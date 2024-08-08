@@ -31,6 +31,9 @@ model_tuning <- function(options_df, base_path, training_data, evaluation_data, 
       process_data(features_list, window_length, overlap_percent, freq_Hz, feature_normalisation) %>%
       na.omit()
     
+    # remove the columns that aren't working # specific to each dataset
+    evaluation_data <- evaluation_data %>% select(-c(entropy_Accelerometer.X, entropy_Accelerometer.Y, entropy_Accelerometer.Z))
+    
     # downsample the data to balance classes
     #activity_counts <- evaluation_data %>%
     #  count(Activity)
@@ -44,7 +47,7 @@ model_tuning <- function(options_df, base_path, training_data, evaluation_data, 
     #  sample_n(min_count) %>%  # Sample 'min_count' observations from each group
     #  ungroup()
     
-    model_evaluation <- evaluate_model_performance(evaluation_data, single_class_SVM, "Validation", targetActivity)
+    model_evaluation <- evaluate_model_performance(evaluation_data, single_class_SVM, validation_type = "Validation", targetActivity)
     
     metrics <- model_evaluation$metrics
     
@@ -148,6 +151,9 @@ build_1_class_SVM <- function(
   training_data_predictors <- training_data_processed %>% select(-Activity)
   training_data_labels <- training_data_processed %>% select(Activity)
   
+  # remove the columns that aren't working # this is specific to each dataset
+  training_data_predictors <- training_data_predictors %>% select(-c(entropy_Accelerometer.X, entropy_Accelerometer.Y, entropy_Accelerometer.Z))
+  
   # train a model with the training predictors (no labels)
   single_class_SVM <- svm(training_data_predictors, 
                           y = NULL,  # No response variable for one-class SVM
@@ -232,13 +238,14 @@ flatten_confusion_matrix <- function(conf_matrix, prefix) {
 # function for creating the specific training, validation, and testing datastes
 create_datasets <- function(data, targetActivity, validation_individuals) {
   
-  # training data,  
-  data_validation <- data %>%
+  # training data, should contain only the target behaviour
+  data_training <- data %>%
     filter(Activity == targetActivity) # Filter for target activity
   
-  data_validation <- data_validation[data_validation$ID %in% unique(data_validation$ID)[1:5], ]
+  data_training <- data_training[data_training$ID %in% unique(data_training$ID)[1:5], ]
   
-  data_training <- anti_join(data, data_validation)
+  # data validation should be everything else
+  data_validation <- anti_join(data, data_training)
   
   return(list(data_training = data_training,
               data_validation = data_validation))

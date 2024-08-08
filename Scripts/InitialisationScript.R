@@ -77,15 +77,18 @@ data_ad <- data_selected %>%
   na.omit() %>%
   mutate(Activity = ifelse(Activity == "notMoving" | Activity == "Nest", "Stationary", Activity))
 
+data_ad <- data_selected
+other_data <- anti_join(data_ad, data_test)
+
 # list variables to test
 targetActivity_options <- c("RunningMove", "Feed", "Stationary")
-window_length_options <- c(3, 4)
+window_length_options <- c(2, 4, 6, 8, 10)
 overlap_percent_options <- c(0)
 freq_Hz <- 1
 feature_normalisation_options <- c("MinMaxScaling") #, "Standardisation")
 nu_options <- c(0.01, 0.1)
-kernel_options <- c("radial") #, "sigmoid", "polynomial")
-features_list <- c("mean", "max", "min", "sd") #, "cor", "SMA", "minODBA", "maxODBA", "minVDBA", "maxVDBA", "entropy", "zero", "auto")
+kernel_options <- c("radial", "sigmoid", "polynomial")
+features_list <- c("mean", "max", "min", "sd", "cor", "SMA", "minODBA", "maxODBA", "minVDBA", "maxVDBA", "entropy", "zero", "auto")
 validation_individuals <- 5
 
 
@@ -100,8 +103,6 @@ for (targetActivity in targetActivity_options){
   colnames(options_df) <- c("targetActivity", "window_length", "overlap_percent", "frequency_Hz", 
                             "feature_normalisation", "nu", "kernel")
   
-  # remove the test data
-  other_data <- anti_join(data_selected, data_test)
   
   # randomly create training and validation datasets
   datasets <- create_datasets(other_data, targetActivity, validation_individuals)
