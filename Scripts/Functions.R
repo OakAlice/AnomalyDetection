@@ -1,72 +1,68 @@
 # Anomaly Detection Model Tuning
 # run the algorithm
 
-# Function for iterating through parameters, saving metrics for each
-model_tuning <- function(options_df, base_path, training_data, evaluation_data, targetActivity){
+# Function for iterating through parameters, saving metrics for each iteration
+model_tuning <- function(options_df, base_path, training_data, evaluation_data, targetActivity) {
   
-  results_sheet <- lapply(1:nrow(options_df), function(i) {
-    
-    # define the variables for this loop
-    window_length <- as.numeric(options_df[i, "window_length"])
-    overlap_percent <- as.numeric(options_df[i, "overlap_percent"])
-    freq_Hz <- as.numeric(options_df[i, "frequency_Hz"])
-    feature_normalisation <- as.character(options_df[i, "feature_normalisation"])
-    nu <- as.numeric(options_df[i, "nu"])
-    kernel <- as.character(options_df[i, "kernel"])
-    
-    # build the SVM
-    single_class_SVM <- build_1_class_SVM(
-      training_data,
-      features_list = features_list,
-      window_length,
-      overlap_percent,
-      freq_Hz,
-      feature_normalisation,
-      nu,
-      kernel
-    )
-    
-    # evaluate performance
-    evaluation_data <- evaluation_data %>%
-      process_data(features_list, window_length, overlap_percent, freq_Hz, feature_normalisation) %>%
-      na.omit()
-    
-    # remove the columns that aren't working # specific to each dataset
-    evaluation_data <- evaluation_data %>% select(-c(entropy_Accelerometer.X, entropy_Accelerometer.Y, entropy_Accelerometer.Z))
-    
-    # downsample the data to balance classes
-    #activity_counts <- evaluation_data %>%
-    #  count(Activity)
-    
-    # Find the minimum count (to determine the size of the smallest group after downsampling)
-    #min_count <- min(activity_counts$n)
-    
-    # Downsample each 'Activity' group to have the same number of observations as 'min_count'
-    #downsampled_data <- evaluation_data %>%
-    #  group_by(Activity) %>%
-    #  sample_n(min_count) %>%  # Sample 'min_count' observations from each group
-    #  ungroup()
-    
-    model_evaluation <- evaluate_model_performance(evaluation_data, single_class_SVM, validation_type = "Validation", targetActivity)
-    
-    metrics <- model_evaluation$metrics
-    
-    results_sheet <- cbind(
-      targetActivity,
-      window_length,
-      overlap_percent,
-      freq_Hz,
-      feature_normalisation,
-      nu,
-      kernel,
-      t(metrics)
-    )
+  # Initialize an empty list to store the results
+  all_results <- list()
+  
+  lapply(1:nrow(options_df), function(i) {
+    try({
+      # Define the variables for this loop
+      window_length <- as.numeric(options_df[i, "window_length"])
+      overlap_percent <- as.numeric(options_df[i, "overlap_percent"])
+      freq_Hz <- as.numeric(options_df[i, "frequency_Hz"])
+      feature_normalisation <- as.character(options_df[i, "feature_normalisation"])
+      nu <- as.numeric(options_df[i, "nu"])
+      kernel_shape <- as.character(options_df[i, "kernel"])
+      
+      # Build the SVM
+      single_class_SVM <- build_1_class_SVM(
+        training_data,
+        features_list = features_list,
+        window_length,
+        overlap_percent,
+        freq_Hz,
+        feature_normalisation,
+        nu,
+        kernel_shape
+      )
+      
+      # Process and evaluate the data
+      evaluation_data_processed <- evaluation_data %>%
+        process_data(features_list, window_length, overlap_percent, freq_Hz, feature_normalisation) %>%
+        na.omit() %>%
+        select(-c(entropy_Accelerometer.X, entropy_Accelerometer.Y, entropy_Accelerometer.Z))
+      
+      model_evaluation <- evaluate_model_performance(evaluation_data_processed, single_class_SVM, validation_type = "Validation", targetActivity)
+      
+      metrics <- model_evaluation$metrics
+      
+      # Combine the results into a dataframe
+      results_sheet <- data.frame(
+        targetActivity = targetActivity,
+        window_length = window_length,
+        overlap_percent = overlap_percent,
+        freq_Hz = freq_Hz,
+        feature_normalisation = feature_normalisation,
+        nu = nu,
+        kernel = kernel_shape,
+        t(metrics)
+      )
+      
+      # Write the results to a CSV file iteratively
+      fwrite(results_sheet, file.path(base_path, paste(targetActivity, "tuning_metrics.csv", sep = "_")), append = TRUE)
+      
+      # Store the results in the list
+      all_results[[i]] <- results_sheet
+    }, silent = TRUE) # Skip any iterations that cause errors
   })
   
-  unsup_1_SVM_options <- do.call(rbind, results_sheet)
-  model_tuning_metrics <- as.data.frame(unsup_1_SVM_options)
+  # Combine all results into a single dataframe
+  model_tuning_metrics <- do.call(rbind, all_results)
   
-  return(model_tuning_metrics)
+  return(as.data.frame(model_tuning_metrics))
 }
 
 # applying optimal metrics to final hold-out test data
@@ -139,7 +135,7 @@ build_1_class_SVM <- function(
     freq_Hz,
     feature_normalisation,
     nu,
-    kernel
+    kernel_shape
 ){
   
   # process the training and validation data
@@ -160,7 +156,7 @@ build_1_class_SVM <- function(
                           type = 'one-classification',
                           nu = nu,
                           scale = TRUE,
-                          kernel = kernel)
+                          kernel = kernel_shape)
   
   return (single_class_SVM)
 }
