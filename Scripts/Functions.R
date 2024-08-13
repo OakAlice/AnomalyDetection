@@ -7,8 +7,14 @@ model_tuning <- function(options_df, base_path, training_data, evaluation_data, 
   # Initialize an empty list to store the results
   all_results <- list()
   
+  # Get the start time
+  start_time <- Sys.time()
+  
   lapply(1:nrow(options_df), function(i) {
     try({
+      # Start timing this iteration
+      iteration_start_time <- Sys.time()
+      
       # Define the variables for this loop
       window_length <- as.numeric(options_df[i, "window_length"])
       overlap_percent <- as.numeric(options_df[i, "overlap_percent"])
@@ -16,6 +22,8 @@ model_tuning <- function(options_df, base_path, training_data, evaluation_data, 
       feature_normalisation <- as.character(options_df[i, "feature_normalisation"])
       nu <- as.numeric(options_df[i, "nu"])
       kernel_shape <- as.character(options_df[i, "kernel"])
+      
+      print(paste("beginning model training at:", Sys.time()))
       
       # Build the SVM
       single_class_SVM <- build_1_class_SVM(
@@ -32,12 +40,14 @@ model_tuning <- function(options_df, base_path, training_data, evaluation_data, 
       # Process and evaluate the data
       evaluation_data_processed <- evaluation_data %>%
         process_data(features_list, window_length, overlap_percent, freq_Hz, feature_normalisation) %>%
-        na.omit() %>%
-        select(-c(entropy_Accelerometer.X, entropy_Accelerometer.Y, entropy_Accelerometer.Z))
+        na.omit()
+      
+      print(paste("evaluation data processed at:", Sys.time()))
       
       model_evaluation <- evaluate_model_performance(evaluation_data_processed, single_class_SVM, validation_type = "Validation", targetActivity)
-      
       metrics <- model_evaluation$metrics
+      
+      print(paste("metrics calculated at:", Sys.time()))
       
       # Combine the results into a dataframe
       results_sheet <- data.frame(
@@ -54,8 +64,19 @@ model_tuning <- function(options_df, base_path, training_data, evaluation_data, 
       # Write the results to a CSV file iteratively
       fwrite(results_sheet, file.path(base_path, paste(targetActivity, "tuning_metrics.csv", sep = "_")), append = TRUE)
       
+      print(paste("results written at:", Sys.time()))
+      
       # Store the results in the list
       all_results[[i]] <- results_sheet
+      
+      # Print progress
+      iteration_end_time <- Sys.time()
+      iteration_time <- round(difftime(iteration_end_time, iteration_start_time, units = "secs"), 2)
+      total_time <- round(difftime(iteration_end_time, start_time, units = "mins"), 2)
+      cat(sprintf("Completed iteration %d of %d in %s seconds. Total time elapsed: %s minutes.\n", 
+                  i, nrow(options_df), iteration_time, total_time))
+      
+      
     }, silent = TRUE) # Skip any iterations that cause errors
   })
   
@@ -143,12 +164,14 @@ build_1_class_SVM <- function(
                                           overlap_percent = overlap_percent, freq_Hz = freq_Hz, 
                                           feature_normalisation = feature_normalisation)
   
+  print(paste("training data processed at:", Sys.time()))
+  
   # separate the training data into predictors and labels 
   training_data_predictors <- training_data_processed %>% select(-Activity)
   training_data_labels <- training_data_processed %>% select(Activity)
   
   # remove the columns that aren't working # this is specific to each dataset
-  training_data_predictors <- training_data_predictors %>% select(-c(entropy_Accelerometer.X, entropy_Accelerometer.Y, entropy_Accelerometer.Z))
+  #training_data_predictors <- training_data_predictors %>% select(-c(entropy_Accelerometer.X, entropy_Accelerometer.Y, entropy_Accelerometer.Z))
   
   # train a model with the training predictors (no labels)
   single_class_SVM <- svm(training_data_predictors, 
@@ -157,6 +180,8 @@ build_1_class_SVM <- function(
                           nu = nu,
                           scale = TRUE,
                           kernel = kernel_shape)
+  
+  print(paste("model trained at:", Sys.time()))
   
   return (single_class_SVM)
 }
@@ -234,14 +259,18 @@ flatten_confusion_matrix <- function(conf_matrix, prefix) {
 # function for creating the specific training, validation, and testing datastes
 create_datasets <- function(data, targetActivity, validation_individuals) {
   
-  # training data, should contain only the target behaviour
-  data_training <- data %>%
-    filter(Activity == targetActivity) # Filter for target activity
+  # individuals
+  training_individuals <- length(unique(data$ID)) - validation_individuals
   
-  data_training <- data_training[data_training$ID %in% unique(data_training$ID)[1:5], ]
+  # training data from the 10 individuals
+  data_training <- data[data$ID %in% unique(data$ID)[1:training_individuals], ]
   
   # data validation should be everything else
   data_validation <- anti_join(data, data_training)
+  
+  # now remove the non-target behaviours from the training data
+  data_training <- data_training %>%
+    filter(Activity == targetActivity) # Filter for target activity
   
   return(list(data_training = data_training,
               data_validation = data_validation))

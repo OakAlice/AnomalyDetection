@@ -18,17 +18,18 @@ source(file.path(base_path, "Scripts", "FeatureGeneration.R"))
 
 # load in the data and select relevant columns
 data_original <- fread(file.path(base_path, "Data", "Annotated_Jeantet_2020.csv"))
-data_selected <- data_original %>%
-  select(LCOLOUR, RCOLOUR, TIME, BEHAV, X, Y, Z, temp) %>%
-  mutate(ID = paste0(LCOLOUR, RCOLOUR)) %>% # create a unique identifier
-  rename(Time = TIME, # rename columns to preference
-         Activity = BEHAV,
-         Accelerometer.X = X,
-         Accelerometer.Y = Y,
-         Accelerometer.Z = Z,
-         Temperature = temp) %>%
-  select(-c(LCOLOUR, RCOLOUR)) %>%
-  mutate(ID = as.numeric(factor(ID))) # convert to numeric for neatness
+
+#data_selected <- data_original %>%
+#  select(LCOLOUR, RCOLOUR, TIME, BEHAV, X, Y, Z, temp) %>%
+#  mutate(ID = paste0(LCOLOUR, RCOLOUR)) %>% # create a unique identifier
+#  rename(Time = TIME, # rename columns to preference
+#         Activity = BEHAV,
+#         Accelerometer.X = X,
+#         Accelerometer.Y = Y,
+#         Accelerometer.Z = Z,
+#         Temperature = temp) %>%
+#  select(-c(LCOLOUR, RCOLOUR)) %>%
+#  mutate(ID = as.numeric(factor(ID))) # convert to numeric for neatness
 
 # Visualising data ####
 # plot shows sample of each behaviour for each individual
@@ -48,7 +49,7 @@ beh_volume_plot <- explore_data(data = data_selected, frequency = 25, colours = 
 # Split Data ####
 # randomly allocate each individual to training, validating, or testing datasets
 all_individuals <- sample(unique(data_selected$ID))
-data_test <- data_selected[data_selected$ID %in% all_individuals[1:5], ]
+data_test <- data_selected[data_selected$ID %in% all_individuals[1:4], ]
 
 # balance the occurances of each behaviour in the validation and testing datasets
 # do this to make the performance metrics more meaningful
@@ -64,15 +65,15 @@ data_ad <- data_selected
 other_data <- anti_join(data_ad, data_test)
 
 # list variables to test
-targetActivity_options <- c("resting", "swimming", "breathing", "staying_at_surface")
-window_length_options <- c(1, 2, 5, 10, 15, 20)
-overlap_percent_options <- c(0, 50)
+targetActivity_options <- c("breathing", "staying_at_surface")
+window_length_options <- c(3, 5)
+overlap_percent_options <- c(0)
 freq_Hz <- 20
-feature_normalisation_options <- c("MinMaxScaling", "Standardisation")
-nu_options <- c(0.001, 0.01, 0.05, 0.1, 0.05, 0.2, 0.5)
-kernel_options <- c("radial", "linear", "hyperbolic", "sigmoid", "polynomial", "RBF") 
-features_list <- c("mean", "max", "min", "sd", "cor", "SMA", "minODBA", "maxODBA", "minVDBA", "maxVDBA", "entropy", "zero", "auto")
-validation_individuals <- 10
+feature_normalisation_options <- c("Standardisation") # "MinMaxScaling"
+nu_options <- c(0.6)
+kernel_options <- c("radial") 
+features_list <- c("mean", "max", "min", "sd", "cor", "SMA", "minODBA", "maxODBA", "minVDBA", "maxVDBA", "entropy", "auto") # zero
+validation_individuals <- 2
 
 # from here on, it will loop
 optimal_model_designs <- data.frame()
@@ -86,7 +87,7 @@ for (targetActivity in targetActivity_options){
                             "feature_normalisation", "nu", "kernel")
   
   # randomly create training and validation datasets
-  datasets <- create_datasets(other_data, targetActivity, validation_individuals)
+  datasets <- create_datasets(data = other_data, targetActivity, validation_individuals)
   data_training <- datasets$data_training %>% select(-time, -ID)
   data_validation <- datasets$data_validation %>% select(-time, -ID)
   print("datasets created")
