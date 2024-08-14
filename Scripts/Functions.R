@@ -16,6 +16,7 @@ model_tuning <- function(options_df, base_path, training_data, evaluation_data, 
       iteration_start_time <- Sys.time()
       
       # Define the variables for this loop
+      architecture <- as.character(options_df[i, "architecture"])
       window_length <- as.numeric(options_df[i, "window_length"])
       overlap_percent <- as.numeric(options_df[i, "overlap_percent"])
       freq_Hz <- as.numeric(options_df[i, "frequency_Hz"])
@@ -25,28 +26,28 @@ model_tuning <- function(options_df, base_path, training_data, evaluation_data, 
       
       print(paste("beginning model training at:", Sys.time()))
       
-      # Build the SVM
-      single_class_SVM <- build_1_class_SVM(
-        training_data,
-        features_list = features_list,
-        window_length,
-        overlap_percent,
-        freq_Hz,
-        feature_normalisation,
-        nu,
-        kernel_shape
-      )
-      
-      # Process and evaluate the data
-      evaluation_data_processed <- evaluation_data %>%
-        process_data(features_list, window_length, overlap_percent, freq_Hz, feature_normalisation) %>%
-        na.omit()
-      
-      print(paste("evaluation data processed at:", Sys.time()))
-      
-      model_evaluation <- evaluate_model_performance(evaluation_data_processed, single_class_SVM, validation_type = "Validation", targetActivity)
-      metrics <- model_evaluation$metrics
-      
+          # Build the SVM
+          single_class_SVM <- build_1_class_SVM(
+            training_data,
+            features_list = features_list,
+            window_length,
+            overlap_percent,
+            freq_Hz,
+            feature_normalisation,
+            nu,
+            kernel_shape
+          )
+          
+          # Process and evaluate the data
+          evaluation_data_processed <- evaluation_data %>%
+            process_data(features_list, window_length, overlap_percent, freq_Hz, feature_normalisation) %>%
+            na.omit()
+          
+          print(paste("evaluation data processed at:", Sys.time()))
+          
+          model_evaluation <- evaluate_model_performance(evaluation_data_processed, single_class_SVM, validation_type = "Validation", targetActivity)
+          metrics <- model_evaluation$metrics
+        
       print(paste("metrics calculated at:", Sys.time()))
       
       # Combine the results into a dataframe
