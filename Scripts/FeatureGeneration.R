@@ -24,7 +24,6 @@ calculate_zero_crossing <- function(window_data) {
 compute_features <- function(window_chunk, features_list) {
   
   # Determine the available axes from the dataset
-  all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
   available_axes <- intersect(colnames(window_chunk), all_axes) # the ones we actually have
   
   result <- data.frame(row.names = 1)

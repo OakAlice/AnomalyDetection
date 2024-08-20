@@ -16,7 +16,6 @@ model_tuning <- function(options_df, base_path, training_data, evaluation_data, 
       iteration_start_time <- Sys.time()
       
       # Define the variables for this loop
-      architecture <- as.character(options_df[i, "architecture"])
       window_length <- as.numeric(options_df[i, "window_length"])
       overlap_percent <- as.numeric(options_df[i, "overlap_percent"])
       freq_Hz <- as.numeric(options_df[i, "frequency_Hz"])
