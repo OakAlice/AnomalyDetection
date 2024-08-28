@@ -1,0 +1,10 @@
+# Ignore all files and directories named 'Data' and 'Output' at any level
+*/Data/
+*/Output/
+
+# Ignore R history files
+*.Rhistory
+
+# Ignore CSV and RDS files
+*.csv
+*.rds

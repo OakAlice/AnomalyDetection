@@ -18,10 +18,12 @@ model_tuning <- function(options_df, base_path, training_data, evaluation_data, 
       # Define the variables for this loop
       window_length <- as.numeric(options_df[i, "window_length"])
       overlap_percent <- as.numeric(options_df[i, "overlap_percent"])
-      freq_Hz <- as.numeric(options_df[i, "frequency_Hz"])
+      down_Hz <- as.numeric(options_df[i, "down_Hz"])
       feature_normalisation <- as.character(options_df[i, "feature_normalisation"])
       nu <- as.numeric(options_df[i, "nu"])
       kernel_shape <- as.character(options_df[i, "kernel"])
+      gamma <- as.numeric(options_df[i, "gamma"])
+      degree <- as.numeric(options_df[i, "degree"])
       
       print(paste("beginning model training at:", Sys.time()))
       
@@ -31,15 +33,17 @@ model_tuning <- function(options_df, base_path, training_data, evaluation_data, 
             features_list = features_list,
             window_length,
             overlap_percent,
-            freq_Hz,
+            down_Hz,
             feature_normalisation,
             nu,
-            kernel_shape
+            kernel_shape,
+            gamma,
+            degree
           )
           
           # Process and evaluate the data
-          evaluation_data_processed <- evaluation_data %>%
-            process_data(features_list, window_length, overlap_percent, freq_Hz, feature_normalisation) %>%
+          evaluation_data_processed <- 
+            process_data(evaluation_data, features_list, window_length, overlap_percent, down_Hz, feature_normalisation) %>%
             na.omit()
           
           print(paste("evaluation data processed at:", Sys.time()))
@@ -54,10 +58,12 @@ model_tuning <- function(options_df, base_path, training_data, evaluation_data, 
         targetActivity = targetActivity,
         window_length = window_length,
         overlap_percent = overlap_percent,
-        freq_Hz = freq_Hz,
+        down_Hz = down_Hz,
         feature_normalisation = feature_normalisation,
         nu = nu,
         kernel = kernel_shape,
+        gamma = ifelse(is.na(gamma), "", gamma),
+        degree = ifelse(is.na(degree), "", degree),
         t(metrics)
       )
       
@@ -92,10 +98,12 @@ model_testing <- function(optimal_df_row, base_path, training_data, evaluation_d
   # define the variables
   window_length = as.numeric(optimal_df_row["window_length"])
   overlap_percent = as.numeric(optimal_df_row["overlap_percent"])
-  freq_Hz = as.numeric(optimal_df_row["freq_Hz"])
+  down_Hz = as.numeric(optimal_df_row["down_Hz"])
   feature_normalisation = as.character(optimal_df_row["feature_normalisation"])
   nu = as.numeric(optimal_df_row["nu"])
   kernel = as.character(optimal_df_row["kernel"])
+  gamma = as.numeric(optimal_df_row["gamma"])
+  degree = as.numeric(optimal_df_row["degree"])
   
   # build the SVM
   single_class_SVM <- build_1_class_SVM(
@@ -103,44 +111,47 @@ model_testing <- function(optimal_df_row, base_path, training_data, evaluation_d
     features_list,
     window_length,
     overlap_percent,
-    freq_Hz,
+    down_Hz,
     feature_normalisation,
     nu,
-    kernel
+    kernel,
+    gamma,
+    degree
   )
   
   # save this svm
-  saveRDS(single_class_SVM, file.path(base_path, paste0(targetActivity, ".rds")))
+  saveRDS(single_class_SVM, file.path(base_path, paste0(targetActivity, "_2.rds")))
   
-  # evaluate performance
-  evaluation_data <- evaluation_data %>%
-    process_data(features_list, window_length, overlap_percent, freq_Hz, feature_normalisation) %>%
-    select(-c(zero_Accel_Y, zero_Accel_Z))%>% 
+  # evaluation data and downsample the data to balance classes
+  evaluation_data <-
+    process_data(evaluation_data, features_list, window_length, overlap_percent, down_Hz, feature_normalisation) %>%
     na.omit()
   
-  # downsample the data to balance classes
-  activity_counts <- evaluation_data %>%
-    count(Activity)
+  #activity_counts <- evaluation_data %>%
+  #  count(Activity)
   
   # Find the minimum count (to determine the size of the smallest group after downsampling)
-  min_count <- min(activity_counts$n)
+  #min_count <- min(activity_counts$n)
   
   # Downsample each 'Activity' group to have the same number of observations as 'min_count'
-  downsampled_data <- evaluation_data %>%
-    group_by(Activity) %>%
-    sample_n(min_count) %>%  # Sample 'min_count' observations from each group
-    ungroup()
+  #downsampled_data <- evaluation_data %>%
+  #  group_by(Activity) %>%
+  #  sample_n(min_count) %>%  # Sample 'min_count' observations from each group
+  #  ungroup()
   
+  downsampled_data <- evaluation_data
   model_evaluation <- evaluate_model_performance(downsampled_data, single_class_SVM, "Test", targetActivity)
   
   model_evaluation_metrics <- cbind(
     targetActivity,
     window_length,
     overlap_percent,
-    freq_Hz,
+    down_Hz,
     feature_normalisation,
     nu,
     kernel,
+    gamma,
+    degree,
     t(model_evaluation$metrics)
   )
   
@@ -153,33 +164,45 @@ build_1_class_SVM <- function(
     features_list,
     window_length,
     overlap_percent,
-    freq_Hz,
+    down_Hz,
     feature_normalisation,
     nu,
-    kernel_shape
+    kernel_shape,
+    gamma = NA,
+    degree = NA
 ){
   
   # process the training and validation data
   training_data_processed <- process_data(na.omit(training_data), features_list, window_length = window_length, 
-                                          overlap_percent = overlap_percent, freq_Hz = freq_Hz, 
+                                          overlap_percent = overlap_percent, down_Hz = down_Hz, 
                                           feature_normalisation = feature_normalisation)
   
   print(paste("training data processed at:", Sys.time()))
   
   # separate the training data into predictors and labels 
-  training_data_predictors <- training_data_processed %>% select(-Activity)
+  training_data_predictors <- training_data_processed %>% select(-Activity, -ID, -Timestamp)
   training_data_labels <- training_data_processed %>% select(Activity)
-  
-  # remove the columns that aren't working # this is specific to each dataset
-  #training_data_predictors <- training_data_predictors %>% select(-c(entropy_Accelerometer.X, entropy_Accelerometer.Y, entropy_Accelerometer.Z))
-  
+
   # train a model with the training predictors (no labels)
-  single_class_SVM <- svm(training_data_predictors, 
-                          y = NULL,  # No response variable for one-class SVM
-                          type = 'one-classification',
-                          nu = nu,
-                          scale = TRUE,
-                          kernel = kernel_shape)
+  params <- list(
+    gamma = gamma,
+    degree = degree
+  )
+  
+  # Remove NA values from the parameters
+  params <- Filter(Negate(is.na), params)
+  
+  single_class_SVM <- do.call(svm, c(
+    list(
+      training_data_predictors, 
+      y = NULL,  # No response variable for one-class SVM
+      type = 'one-classification',
+      nu = nu,
+      scale = TRUE,
+      kernel = kernel_shape
+    ),
+    params  # Add filtered parameters
+  ))
   
   print(paste("model trained at:", Sys.time()))
   
@@ -195,14 +218,23 @@ evaluate_model_performance <- function(
 ){
   
   # Separate predictors and labels
-  data_predictors <- processed_data %>% select(-Activity)
+  data_predictors <- processed_data %>% select(-Activity, -Timestamp, -ID)
   data_labels <- processed_data$Activity
+  data_identification <- processed_data %>% select(Activity, Timestamp, ID)
+  name <- as.character(data_identification$ID[1])
+  behaviour <- as.character(targetActivity)
   
   # Make predictions on the test data
   predicted <- predict(single_class_SVM, newdata = data_predictors)
   
   predicted <- ifelse(predicted == "TRUE", "Normal", "Outlier")
   reference <- ifelse(data_labels == targetActivity, "Normal", "Outlier")
+  
+  # print out predictions 
+  if (validation_type == "Test"){
+    predictions <- cbind(data_identification, reference, predicted)
+    fwrite(predictions, file.path(base_path, paste0(name, "_", behaviour, "_predictions.csv")))
+  }
   
   # Compute performance metrics
   #compare_performance <- as.data.frame(cbind(predicted, reference)) %>%
@@ -217,37 +249,56 @@ evaluate_model_performance <- function(
 }
 
 # function to turn matrices into rows
+calculate_mcc <- function(TP, FP, FN, TN) {
+  TP <- as.numeric(TP)
+  FP <- as.numeric(FP)
+  FN <- as.numeric(FN)
+  TN <- as.numeric(TN)
+  numerator <- (TP * TN) - (FP * FN)
+  denominator <- sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN))
+  if (denominator == 0) {
+    return(NA)
+  } else {
+    return(round(numerator / denominator, 2))
+  }
+}
+
 flatten_confusion_matrix <- function(conf_matrix, prefix) {
   if (nrow(conf_matrix) == 2 && ncol(conf_matrix) == 2) { # validation
-    c(TP = conf_matrix[1, 1],
-      FP = conf_matrix[1, 2],
-      FN = conf_matrix[2, 1],
-      TN = conf_matrix[2, 2],
-      accuracy = round((conf_matrix[1, 1]+conf_matrix[2, 2])/(conf_matrix[1, 1]+conf_matrix[2, 2]+conf_matrix[1, 2]+conf_matrix[2, 1]),2)) %>%
-      setNames(paste(prefix, c("TP", "FP", "FN", "TN", "accuracy"), sep = "_"))
+    TP <- conf_matrix[1, 1]
+    FP <- conf_matrix[1, 2]
+    FN <- conf_matrix[2, 1]
+    TN <- conf_matrix[2, 2]
+    accuracy <- round((TP + TN) / (TP + TN + FP + FN), 2)
+    mcc <- calculate_mcc(TP, FP, FN, TN)
+    c(TP = TP, FP = FP, FN = FN, TN = TN, accuracy = accuracy, MCC = mcc) %>%
+      setNames(paste(prefix, c("TP", "FP", "FN", "TN", "accuracy", "MCC"), sep = "_"))
+    
   } else if (nrow(conf_matrix) == 2 && ncol(conf_matrix) == 1) { # training
-    c(TP = conf_matrix[1, 1],
-      FN = conf_matrix[2, 1],
-      FP = NA,
-      TN = NA,
-      accuracy = round((conf_matrix[1, 1]/(conf_matrix[1, 1]+conf_matrix[2, 1])),2)) %>%
-      setNames(paste(prefix, c("TP", "FP", "FN", "TN", "accuracy"), sep = "_"))
-  } else if (nrow(conf_matrix) == 1 && ncol(conf_matrix) == 2){ # validation extra
-    if (row.names(conf_matrix) == "Outlier"){ # only outliers predicted
-      c(FN = conf_matrix[1, 1],
-        TN = conf_matrix[1, 2],
-        FP = NA,
-        TP = NA,
-        accuracy = round((conf_matrix[1, 2]/(conf_matrix[1, 1]+conf_matrix[1, 2])),2)) %>%
-        setNames(paste(prefix, c("TP", "FP", "FN", "TN", "accuracy"), sep = "_"))
-    } else if (row.names(conf_matrix) == "Normal"){ # only normal predicted
-      c(TP = conf_matrix[1, 1],
-        FP = conf_matrix[1, 2],
-        TN = NA,
-        FN = NA,
-        accuracy = round((conf_matrix[1, 1]/(conf_matrix[1, 1]+conf_matrix[1, 2])),2)) %>%
-        setNames(paste(prefix, c("TP", "FP", "FN", "TN", "accuracy"), sep = "_"))
+    TP <- conf_matrix[1, 1]
+    FN <- conf_matrix[2, 1]
+    accuracy <- round((TP / (TP + FN)), 2)
+    mcc <- NA
+    c(TP = TP, FP = NA, FN = FN, TN = NA, accuracy = accuracy, MCC = mcc) %>%
+      setNames(paste(prefix, c("TP", "FP", "FN", "TN", "accuracy", "MCC"), sep = "_"))
+    
+  } else if (nrow(conf_matrix) == 1 && ncol(conf_matrix) == 2) { # validation extra
+    if (row.names(conf_matrix) == "Outlier") { # only outliers predicted
+      FN <- conf_matrix[1, 1]
+      TN <- conf_matrix[1, 2]
+      accuracy <- round((TN / (FN + TN)), 2)
+      mcc <- NA
+      c(TP = NA, FP = NA, FN = FN, TN = TN, accuracy = accuracy, MCC = mcc) %>%
+        setNames(paste(prefix, c("TP", "FP", "FN", "TN", "accuracy", "MCC"), sep = "_"))
       
+    } else if (row.names(conf_matrix) == "Normal") { # only normal predicted
+      TP <- conf_matrix[1, 1]
+      FP <- conf_matrix[1, 2]
+      accuracy <- round((TP / (TP + FP)), 2)
+      mcc <- NA
+      c(TP = TP, FP = FP, FN = NA, TN = NA, accuracy = accuracy, MCC = mcc) %>%
+        setNames(paste(prefix, c("TP", "FP", "FN", "TN", "accuracy", "MCC"), sep = "_"))
+    
     } else {
       stop("Confusion matrix is in unexpected format.")
     }
@@ -255,6 +306,7 @@ flatten_confusion_matrix <- function(conf_matrix, prefix) {
     stop("Confusion matrix dimensions are not supported.")
   }
 }
+
 
 # function for creating the specific training, validation, and testing datastes
 create_datasets <- function(data, targetActivity, validation_individuals) {
@@ -275,3 +327,41 @@ create_datasets <- function(data, targetActivity, validation_individuals) {
   return(list(data_training = data_training,
               data_validation = data_validation))
 }
+
+
+
+# create all options of the model specific hyperparameters
+expand_hyperparameters <- function(model_hyperparameters_list) {
+  hyperparameters_df <- data.frame(kernel = character(0))
+  
+  # Iterate over each model hyperparameters
+  for (kernel_name in names(model_hyperparameters_list)) {
+    model_hyperparameters <- model_hyperparameters_list[[kernel_name]]
+    param_names <- names(model_hyperparameters)
+    all_combinations <- expand.grid(model_hyperparameters)
+    
+    all_combinations$kernel <- kernel_name
+    
+    # Merge with existing hyperparameters dataframe
+    hyperparameters_df <- dplyr::bind_rows(hyperparameters_df, all_combinations)
+  }
+  
+  return(hyperparameters_df)
+}
+
+# bind this with the normal parameter options
+create_extended_options <- function(model_hyperparameters_list, options_df) {
+  # Expand hyperparameters for each model
+  all_hyperparameters_df <- expand_hyperparameters(model_hyperparameters_list)
+  
+  # Merge only the model_architectures that appear in options_df
+  extended_options_df <- merge(
+    options_df,
+    all_hyperparameters_df[all_hyperparameters_df$kernel %in% unique(options_df$kernel), ],
+    by = "kernel",
+    all = TRUE
+  )
+  
+  return(extended_options_df)
+}
+

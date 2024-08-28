@@ -21,12 +21,44 @@ calculate_zero_crossing <- function(window_data) {
   return(zero_crossings)
 }
 
+
+# Fast Fourier Transformation based features
+extract_FFT_features <- function(window_data, down_Hz) {
+  n <- length(window_data)
+  
+  # Compute FFT
+  fft_result <- fft(window_data)
+  
+  # Compute frequencies
+  freq <- (0:(n/2 - 1)) * (down_Hz / n)
+  
+  # Compute magnitude
+  magnitude <- abs(fft_result[1:(n/2)])
+  
+  # Calculate features
+  mean_magnitude <- mean(magnitude)
+  max_magnitude <- max(magnitude)
+  total_power <- sum(magnitude^2)
+  peak_frequency <- freq[which.max(magnitude)]
+  
+  # Return features
+  return(list(Mean_Magnitude = mean_magnitude,
+              Max_Magnitude = max_magnitude,
+              Total_Power = total_power,
+              Peak_Frequency = peak_frequency))
+}
+
+
+
+
 compute_features <- function(window_chunk, features_list) {
   
   # Determine the available axes from the dataset
   available_axes <- intersect(colnames(window_chunk), all_axes) # the ones we actually have
   
   result <- data.frame(row.names = 1)
+  
+  window_chunk <- data.frame(window_chunk)
   
   for (axis in available_axes) {
     
@@ -59,6 +91,13 @@ compute_features <- function(window_chunk, features_list) {
     }
     if ("zero" %in% features_list){
       result[paste0("zero_", axis)] <- calculate_zero_crossing(window_chunk[[axis]])
+    }
+    if ("fft" %in% features_list){
+      features <- extract_FFT_features(window_chunk[[axis]], down_Hz)
+      result[paste0("mean_mag_", axis)] <- features$Mean_Magnitude
+      result[paste0("max_mag_", axis)] <- features$Max_Magnitude
+      result[paste0("total_power_", axis)] <- features$Total_Power
+      result[paste0("peak_freq_", axis)] <- features$Peak_Frequency
     }
   }
   
@@ -119,14 +158,14 @@ process_data <- function(relabelled_data,
                          features_list, 
                          window_length, 
                          overlap_percent, 
-                         freq_Hz, 
+                         down_Hz, 
                          feature_normalisation) {
   # this section will be done with futures 
   # Set up the plan to use multiprocessing
   plan(multisession, workers = availableCores() - 2) # everything minus 2
   
   # Calculate window size in samples
-  window_samples <- window_length * freq_Hz
+  window_samples <- window_length * down_Hz
   # Calculate overlap size in samples
   overlap_samples <- if (overlap_percent > 0) ((overlap_percent / 100) * window_samples) else 0
   
