@@ -2,66 +2,111 @@
 
 # Set up ####
 # load packages
-library(data.table)
-library(tidyverse)
-library(future)
-library(future.apply)
-library(e1071)
+library(pacman)
+p_load(data.table, tidyverse, future.apply, e1071, zoo, tsfeatures)
 library(h2o)
-library(zoo)
-
 
 # set base path
-base_path <- setwd("C:/Users/oaw001/Documents/AnomalyDetection")
+base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
 
-# load in the files
-source(file.path(base_path, "Scripts", "PlotFunctions.R"))
-source(file.path(base_path, "Scripts", "1classSVMFunctions.R"))
-source(file.path(base_path, "Scripts", "FeatureGeneration.R"))
-#source(file.path(base_path, "Scripts", "DataExploration.R"))
+# load in the scripts
+scripts <- list("Dictionaries.R", "PlotFunctions.R", "FeatureGeneration.R") #, "DataExploration.R")
 
-# load in the data and reformat
-name <- "Vehkaoja_2018"
-data <- fread(file.path(base_path, "Data/Annotated_Vehkaoja_2018.csv"))
-data_formatted <- data %>%
-  rename(Accelerometer.X = ANeck_x,
-         Accelerometer.Y = ANeck_y,
-         Accelerometer.Z = ANeck_z,
-         ID = DogID,
-         Timestamp = t_sec,
-         Activity = Behavior_2) %>%
-  filter(!Activity == "<undefined>") %>%
-  select(ID, Timestamp, Activity, Accelerometer.X, Accelerometer.Y, Accelerometer.Z)
+for (script in scripts){
+  source(file.path(base_path, "Scripts", script))
+}
 
+# Dataset selection ####
+dataset_name <- "Vehkaoja_Dog"
+list_name <- all_dictionaries[[dataset_name]]
+movement_data <- get(list_name)
+
+# Explore dataset ####
+# load in data
+move_data <- fread(file.path(base_path, "Data", paste0(movement_data$name, ".csv")))
+
+# generate plots
+# volume of data per individual and activity
+plot_activity_ID_graph <- plot_activity_ID(data = move_data, 
+                                frequency = movement_data$Frequency, colours = length(unique(move_data$ID)))
+# examples of each trace
+plot_trace_example_graph <- plot_trace_example(behaviours = unique(move_data$Activity), 
+          data = move_data, n_samples = 200, n_col = 4)
+
+# other exploratory plots
 
 # Split Data ####
 # randomly allocate each individual to training, validating, or testing datasets
 # pull 10% individuals for the test set
-#data_test <- data_formatted[data_formatted$ID %in% sample(unique(data_formatted$ID), ceiling(length(unique(data_formatted$ID)) * 0.1)), ]
-#data_other <- anti_join(data_formatted, data_test) # remainder
+  #data_test <- move_data[move_data$ID %in% sample(unique(move_data$ID), ceiling(length(unique(move_data$ID)) * 0.1)), ]
+  #data_other <- anti_join(move_data, data_test) # remainder
 # save these
-#fwrite(data_test, file.path(base_path, "Data/Hold_out_test", paste0(name, "_test.csv")))
-#fwrite(data_other, file.path(base_path, "Data/Hold_out_test", paste0(name, "_other.csv")))
+  #fwrite(data_test, file.path(base_path, "Data/Hold_out_test", paste0(movement_data$name, "_test.csv")))
+  #fwrite(data_other, file.path(base_path, "Data/Hold_out_test", paste0(movement_data$name, "_other.csv")))
 
 # load in 
-data_test <- fread(file.path(base_path, "Data/Hold_out_test", paste0(name, "_test.csv")))
-data_other <-fread(file.path(base_path, "Data/Hold_out_test", paste0(name, "_other.csv")))
+  data_test <- fread(file.path(base_path, "Data/Hold_out_test", paste0(movement_data$name, "_test.csv")))
+  data_other <-fread(file.path(base_path, "Data/Hold_out_test", paste0(movement_data$name, "_other.csv")))
 
-# Visualising data ####
-# plot shows sample of each behaviour for each individual
-# select a subset of individuals to use
-data_subset <- data_formatted[data_formatted$ID %in% unique(data_formatted$ID)[1:5], ]
-beh_trace_plot <- plot_behaviours(behaviours = unique(data_subset$Activity), data = data_subset, n_samples = 200, n_col = 4)
-beh_volume_plot <- explore_data(data = data_formatted, frequency = 100, colours = unique(data_formatted$ID))
+# Feature Generation ####
+## Prt 1: Determine Window Length ####
+  duration_info <- average_duration(data = data_other, sample_rate = movement_data$Frequency)
+  stats <- duration_info$duration_stats %>% 
+    filter(Activity %in% movement_data$target_behaviours)
+  plot <- duration_info$duration_plot
 
+# therefore, select the window length and add that to the Dictionary  
+  
+## Prt 2: Determine Features ####
+# generate a tonne of features
+  all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
+  
+  
+  samples_per_window <- movement_data$window_length * movement_data$Frequency
+  num_windows <- ceiling(nrow(data_other) / samples_per_window)
+  
+  # Split the data into windows
+  windows <- lapply(1:num_windows, function(i) {
+    start_index <- (i - 1) * samples_per_window + 1
+    end_index <- min(i * samples_per_window, nrow(data))
+    window <- data[start_index:end_index, ]
+    
+    # Convert each column (e.g., X, Y, Z) into a list of time series
+    list(
+      X = window$Accelerometer.X,
+      Y = window$Accelerometer.Y,
+      Z = window$Accelerometer.Z
+    )
+  })
+  
 
-# regroup some of the stationary behaviours together
-data_other <- data_other %>%
-  mutate(Activity = ifelse(Activity %in% c("Panting", "Sitting", "Lying chest"), 
-                           "Stationary", 
-                           Activity))
+  
+###################HERE ##########################
+  data_tslist <- c(data_tslist$X, data_tslist$Y, data_tslist$Z)
+  
+  # generate
+  features <- lapply(windows, function(window){
+    tsfeatures(tslist = data_tslist,
+               features = c("frequency", "stl_features", "entropy", "acf_features"),
+               scale = FALSE,  
+               na.rm = TRUE,
+               multiprocess = TRUE)
+  })
+  
+  features_df <- do.call(rbind, features)
+  
 
-# 1class-SVM model design tuning ####
+  
+# select the best features
+  
+# now you have found the optimal features for your system, add to Dictionary
+
+  
+
+  
+# Tuning various OCC ####  
+  
+  
 # list variables to test
 targetActivity_options <- c("Galloping", "Stationary", "Walking") #, "Walking", "Panting", "Sitting", "Eating")
 down_Hz <- 100

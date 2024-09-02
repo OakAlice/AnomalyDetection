@@ -51,7 +51,7 @@ extract_FFT_features <- function(window_data, down_Hz) {
 
 
 
-compute_features <- function(window_chunk, features_list) {
+compute_features <- function(window_chunk, features_list, down_Hz) {
   
   # Determine the available axes from the dataset
   available_axes <- intersect(colnames(window_chunk), all_axes) # the ones we actually have
@@ -176,7 +176,7 @@ process_data <- function(relabelled_data,
   processed_windows <- future_lapply(starts, function(st) {
     fn <- min(st + window_samples - 1, nrow(relabelled_data))
     window_chunk <- relabelled_data[st:fn, ]
-    compute_features(window_chunk, features_list)
+    compute_features(window_chunk, features_list, down_Hz)
   })
   
   # Combine results into a single data frame

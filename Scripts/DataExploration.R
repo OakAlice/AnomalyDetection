@@ -145,47 +145,90 @@ ggplot(data2, aes(x = (relative_seconds/20), y = as.numeric(numeric_activity))) 
     labels = levels(data2$Activity)
   )
 
-# average duration of each behaviour before it changes ####
-# will create a negative number when the ID changes. Therefore I just remove all of those rows
-sample_rate <- 20
-summary <- data_other %>%
-  arrange(ID, time) %>%
-  group_by(ID) %>%
-  mutate(
-    # Detect behavior change
-    behavior_change = lag(Activity) != Activity,
-    behavior_change = ifelse(is.na(behavior_change), TRUE, behavior_change),  # Set NA for the first row of each ID
-    row = row_number()
-  ) %>%
-  ungroup() %>%
-  filter(behavior_change) %>%
-  mutate(
-    duration_samples = row - lag(row, default = 0),
-    duration_seconds = duration_samples / sample_rate
-  ) %>%
-  filter(duration_seconds >= 0) # %>%
-#  group_by(Activity) %>%
-#  summarise(
-#    average_duration = mean(duration_seconds, na.rm = TRUE),
-#    variation_duration = sd(duration_seconds, na.rm = TRUE),
-#    count = n()
-#  )
-
-# plot that
-ggplot(summary, aes(x = Activity, y = duration_seconds)) +
-  geom_boxplot(aes(color = Activity), outlier.shape = NA) +  # Use color to distinguish activities
-  theme_minimal() +
-  theme(legend.position = "none") +
-  labs(
-    x = "Activity",
-    y = "Duration (seconds)"
-  ) +
-  scale_y_continuous(
-    limits = c(min(summary$duration_seconds, na.rm = TRUE), max(summary$duration_seconds, na.rm = TRUE)),  # Set y-axis limits
-    breaks = seq(0, max(summary$duration_seconds, na.rm = TRUE), by = 160)  # Adjust the step size as needed
-  )
-
 
 
 # look at the trace shapes ####
 beh_trace_plot <- plot_behaviours(behaviours = unique(data_other$Activity), data = data_other, n_samples = 200, n_col = 2)
+
+
+
+
+
+
+# Feature discovery ####
+data_other <- fread(file.path(base_path, "Data", "Hold_out_test", "Vehkaoja_2018_other.csv")) %>%
+  mutate(Activity = ifelse(Activity %in% c("Panting", "Sitting", "Lying chest"), 
+                           "Stationary",  Activity))
+
+data_test <- fread(file.path(base_path, "Data", "Hold_out_test", "Vehkaoja_2018_test.csv")) %>%
+  mutate(Activity = ifelse(Activity %in% c("Panting", "Sitting", "Lying chest"), 
+                           "Stationary",  Activity))
+
+data_test<- create_windows(data_test, 200)
+
+
+#keras::install_keras()
+library(keras)
+library(dplyr)
+h2o.init()
+
+# Select relevant columns for the autoencoder
+data <- create_format_data(training_data = data_other, targetActivity = "Galloping", window_size = 200)
+data_autoencoder <- data$target_windows
+
+
+# Define the input shape
+input_dim <- ncol(data_autoencoder)
+encoding_dim <- 2  # Number of features to discover
+
+# Input layer
+input_layer <- layer_input(shape = c(input_dim))
+
+# Encoder layer
+encoder <- input_layer %>%
+  layer_dense(units = encoding_dim, activation = 'relu') # can change the function
+
+# Decoder layer
+decoder <- encoder %>%
+  layer_dense(units = input_dim, activation = 'sigmoid') # and this one
+
+# Define the autoencoder model
+autoencoder <- keras_model(inputs = input_layer, outputs = decoder)
+
+# Compile the model
+autoencoder %>% compile(
+  optimizer = 'adam',
+  loss = 'mean_squared_error'
+)
+
+
+# Fit the autoencoder to the data
+data_matrix <- as.matrix(as.data.frame(data_autoencoder))
+history <- autoencoder %>% fit(
+  x = data_matrix,      # Input data
+  y = data_matrix,      # Target data is the same as input for an autoencoder
+  epochs = 50,
+  batch_size = 32,
+  shuffle = TRUE,
+  validation_split = 0.2
+)
+
+
+# apply it to the validation data to see what happens
+data_matrix_test <- as.matrix(as.data.frame(data_test))
+predicted <- autoencoder %>% predict(data_matrix_test)
+
+
+# Define the encoder model
+encoder_model <- keras_model(inputs = input_layer, outputs = encoder)
+
+# Get the encoded features
+encoded_features <- encoder_model %>% predict(data_autoencoder)
+
+# Add the new features to your original data
+data_with_features <- data_other %>%
+  mutate(Feature1 = encoded_features[, 1],
+         Feature2 = encoded_features[, 2])
+
+# View the data with the new features
+head(data_with_features)
