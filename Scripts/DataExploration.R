@@ -3,38 +3,31 @@
 # plot the training_data features ####
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
 
-data <- data_other %>%
-  group_by(Activity) %>%
-  #slice_head(n = 10000) %>%
-  ungroup()
-features_list <- c("mean", "max", "min", "sd", "cor", "SMA", "minODBA", "maxODBA", "minVDBA", "maxVDBA", "entropy", "auto", "zero", "fft")
-data_processed <- process_data(na.omit(data), features_list, window_length = 1, 
-                                        overlap_percent = 0, down_Hz = 100, 
-                                        feature_normalisation = "Standardised")
-
-# Reshape data from wide to long format
-data_long <- data_processed %>%
-  pivot_longer(
-    cols = starts_with("mean_") | starts_with("max_") | starts_with("min_") | starts_with("sd_") | starts_with("entropy_") | starts_with("auto_") | starts_with("SMA") | starts_with("minODBA") | starts_with("maxODBA") | starts_with("minVDBA") | starts_with("maxVDBA") | starts_with("cor_"),
-    names_to = "Feature",
-    values_to = "Value"
-  )
-
-# Create the plot
-ggplot(data_long, aes(x = Value, fill = Activity)) +
-  geom_histogram(position = "identity", alpha = 0.6, binwidth = 0.1) +
-  facet_wrap(~ Feature, scales = "free_x", ncol = 4) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_blank(),  # Remove x-axis text
-    axis.text.y = element_blank(),  # Remove y-axis text
-    axis.title.x = element_blank(), # Remove x-axis title
-    axis.title.y = element_blank(), # Remove y-axis title
-    axis.ticks = element_blank()    # Remove axis ticks
-  ) +
-  labs(
-    fill = "Activity"
-  )
+feature_distribution_1 <- function(data_processed) {
+  # Reshape data from wide to long format
+  data_long <- data_processed %>%
+    pivot_longer(
+      cols = starts_with("X_") | starts_with("Y_") | starts_with("Z_"),
+      names_to = "Feature",
+      values_to = "Value"
+    )
+  
+  # Create the plot
+  ggplot(data_long, aes(x = Value, fill = Activity)) +
+    geom_histogram(position = "identity", alpha = 0.6, binwidth = 0.1) +
+    facet_wrap(~ Feature, scales = "free_x", ncol = 4) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_blank(),  # Remove x-axis text
+      axis.text.y = element_blank(),  # Remove y-axis text
+      axis.title.x = element_blank(), # Remove x-axis title
+      axis.title.y = element_blank(), # Remove y-axis title
+      axis.ticks = element_blank()    # Remove axis ticks
+    ) +
+    labs(
+      fill = "Activity"
+    )
+}
 
 
 # same idea as above but different view ####

@@ -16,7 +16,8 @@ all_dictionaries <- list("Vehkaoja_Dog" = "Vehkaoja_Dog_Labelled",
 Vehkaoja_Dog_Labelled <- list(name = "Vehkaoja_Dog_Labelled",
                               "Frequency" = 100, 
                               target_behaviours = c("Eating", "Sitting"), # regroup these to stationary
-                              window_length = 1
+                              window_length = 1,
+                              overlap_percent = 0
                               )
 
 Studd_Squirrel_Labelled <- list(name = "Studd_Squirrel_Labelled",

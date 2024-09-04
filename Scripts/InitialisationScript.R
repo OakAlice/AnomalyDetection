@@ -3,7 +3,8 @@
 # Set up ####
 # load packages
 library(pacman)
-p_load(data.table, tidyverse, future.apply, e1071, zoo, tsfeatures)
+p_load(data.table, tidyverse, future.apply, e1071, zoo, 
+       tsfeatures, umap, plotly, randomForest)
 library(h2o)
 
 # set base path
@@ -23,7 +24,7 @@ movement_data <- get(list_name)
 
 # Explore dataset ####
 # load in data
-move_data <- fread(file.path(base_path, "Data", paste0(movement_data$name, ".csv")))
+move_data <- fread(file.path(base_path, "Data", paste0(movement_data$name, "_Corrected.csv")))
 
 # generate plots
 # volume of data per individual and activity
@@ -58,61 +59,68 @@ plot_trace_example_graph <- plot_trace_example(behaviours = unique(move_data$Act
 # therefore, select the window length and add that to the Dictionary  
   
 ## Prt 2: Determine Features ####
-# generate a tonne of features
+### generate a tonne of features ####
   all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
   
-  
-  samples_per_window <- movement_data$window_length * movement_data$Frequency
-  num_windows <- ceiling(nrow(data_other) / samples_per_window)
-  
-  # Split the data into windows
-  windows <- lapply(1:num_windows, function(i) {
-    start_index <- (i - 1) * samples_per_window + 1
-    end_index <- min(i * samples_per_window, nrow(data))
-    window <- data[start_index:end_index, ]
-    
-    # Convert each column (e.g., X, Y, Z) into a list of time series
-    list(
-      X = window$Accelerometer.X,
-      Y = window$Accelerometer.Y,
-      Z = window$Accelerometer.Z
-    )
-  })
-  
+  # window data and generate features
+  example_data <- data_other %>% slice(1:100000)
+  feature_data <- generate_features(movement_data, data = example_data, normalise = "z_scale")
+ # fwrite(feature_data, file.path(base_path, "Output", "DogFeatureData_1000.csv"))
 
+### select the best features ####
+#### UMAP ####
+# UMAP is a non-linear version of PCA, we use this to reduce dimensionality
   
-###################HERE ##########################
-  data_tslist <- c(data_tslist$X, data_tslist$Y, data_tslist$Z)
+# define the hyperparameters
+minimum_distance <- 0.7
+num_neighbours <- 10
+shape_metric <- 'manhattan' # 'euclidean'
   
-  # generate
-  features <- lapply(windows, function(window){
-    tsfeatures(tslist = data_tslist,
-               features = c("frequency", "stl_features", "entropy", "acf_features"),
-               scale = FALSE,  
-               na.rm = TRUE,
-               multiprocess = TRUE)
-  })
+UMAP_representations <- UMAP_reduction(feature_data, minimum_distance, num_neighbours, shape_metric)
+UMAP_representations$UMAP_2D_plot
+UMAP_representations$UMAP_3D_plot
+UMAP_features <- ###
   
-  features_df <- do.call(rbind, features)
-  
+#### PCA ####
+pca_results <- PCA_reduction(feature_data)
+pca_result <- pca_results$pca_result
+pca_df <- pca_results$pca_df
+scree_plot(pca_result)
+scatter_plot_pca(pca_df)
+PCA_features <- pca_df[, c(1:10, which(names(pca_df) == "Activity"))]
 
-  
-# select the best features
-  
-# now you have found the optimal features for your system, add to Dictionary
+#### LDA ####
+number_features <- 30
+lda_results <- LDA_feature_selection(feature_data, target_column = "Activity", number_features)
+print(lda_results$Feature_Importance_Plot)
+LDA_features <- lda_results$Selected_Features[1:20, 1]
 
-  
+#### Random Forest ####
+num_trees <- 50
+number_features <- 50
+rf_results <- RF_feature_selection(feature_data, target_column = "Activity", n_trees = num_trees, number_features = 100)
+print(rf_results$Feature_Importance_Plot)
+print(rf_results$OOB_Error_Plot)
+rf_features <- rf_results$Selected_Features[1:100, ]
 
-  
-# Tuning various OCC ####  
-  
+# these possible optimal feature sets will then be explored in the model tuning
+# Tuning various classifiers ####  
+
+classifier_types <- c("SingleClassSVM")
+
+
+
+
   
 # list variables to test
 targetActivity_options <- c("Galloping", "Stationary", "Walking") #, "Walking", "Panting", "Sitting", "Eating")
 down_Hz <- 100
 window_length_options <- c(1, 2, 5)
 overlap_percent_options <- c(0, 10)
+feature_sets <- c(UMAP_features, PCA_features, LDA_features, rf_features)
 feature_normalisation_options <- c("Standardisation") #, "MinMaxScaling")
+
+# SVM options
 nu_options <- c(0.01, 0.1, 0.25, 0.5)
 kernel_options <- c("radial", "sigmoid", "polynomial", "linear")
 gamma_options <- c(0.001, 0.01)
