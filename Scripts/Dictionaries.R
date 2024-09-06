@@ -39,14 +39,14 @@ Smit_Cat_Labelled <- list("Frequency" = 30, target_behaviours = c())
 
 
 
-exploration_dataset <- exploration_dataset %>% 
-  select("DogID", "t_sec", "ANeck_x", "ANeck_y", "ANeck_z", "Behavior_2") %>%
-  rename("ID" = "DogID",
-         "Time" = "t_sec", 
-         "Accelerometer.X" = "ANeck_x", 
-         "Accelerometer.Y" ="ANeck_y", 
-         "Accelerometer.Z" = "ANeck_z", 
-         "Activity" = "Behavior_2")
-exploration_dataset <- exploration_dataset %>% filter(!Activity == "<undefined>")
+#exploration_dataset <- exploration_dataset %>% 
+#  select("DogID", "t_sec", "ANeck_x", "ANeck_y", "ANeck_z", "Behavior_2") %>%
+#  rename("ID" = "DogID",
+#         "Time" = "t_sec", 
+#         "Accelerometer.X" = "ANeck_x", 
+#         "Accelerometer.Y" ="ANeck_y", 
+#         "Accelerometer.Z" = "ANeck_z", 
+#         "Activity" = "Behavior_2")
+#exploration_dataset <- exploration_dataset %>% filter(!Activity == "<undefined>")
 
-fwrite(exploration_dataset, file.path(base_path, "Data", paste0(exploration_dataset_name, ".csv")))
+#fwrite(exploration_dataset, file.path(base_path, "Data", paste0(exploration_dataset_name, ".csv")))

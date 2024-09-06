@@ -1,42 +1,22 @@
 # Processing scripts for generating statistical and time series features
 
 
-
-# generate features main function ####
-generate_features <- function(movement_data, data, normalise) {
-  
-  # multiprocessing   
-  plan(multisession, workers = availableCores() - 2) # everything minus 2 so I don't kill my laptop
+# Function to process data for each ID
+process_id_data <- function(id_data) {
   
   # calculate window length and overlap
   samples_per_window <- movement_data$window_length * movement_data$Frequency
   overlap_samples <- if (movement_data$overlap_percent > 0) ((movement_data$overlap_percent / 100) * samples_per_window) else 0
+  num_windows <- ceiling((nrow(id_data) - overlap_samples) / (samples_per_window - overlap_samples))
   
-  num_windows <- ceiling((nrow(data) - overlap_samples) / (samples_per_window - overlap_samples))
-  
-  # list to store features and window info
-  time_series_list <- list()
-  statistical_list <- list()
-  window_info_list <- list()  # New list to store window information
-  
-  # window and process each window
-  for (i in 1:num_windows) {
+  # Function to process each window for this specific ID
+  process_window <- function(i) {
     start_index <- max(1, round((i - 1) * (samples_per_window - overlap_samples) + 1))
-    end_index <- min(start_index + samples_per_window - 1, nrow(data))
-    window_chunk <- data[start_index:end_index, ]
+    end_index <- min(start_index + samples_per_window - 1, nrow(id_data))
+    window_chunk <- id_data[start_index:end_index, ]
     
-    # Extract window identifying info and store in the list
-    window_info <- window_chunk %>% 
-      summarise(
-        Time = first(Time),
-        ID = first(ID),
-        Activity = names(which.max(table(Activity)))
-      )
-    window_info_list[[i]] <- window_info  # Store in the list
-    
-    # extract the statistical features 
-    statistical_features <- generate_statistical_features(window_chunk = window_chunk, down_Hz = movement_data$Frequency) 
-    statistical_list[[i]] <- statistical_features
+    # extract statistical features
+    statistical_features <- generate_statistical_features(window_chunk = window_chunk, down_Hz = movement_data$Frequency)
     
     # extract time series features
     time_series_features <- generate_ts_features(data = window_chunk)
@@ -45,27 +25,56 @@ generate_features <- function(movement_data, data, normalise) {
       pivot_longer(cols = -axis, names_to = "feature", values_to = "value") %>%  # Reshape the data from wide to long format
       unite("feature_name", axis, feature, sep = "_") %>%  # Combine axis and feature name
       pivot_wider(names_from = feature_name, values_from = value)  # Reshape back to wide format with prefixed feature names
-    time_series_list[[i]] <- single_row_features
     
+    # Extract window identifying info
+    window_info <- window_chunk %>% 
+      summarise(
+        Time = Time[1],
+        ID = ID[1],
+        Activity = as.character(
+          names(sort(table(Activity), decreasing = TRUE))[1]
+        )
+      ) %>% ungroup()
+    
+    # Combine the window info, time series, and statistical features
+    window_features <- cbind(window_info, single_row_features, statistical_features)
+    
+    return(window_features)
   }
   
-  plan(sequential)
+  # Use lapply to process each window for the current ID
+  window_features_list <- lapply(1:num_windows, process_window)
   
-  # Combine all the windows into a single data frame
-  time_series <- do.call(rbind, time_series_list)
-  statistical <- do.call(rbind, statistical_list)
-  window_info <- do.call(rbind, window_info_list)  # Combine window info
-  
-  # normalise
-  if (normalise == "z_scale"){
-    normal_ts <- as.data.frame(scale(time_series))
-    normal_stat <- as.data.frame(scale(statistical))
-    features <- cbind(window_info, normal_ts, normal_stat)
-  }else {
-    features <- cbind(window_info, time_series, statistical)
-  }
-  
+  # Combine all the windows for this ID into a single data frame
+  features <- do.call(rbind, window_features_list)
   return(features)
+}
+
+
+generate_features <- function(movement_data, data, normalise) {
+  
+  # multiprocessing   
+  plan(multisession, workers = availableCores() - 2)  # Use cores
+  
+  # Split data by 'ID'
+  data_by_id <- split(data, data$ID)
+  
+  # Process each ID's data separately
+  features_by_id <- lapply(data_by_id, process_id_data)
+  
+  plan(sequential)  # Return to sequential execution
+  
+  # Combine all IDs' features into a single data frame
+  all_features <- do.call(rbind, features_by_id)
+  
+  # Optionally normalise the feature data
+  #if (normalise == "z_scale") {
+  #  normal_ts <- as.data.frame(scale(do.call(rbind, time_series_list)))
+  #  normal_stat <- as.data.frame(scale(do.call(rbind, statistical_list)))
+  #  all_features <- cbind(do.call(rbind, window_info_list), normal_ts, normal_stat)
+  #}
+  
+  return(all_features)
 }
 
 
@@ -138,7 +147,7 @@ generate_statistical_features <- function(window_chunk, down_Hz) {
   result <- data.frame(row.names = 1)
   
   window_chunk <- data.frame(window_chunk)
-  
+
   for (axis in available_axes) {
     
     result[[paste0("mean_", axis)]] <- mean(window_chunk[[axis]], na.rm = TRUE)
@@ -188,7 +197,7 @@ generate_statistical_features <- function(window_chunk, down_Hz) {
       }
     }
   }
-  
+
   return(result)
 }
 

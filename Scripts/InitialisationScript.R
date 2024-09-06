@@ -11,7 +11,8 @@ library(h2o)
 base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
 
 # load in the scripts
-scripts <- list("Dictionaries.R", "PlotFunctions.R", "FeatureGeneration.R") #, "DataExploration.R")
+scripts <- list("Dictionaries.R", "PlotFunctions.R", "FeatureGeneration.R",
+                "FeatureSelection.R", "OtherFunctions.R") #, "DataExploration.R")
 
 for (script in scripts){
   source(file.path(base_path, "Scripts", script))
@@ -58,90 +59,191 @@ plot_trace_example_graph <- plot_trace_example(behaviours = unique(move_data$Act
 
 # therefore, select the window length and add that to the Dictionary  
   
-## Prt 2: Determine Features ####
+## Prt 2: Preprocess and Generate Features ####
 ### generate a tonne of features ####
   all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
   
   # window data and generate features
-  example_data <- data_other %>% slice(1:100000)
-  feature_data <- generate_features(movement_data, data = example_data, normalise = "z_scale")
- # fwrite(feature_data, file.path(base_path, "Output", "DogFeatureData_1000.csv"))
+  suppressMessages({
+    example_data <- data_other %>% group_by(ID, Activity) %>% 
+      filter(ID %in% unique(data_other$ID)[1:5]) %>% slice(1:1000)
+  })
+  suppressMessages({
+    feature_data <- generate_features(movement_data, data = example_data, normalise = "z_scale")
+  })
+ # fwrite(feature_data, file.path(base_path, "Output", "DogFeatureData_1.csv"))
+ # feature_data <- fread(file.path(base_path, "Output", "DogFeatureData_1000.csv"))
 
-### select the best features ####
+### insert other preprocessing steps later ####  
+  
+# Tuning models ####
+## Defining parameters ####
+targetActivity_options <- c("Walking")
+classifier_types <- c("SVM" ) #, "Autoencoder", "GMM", "PPNN", "KNN")
+all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
+
+### tunable feature parameters ####
 #### UMAP ####
-# UMAP is a non-linear version of PCA, we use this to reduce dimensionality
-  
-# define the hyperparameters
-minimum_distance <- 0.7
-num_neighbours <- 10
-shape_metric <- 'manhattan' # 'euclidean'
-  
-UMAP_representations <- UMAP_reduction(feature_data, minimum_distance, num_neighbours, shape_metric)
-UMAP_representations$UMAP_2D_plot
-UMAP_representations$UMAP_3D_plot
-UMAP_features <- ###
-  
-#### PCA ####
-pca_results <- PCA_reduction(feature_data)
-pca_result <- pca_results$pca_result
-pca_df <- pca_results$pca_df
-scree_plot(pca_result)
-scatter_plot_pca(pca_df)
-PCA_features <- pca_df[, c(1:10, which(names(pca_df) == "Activity"))]
+minimum_distance_options <- c(0.7)
+num_neighbours_options <- 10
+shape_metric_options <- 'manhattan' # 'euclidean'
 
-#### LDA ####
-number_features <- 30
-lda_results <- LDA_feature_selection(feature_data, target_column = "Activity", number_features)
-print(lda_results$Feature_Importance_Plot)
-LDA_features <- lda_results$Selected_Features[1:20, 1]
+feature_sets <- c("UMAP")
+feature_normalisation_options <- c("z-scale") # "Standardisation", "MinMaxScaling"
 
-#### Random Forest ####
-num_trees <- 50
-number_features <- 50
-rf_results <- RF_feature_selection(feature_data, target_column = "Activity", n_trees = num_trees, number_features = 100)
-print(rf_results$Feature_Importance_Plot)
-print(rf_results$OOB_Error_Plot)
-rf_features <- rf_results$Selected_Features[1:100, ]
-
-# these possible optimal feature sets will then be explored in the model tuning
-# Tuning various classifiers ####  
-
-classifier_types <- c("SingleClassSVM")
-
-
-
-
-  
-# list variables to test
-targetActivity_options <- c("Galloping", "Stationary", "Walking") #, "Walking", "Panting", "Sitting", "Eating")
-down_Hz <- 100
-window_length_options <- c(1, 2, 5)
-overlap_percent_options <- c(0, 10)
-feature_sets <- c(UMAP_features, PCA_features, LDA_features, rf_features)
-feature_normalisation_options <- c("Standardisation") #, "MinMaxScaling")
-
-# SVM options
-nu_options <- c(0.01, 0.1, 0.25, 0.5)
-kernel_options <- c("radial", "sigmoid", "polynomial", "linear")
-gamma_options <- c(0.001, 0.01)
-degree_options <- c(2, 3, 4)
-
-model_hyperparameters_list <- list(
-  radial = list(
-    gamma = gamma_options
-  ),
-  polynomial = list(
-    gamma = gamma_options,
-    degree = degree_options
-  ),
-  sigmoid = list(
-    gamma = gamma_options
-  )
+feature_hyperparameters_list <- list(
+  UMAP = list(min_dist = minimum_distance_options,
+              n_neighbours = num_neighbours_options,
+              metric = shape_metric_options)
 )
 
-features_list <- c("mean", "max", "min", "sd", "cor", "SMA", "minODBA", "maxODBA", "minVDBA", "maxVDBA", "entropy", "auto", "zero", "fft")
-#features_list <- c("auto", "entropy", "max", "min", "maxVDBA", "sd")
-all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
+### tunable model parameters ####
+### SVM specific options ####
+nu_options <- c(0.01)
+kernel_options <- c("radial" ) #, "sigmoid", "polynomial", "linear")
+gamma_options <- c(0.001)
+degree_options <- c(3)
+
+model_hyperparameters_list <- list(
+  radial = list(gamma = gamma_options),
+  polynomial = list(gamma = gamma_options, degree = degree_options),
+  sigmoid = list(gamma = gamma_options))
+
+### All possible parameter sets ####
+# make options_df for all of these options # TODO: Is just for SVM right now
+options_df <- expand.grid(targetActivity_options, 
+                          feature_sets, 
+                          feature_normalisation_options, 
+                          nu_options, 
+                          kernel_options)
+colnames(options_df) <- c("targetActivity", "feature_sets", "feature_normalisation", "nu", "kernel")
+
+# add the additional parameters
+extended_options_df <- create_extended_options(model_hyperparameters_list, options_df)
+extended_options_df2 <- create_extended_options2(feature_hyperparameters_list, extended_options_df)
+  
+# Tune Models ####
+model_outcome <- data.frame() # for each model
+cross_outcome <- data.frame() # for each cross-validation fold
+
+for (i in 1:nrow(extended_options_df)){
+  
+  # select row
+  options <- extended_options_df2[i, ] %>% data.frame()
+  
+  # begin cross validation
+ for (k in 1:k_folds){ 
+  
+   # create training and validation data
+   validation_data <- feature_data[feature_data$ID %in% sample(unique(feature_data$ID), ceiling(length(unique(feature_data$ID)) * 0.2)), ]
+   suppressMessages({
+       training_data <- anti_join(feature_data, validation_data) #%>%
+         #filter(Activity == as.character(options$targetActivity))
+       # TODO: This line needs to be moved down
+   })
+   
+  # extract numeric elements from feature_data # TODO: add automated removal of NA columns
+   selected_training_data <- training_data %>%
+     select(-Time, -ID, -Y_zero_proportion, -X_nperiods, -X_seasonal_period, -Y_nperiods, -Y_seasonal_period, -Z_nperiods, -Z_seasonal_period, -X_alpha, -X_beta, -X_gamma, -Y_alpha, -Y_beta, -Y_gamma, -Z_alpha, -Z_beta, -Z_gamma) %>% # these were all NA
+     na.omit()
+   training_labels <- selected_training_data %>% select(Activity)
+   training_numeric <- selected_training_data %>% select(-Activity)
+   
+  #### select the feature subset ####
+     if (options$feature_sets == "UMAP") {  # TODO: increase number of embeddings
+       UMAP_representations <- UMAP_reduction(training_numeric, training_labels, 
+                                              minimum_distance = options$min_dist, 
+                                              num_neighbours = options$n_neighbours, 
+                                              shape_metric = options$metric,
+                                              save_model_path = file.path(base_path, "Output"))
+       #UMAP_representations$UMAP_2D_plot
+       #UMAP_representations$UMAP_3D_plot
+       selected_feature_model <- UMAP_representations$UMAP_2D_model
+       selected_feature_data <- as.data.frame(UMAP_representations$UMAP_2D_embeddings) %>%
+         filter(Activity == as.character(options$targetActivity)) %>%
+         select(-Activity)
+       
+     # Todo: add LDA, PCA, and RF
+    
+  #### train model ####
+       #add in the other types later
+    if (model == "SVM"){
+      params <- list(
+        gamma = options$gamma,
+        degree = options$degree
+      )
+      params <- Filter(Negate(is.na), params)
+      
+      single_class_SVM <- do.call(svm, c(
+        list(
+          selected_feature_data, 
+          y = NULL,  # No response variable for one-class SVM
+          type = 'one-classification',
+          nu = options$nu,
+          scale = TRUE,
+          kernel = options$kernel
+        ),
+        params  # Add filtered parameters
+      ))
+    }
+    
+    #### validate model ####
+    # make into the same shape as the other data
+       validation_labels <- validation_data %>% select(Activity)
+       numeric_validation_data <- validation_data %>% 
+         select(-Time, -ID, -Activity, -Y_zero_proportion, -X_nperiods, -X_seasonal_period, -Y_nperiods, -Y_seasonal_period, -Z_nperiods, -Z_seasonal_period, -X_alpha, -X_beta, -X_gamma, -Y_alpha, -Y_beta, -Y_gamma, -Z_alpha, -Z_beta, -Z_gamma) %>% # these were all NA
+         na.omit()
+       
+    if(options$feature_sets == "UMAP") {
+      umap_model <- readRDS(file.path(base_path, "Output", "umap_2D_model.rds"))
+      transformed_data <- predict(umap_model, numeric_validation_data) %>%
+        as.data.frame
+      colnames(transformed_data) <- c("UMAP1", "UMAP2")
+    } 
+      
+    # use the previously made SVM to predict on this new data
+    validation_predictions <- predict(single_class_SVM, newdata = transformed_data)
+      
+    predicted <- ifelse(validation_predictions == "TRUE", "Normal", "Outlier")
+    reference <- ifelse(validation_labels$Activity == options$targetActivity, "Normal", "Outlier")   
+       
+    performance <- table(Predicted = predicted, Reference = reference[1:length(predicted)])
+    
+    
+    
+    ######HERE#########
+    # calculate performance metrics as AUC and Sp/Se
+    
+    
+    
+    # save to the loop
+    cross_outcome <- rbind(cross_outcome, cross_results)
+  }
+  
+  # take the mean and standard deviations of the three cross-validation results 
+  
+  # save to the dataframe.
+  model_outcome <- rbind(model_outcome, model_results)
+}
+
+
+
+
+
+training_feature_data <- as.matrix(training_data_features)
+validation_feature_data <- as.matrix(validation_data_features)
+
+iso_forest <- isolation.forest(
+  data = training_feature_data,
+  ntrees = 100,      # Number of trees to build (default is 100)
+  sample_size = 1000, # Subsampling size (default is 256)
+  ndim = 3,          # Number of dimensions to randomly sample at each node
+  prob_pick_avg_gain = TRUE # Split by average gain
+  #max_depth = ceiling(log2(10))
+)
+
+
+
 
 # from here on, it will loop
 optimal_model_designs <- data.frame()
