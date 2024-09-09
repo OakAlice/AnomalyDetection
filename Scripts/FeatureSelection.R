@@ -26,17 +26,18 @@ UMAP_reduction <- function(numeric_features, labels, minimum_distance, num_neigh
   umap_df_3$Activity <- labels[1:nrow(umap_df_3), ]
   
   # Plot the clusters in 2D
-  UMAP_2D_plot <- ggplot(umap_df, aes(x = UMAP1, y = UMAP2, color = Activity)) +
+  UMAP_2D_plot <- ggplot(umap_df, aes(x = UMAP1, y = UMAP2, color = Activity$Activity)) +
     geom_point(alpha = 0.6) +
     theme_minimal() +
     labs(x = "Dimension 1", y = "Dimension 2", colour = "Activity") +
     theme(legend.position = "right") +
     annotate("text", x = Inf, y = -Inf, label = paste("n_neighbors:", num_neighbours, "\nmin_dist:", minimum_distance, "\nmetric:", shape_metric),
-             hjust = 1.1, vjust = -0.5, size = 3, color = "black", fontface = "italic")
+             hjust = 1.1, vjust = -0.5, size = 3, color = "black", fontface = "italic")+
+    scale_color_discrete()
   
   # Plot in 3D
   UMAP_3D_plot <- plotly::plot_ly(umap_df_3, x = ~UMAP1, y = ~UMAP2, z = ~UMAP3, 
-                                  color = ~Activity, colors = "Set1", 
+                                  color = ~Activity$Activity, colors = "Set1", 
                                   type = "scatter3d", mode = "markers",
                                   marker = list(size = 3, opacity = 0.5)) %>% 
     plotly::layout(scene = list(xaxis = list(title = "UMAP1"), yaxis = list(title = "UMAP2"), zaxis = list(title = "UMAP3")))

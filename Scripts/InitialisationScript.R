@@ -4,8 +4,8 @@
 # load packages
 library(pacman)
 p_load(data.table, tidyverse, future.apply, e1071, zoo, 
-       tsfeatures, umap, plotly, randomForest)
-library(h2o)
+       tsfeatures, umap, plotly, randomForest, pROC)
+#library(h2o)
 
 # set base path
 base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
@@ -124,12 +124,13 @@ extended_options_df2 <- create_extended_options2(feature_hyperparameters_list, e
   
 # Tune Models ####
 model_outcome <- data.frame() # for each model
-cross_outcome <- data.frame() # for each cross-validation fold
 
 for (i in 1:nrow(extended_options_df)){
   
   # select row
   options <- extended_options_df2[i, ] %>% data.frame()
+  
+  cross_outcome <- data.frame() # for each cross-validation fold
   
   # begin cross validation
  for (k in 1:k_folds){ 
@@ -137,8 +138,7 @@ for (i in 1:nrow(extended_options_df)){
    # create training and validation data
    validation_data <- feature_data[feature_data$ID %in% sample(unique(feature_data$ID), ceiling(length(unique(feature_data$ID)) * 0.2)), ]
    suppressMessages({
-       training_data <- anti_join(feature_data, validation_data) #%>%
-         #filter(Activity == as.character(options$targetActivity))
+       training_data <- anti_join(feature_data, validation_data)
        # TODO: This line needs to be moved down
    })
    
@@ -159,8 +159,9 @@ for (i in 1:nrow(extended_options_df)){
        #UMAP_representations$UMAP_2D_plot
        #UMAP_representations$UMAP_3D_plot
        selected_feature_model <- UMAP_representations$UMAP_2D_model
+       # just get data from the training class to train the OCC
        selected_feature_data <- as.data.frame(UMAP_representations$UMAP_2D_embeddings) %>%
-         filter(Activity == as.character(options$targetActivity)) %>%
+         filter(Activity == as.character(options$targetActivity)[1]) %>%
          select(-Activity)
        
      # Todo: add LDA, PCA, and RF
@@ -189,10 +190,11 @@ for (i in 1:nrow(extended_options_df)){
     
     #### validate model ####
     # make into the same shape as the other data
-       validation_labels <- validation_data %>% select(Activity)
-       numeric_validation_data <- validation_data %>% 
-         select(-Time, -ID, -Activity, -Y_zero_proportion, -X_nperiods, -X_seasonal_period, -Y_nperiods, -Y_seasonal_period, -Z_nperiods, -Z_seasonal_period, -X_alpha, -X_beta, -X_gamma, -Y_alpha, -Y_beta, -Y_gamma, -Z_alpha, -Z_beta, -Z_gamma) %>% # these were all NA
+       selected_validation_data <- training_data %>%
+         select(-Time, -ID, -Y_zero_proportion, -X_nperiods, -X_seasonal_period, -Y_nperiods, -Y_seasonal_period, -Z_nperiods, -Z_seasonal_period, -X_alpha, -X_beta, -X_gamma, -Y_alpha, -Y_beta, -Y_gamma, -Z_alpha, -Z_beta, -Z_gamma) %>% # these were all NA
          na.omit()
+       validation_labels <- selected_validation_data %>% select(Activity)
+       numeric_validation_data <- selected_validation_data %>% select(-Activity)
        
     if(options$feature_sets == "UMAP") {
       umap_model <- readRDS(file.path(base_path, "Output", "umap_2D_model.rds"))
@@ -202,28 +204,52 @@ for (i in 1:nrow(extended_options_df)){
     } 
       
     # use the previously made SVM to predict on this new data
-    validation_predictions <- predict(single_class_SVM, newdata = transformed_data)
-      
-    predicted <- ifelse(validation_predictions == "TRUE", "Normal", "Outlier")
-    reference <- ifelse(validation_labels$Activity == options$targetActivity, "Normal", "Outlier")   
-       
-    performance <- table(Predicted = predicted, Reference = reference[1:length(predicted)])
+    decision_scores <- predict(single_class_SVM, newdata = transformed_data, decision.values = TRUE)
+    scores <- as.numeric(attr(decision_scores, "decision.values"))
     
+    # get the real labels
+    ground_truth_labels <- ifelse(validation_labels$Activity == options$targetActivity, 1, -1)   
     
+    # calculate AUC
+    roc_curve <- roc(ground_truth_labels, scores)
+    auc_value <- auc(roc_curve)
     
-    ######HERE#########
-    # calculate performance metrics as AUC and Sp/Se
+    # Plot the ROC curve
+    #AUC_ROC_Curve <- plot(roc_curve, col = "#1c61b6", main = paste("ROC Curve (AUC =", round(auc_value, 4), ")"))
     
-    
+    # save a row of parameters and values
+    cross_result <- cbind(Model = "SVM",
+                          Activity = as.character(options[1, "targetActivity"]), 
+                          nu = as.character(options[1, "nu"]), 
+                          gamma = as.character(options[1, "gamma"]), 
+                          kernel = as.character(options[1, "kernel"]),
+                          feature_method = as.character(options[1, "feature_sets"]),
+                          min_dist = as.character(options[1, "min_dist"]),
+                          n_neighbours = as.character(options[1, "n_neighbours"]),
+                          metric = as.character(options[1, "metric"]),
+                          feature_normalisation = as.character(options[1, "feature_normalisation"]),
+                          AUC_Value = as.numeric(auc_value)
+                          ) %>% data.frame()
     
     # save to the loop
-    cross_outcome <- rbind(cross_outcome, cross_results)
+    cross_outcome <- rbind(cross_outcome, cross_result)
   }
   
-  # take the mean and standard deviations of the three cross-validation results 
+  # take the mean and standard deviations of the three cross-validation AUC results
+   suppressMessages({
+     cross_average <- cross_outcome %>%
+       # Exclude 'AUC_Value' from the grouping columns
+       group_by(across(-AUC_Value)) %>%  
+       mutate(AUC_Value = as.numeric(AUC_Value)) %>%
+       summarise(
+         mean_AUC = mean(AUC_Value, na.rm = TRUE),  # Calculate the mean AUC
+         sd_AUC = sd(AUC_Value, na.rm = TRUE)       # Calculate the standard deviation of AUC
+       )
+   })
   
   # save to the dataframe.
-  model_outcome <- rbind(model_outcome, model_results)
+  model_outcome <- rbind(model_outcome, cross_average)
+ }
 }
 
 
