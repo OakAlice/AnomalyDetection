@@ -103,3 +103,15 @@ fwrite(dog_data4, file.path(base_path, "Data", "Vehkaoja_Dog_Labelled_Corrected.
 
 
 summary <- dog_data4 %>% group_by(Activity) %>% count()
+
+
+
+# stitch all the feature data together
+files <- list.files(file.path(base_path, "Data", "Feature_data", "Vehkaoja_Dog"), full.names = TRUE)
+
+combined_data <- files %>%
+  lapply(fread) %>%
+  bind_rows()
+
+
+fwrite(combined_data, file.path(base_path, "Data", "Feature_data", "Vehkaoja_Dog_labelled_features.csv"))

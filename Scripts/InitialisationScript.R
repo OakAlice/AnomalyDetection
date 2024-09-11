@@ -4,7 +4,7 @@
 # load packages
 library(pacman)
 p_load(data.table, tidyverse, future.apply, e1071, zoo, 
-       tsfeatures, umap, plotly, randomForest, pROC)
+       tsfeatures, umap, plotly, randomForest, pROC, purrr)
 #library(h2o)
 
 # set base path
@@ -66,15 +66,31 @@ plot_trace_example_graph <- plot_trace_example(behaviours = unique(move_data$Act
   # window data and generate features
   suppressMessages({
     example_data <- data_other %>% group_by(ID, Activity) %>% 
-      filter(ID %in% unique(data_other$ID)[1:5]) %>% slice(1:1000)
+      filter(ID %in% unique(data_other$ID)[1:2]) %>% 
+      slice(1:100)
   })
-  suppressMessages({
-    feature_data <- generate_features(movement_data, data = example_data, normalise = "z_scale")
-  })
+  #suppressMessages({
+    feature_data <- generate_features(movement_data, data = data_other, normalise = "z_scale")
+  #})
  # fwrite(feature_data, file.path(base_path, "Output", "DogFeatureData_1.csv"))
- # feature_data <- fread(file.path(base_path, "Output", "DogFeatureData_1000.csv"))
+ feature_data <- fread(file.path(base_path, "Data", "Feature_data", "Vehkaoja_Dog_labelled_features.csv"))
 
 ### insert other preprocessing steps later ####  
+ 
+### select potential features ####
+potential_features <- select_potential_features(feature_data, threshold = 0.9)
+subset_data <- feature_data %>% select(c(all_of(potential_features), Activity, Time, ID))
+# use the RF to select the 30 most explanatory features 
+RF_features <- RF_feature_selection(subset_data, 
+                                          target_column = "Activity", 
+                                          n_trees = 100, 
+                                          number_features = 50)
+   
+top_50_features <- RF_features$Selected_Features$Feature[1:50]
+#RF_features$Feature_Importance_Plot
+#RF_features$OOB_Error_Plot
+simplified_feature_data <- feature_data %>% select(c(all_of(top_50_features), Activity, Time, ID))
+feature_data <- simplified_feature_data
   
 # Tuning models ####
 ## Defining parameters ####
@@ -139,19 +155,15 @@ for (i in 1:nrow(extended_options_df)){
    validation_data <- feature_data[feature_data$ID %in% sample(unique(feature_data$ID), ceiling(length(unique(feature_data$ID)) * 0.2)), ]
    suppressMessages({
        training_data <- anti_join(feature_data, validation_data)
-       # TODO: This line needs to be moved down
    })
    
-  # extract numeric elements from feature_data # TODO: add automated removal of NA columns
-   selected_training_data <- training_data %>%
-     select(-Time, -ID, -Y_zero_proportion, -X_nperiods, -X_seasonal_period, -Y_nperiods, -Y_seasonal_period, -Z_nperiods, -Z_seasonal_period, -X_alpha, -X_beta, -X_gamma, -Y_alpha, -Y_beta, -Y_gamma, -Z_alpha, -Z_beta, -Z_gamma) %>% # these were all NA
-     na.omit()
-   training_labels <- selected_training_data %>% select(Activity)
-   training_numeric <- selected_training_data %>% select(-Activity)
-   
+   training_labels <- training_data %>% select(Activity)
+   training_numeric <- training_data %>% select(-Activity, -Time, -ID)
+  
   #### select the feature subset ####
      if (options$feature_sets == "UMAP") {  # TODO: increase number of embeddings
-       UMAP_representations <- UMAP_reduction(training_numeric, training_labels, 
+       UMAP_representations <- UMAP_reduction(numeric_features= training_numeric, 
+                                              labels = training_labels, 
                                               minimum_distance = options$min_dist, 
                                               num_neighbours = options$n_neighbours, 
                                               shape_metric = options$metric,
@@ -165,7 +177,9 @@ for (i in 1:nrow(extended_options_df)){
          select(-Activity)
        
      # Todo: add LDA, PCA, and RF
-    
+     }
+   
+   
   #### train model ####
        #add in the other types later
     if (model == "SVM"){
@@ -174,6 +188,8 @@ for (i in 1:nrow(extended_options_df)){
         degree = options$degree
       )
       params <- Filter(Negate(is.na), params)
+      
+      selected_feature_data <- training_data %>% filter(Activity == as.character(options$targetActivity)[1]) %>% select(-Activity, -Time, -ID)
       
       single_class_SVM <- do.call(svm, c(
         list(
@@ -189,26 +205,21 @@ for (i in 1:nrow(extended_options_df)){
     }
     
     #### validate model ####
-    # make into the same shape as the other data
-       selected_validation_data <- training_data %>%
-         select(-Time, -ID, -Y_zero_proportion, -X_nperiods, -X_seasonal_period, -Y_nperiods, -Y_seasonal_period, -Z_nperiods, -Z_seasonal_period, -X_alpha, -X_beta, -X_gamma, -Y_alpha, -Y_beta, -Y_gamma, -Z_alpha, -Z_beta, -Z_gamma) %>% # these were all NA
-         na.omit()
-       validation_labels <- selected_validation_data %>% select(Activity)
-       numeric_validation_data <- selected_validation_data %>% select(-Activity)
-       
+      
     if(options$feature_sets == "UMAP") {
       umap_model <- readRDS(file.path(base_path, "Output", "umap_2D_model.rds"))
-      transformed_data <- predict(umap_model, numeric_validation_data) %>%
+      transformed_data <- predict(umap_model, validation_numeric) %>%
         as.data.frame
       colnames(transformed_data) <- c("UMAP1", "UMAP2")
+      validation_numeric <- transformed_data
     } 
       
     # use the previously made SVM to predict on this new data
-    decision_scores <- predict(single_class_SVM, newdata = transformed_data, decision.values = TRUE)
+   validation_numeric <- validation_data %>% select(-Activity, -Time, -ID)
+    ground_truth_labels <- validation_data %>% select(Activity)
+    ground_truth_labels <- ifelse(ground_truth_labels == options$targetActivity, 1, -1)   
+    decision_scores <- predict(single_class_SVM, newdata = validation_numeric, decision.values = TRUE)
     scores <- as.numeric(attr(decision_scores, "decision.values"))
-    
-    # get the real labels
-    ground_truth_labels <- ifelse(validation_labels$Activity == options$targetActivity, 1, -1)   
     
     # calculate AUC
     roc_curve <- roc(ground_truth_labels, scores)

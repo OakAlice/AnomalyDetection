@@ -2,6 +2,11 @@
 
 # UMAP ####
 UMAP_reduction <- function(numeric_features, labels, minimum_distance, num_neighbours, shape_metric, save_model_path) {
+  
+  # minimum_distance = 0.1
+  # num_neighbours = 200
+  # metric = "euclidean"
+  
   # Train UMAP model on the known data
   umap_model_2D <- umap::umap(numeric_features, n_neighbors = num_neighbours, min_dist = minimum_distance, metric = shape_metric)
   umap_model_3D <- umap::umap(numeric_features, n_neighbors = num_neighbours, min_dist = minimum_distance, metric = shape_metric, n_components = 3)
@@ -179,15 +184,15 @@ LDA_feature_selection <- function(feature_data, target_column, number_features) 
 
 # Random Forest ####
 RF_feature_selection <- function(feature_data, target_column, n_trees, number_features) {
-  # Ensure the target column is a factor
-  feature_data[[target_column]] <- as.factor(feature_data[[target_column]])
   
   # Extract numeric features and target variable
-  numeric_features <- feature_data %>%
-    select_if(is.numeric) %>% # Select only numeric columns
-    select(-Time, -ID, -X_nperiods, -X_seasonal_period, -Y_zero_proportion, -Y_nperiods, -Y_seasonal_period, -Z_nperiods, -Z_seasonal_period, -X_alpha, -X_beta, -X_gamma, -Y_alpha, -Y_beta, -Y_gamma, -Z_alpha, -Z_beta, -Z_gamma) %>% # these were all NA
+  feature_data <- feature_data %>%
+    select(-Time, -ID) %>%
+    select(where(~ !is.na(.x[1]))) %>%
+    #, -X_nperiods, -X_seasonal_period, -Y_zero_proportion, -Y_nperiods, -Y_seasonal_period, -Z_nperiods, -Z_seasonal_period, -X_alpha, -X_beta, -X_gamma, -Y_alpha, -Y_beta, -Y_gamma, -Z_alpha, -Z_beta, -Z_gamma) %>% # these were all NA
     na.omit()
-  target <- feature_data[[target_column]]
+  target <- as.factor(feature_data[[target_column]])
+  numeric_features <- feature_data %>% select(-Activity)
   
   # Fit Random Forest model
   rf_model <- randomForest(x = numeric_features, y = target, ntree = n_trees, importance = TRUE)
@@ -203,7 +208,7 @@ RF_feature_selection <- function(feature_data, target_column, n_trees, number_fe
     geom_bar(stat = "identity", fill = "forestgreen") +
     coord_flip() +
     labs(
-      title = "Top 10 Feature Importance based on Random Forest",
+      title = "Top Feature Importance based on Random Forest",
       x = "Features",
       y = "Importance (Mean Decrease in Accuracy)"
     ) +
@@ -228,4 +233,28 @@ RF_feature_selection <- function(feature_data, target_column, n_trees, number_fe
     Feature_Importance_Plot = feature_importance_plot,
     OOB_Error_Plot = oob_error_plot
   )
+}
+
+
+  # select potential features 
+select_potential_features <- function(feature_data, threshold){
+  
+  # Subset 40% of the data based on unique IDs
+  subset_data <- feature_data[feature_data$ID %in% sample(unique(feature_data$ID), ceiling(length(unique(feature_data$ID)) * 0.4)), ]
+  
+  # Remove features with little variance (using a threshold)
+  variances <- apply(subset_data, 2, var, na.rm = TRUE)  # Calculate variances
+  variable_features <- subset_data[, variances > threshold]  %>% data.frame() %>% filter(. == TRUE) %>% rownames()
+  subset_data <- subset_data %>% select(all_of(variable_features))
+  
+  # Remove features highly correlated to others
+  numeric_columns <- subset_data %>% select(-Time, -ID)  # Select numeric columns
+  corr_matrix <- cor(numeric_columns, use = "complete.obs")
+  
+  high_corr <- findCorrelation(corr_matrix, cutoff = 0.9)  # Identify highly correlated features (cutoff at 0.9)
+  subset_data <- numeric_columns %>% select(-all_of(high_corr))  # Remove highly correlated features
+  
+  potential_features <- colnames(numeric_columns)
+  
+  return(potential_features)
 }

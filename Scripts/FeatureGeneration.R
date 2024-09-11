@@ -59,15 +59,21 @@ generate_features <- function(movement_data, data, normalise) {
   # Split data by 'ID'
   data_by_id <- split(data, data$ID)
   
-  # Process each ID's data separately
-  features_by_id <- lapply(data_by_id, process_id_data)
+  # process each
+  features_by_id <- list()
+  
+  # Process each ID's data separately using a for loop
+  for (id in names(data_by_id)) {
+    features_by_id[[id]] <- process_id_data(id_data = data_by_id[[id]])
+  }
+  
   
   plan(sequential)  # Return to sequential execution
   
   # Combine all IDs' features into a single data frame
   all_features <- do.call(rbind, features_by_id)
   
-  # Optionally normalise the feature data
+  # Optionally normalise the feature
   #if (normalise == "z_scale") {
   #  normal_ts <- as.data.frame(scale(do.call(rbind, time_series_list)))
   #  normal_stat <- as.data.frame(scale(do.call(rbind, statistical_list)))
