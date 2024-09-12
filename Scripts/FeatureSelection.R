@@ -4,7 +4,7 @@
 UMAP_reduction <- function(numeric_features, labels, minimum_distance, num_neighbours, shape_metric, save_model_path) {
   
   # minimum_distance = 0.1
-  # num_neighbours = 200
+  # num_neighbours = 40
   # metric = "euclidean"
   
   # Train UMAP model on the known data

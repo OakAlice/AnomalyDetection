@@ -2,7 +2,7 @@
 
 
 # Function to process data for each ID
-process_id_data <- function(id_data) {
+process_id_data <- function(id_data, features_type) {
   
   # calculate window length and overlap
   samples_per_window <- movement_data$window_length * movement_data$Frequency
@@ -16,15 +16,19 @@ process_id_data <- function(id_data) {
     window_chunk <- id_data[start_index:end_index, ]
     
     # extract statistical features
+    if ("statistical" %in% features_type){
     statistical_features <- generate_statistical_features(window_chunk = window_chunk, down_Hz = movement_data$Frequency)
+    } 
     
-    # extract time series features
-    time_series_features <- generate_ts_features(data = window_chunk)
-    single_row_features <- time_series_features %>%
-      mutate(axis = c("X", "Y", "Z")) %>% 
-      pivot_longer(cols = -axis, names_to = "feature", values_to = "value") %>%  # Reshape the data from wide to long format
-      unite("feature_name", axis, feature, sep = "_") %>%  # Combine axis and feature name
-      pivot_wider(names_from = feature_name, values_from = value)  # Reshape back to wide format with prefixed feature names
+    # extract timeseries features and flatten
+    if ("timseries" %in% features_type){
+      time_series_features <- generate_ts_features(data = window_chunk)
+      single_row_features <- time_series_features %>%
+        mutate(axis = c("X", "Y", "Z")) %>% 
+        pivot_longer(cols = -axis, names_to = "feature", values_to = "value") %>%  # Reshape the data from wide to long format
+        unite("feature_name", axis, feature, sep = "_") %>%  # Combine axis and feature name
+        pivot_wider(names_from = feature_name, values_from = value)  # Reshape back to wide format with prefixed feature names
+    }
     
     # Extract window identifying info
     window_info <- window_chunk %>% 
@@ -37,7 +41,11 @@ process_id_data <- function(id_data) {
       ) %>% ungroup()
     
     # Combine the window info, time series, and statistical features
-    window_features <- cbind(window_info, single_row_features, statistical_features)
+    if (exists("window_info")) window_info <- window_info else window_info <- NULL
+    if (exists("single_row_features")) single_row_features <- single_row_features else single_row_features <- NULL
+    if (exists("statistical_features")) statistical_features <- statistical_features else statistical_features <- NULL
+    
+    window_features <- do.call(cbind, Filter(Negate(is.null), list(window_info, single_row_features, statistical_features)))
     
     return(window_features)
   }
@@ -51,7 +59,7 @@ process_id_data <- function(id_data) {
 }
 
 
-generate_features <- function(movement_data, data, normalise) {
+generate_features <- function(movement_data, data, normalise, features_type) {
   
   # multiprocessing   
   plan(multisession, workers = availableCores() - 2)  # Use cores
@@ -64,7 +72,7 @@ generate_features <- function(movement_data, data, normalise) {
   
   # Process each ID's data separately using a for loop
   for (id in names(data_by_id)) {
-    features_by_id[[id]] <- process_id_data(id_data = data_by_id[[id]])
+    features_by_id[[id]] <- process_id_data(id_data = data_by_id[[id]], features_type)
   }
   
   

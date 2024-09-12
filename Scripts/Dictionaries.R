@@ -1,4 +1,6 @@
-# Dictionaries
+# ---------------------------------------------------------------------------
+# Defining Dataset Parameters
+# ---------------------------------------------------------------------------
 
 # list formatted data
 # formatted means columns: Time, ID, Accelerometer.X, Acceleormeter.Y, Accelerometer.Z, Activity

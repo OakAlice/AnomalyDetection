@@ -1,5 +1,14 @@
 # Other functions
 
+
+
+ensure.dir <- function(path) {
+  if (!dir.exists(path)) {
+    dir.create(path, recursive = TRUE)
+  }
+}
+
+
 # increase hyperparameter options in options_df ####
 # bind this with the normal parameter options
 create_extended_options <- function(model_hyperparameters_list, options_df) {
@@ -39,17 +48,17 @@ expand_hyperparameters <- function(model_hyperparameters_list) {
 create_extended_options2 <- function(feature_hyperparameters_list, extended_options_df) {
   
   # Initialize an empty dataframe for storing expanded hyperparameters
-  hyperparameters_df <- data.frame(feature_set = character(0))
+  hyperparameters_df <- data.frame(feature_selection = character(0))
   
   # Iterate over each feature set in the hyperparameter list
-  for (feature_set in names(feature_hyperparameters_list)) {
-    feature_hyperparameters <- feature_hyperparameters_list[[feature_set]]
+  for (feature_selection in names(feature_hyperparameters_list)) {
+    feature_hyperparameters <- feature_hyperparameters_list[[feature_selection]]
     
     # Create all combinations of the hyperparameters
     all_combinations <- expand.grid(feature_hyperparameters)
     
     # Add a column for the feature set
-    all_combinations$feature_set <- feature_set
+    all_combinations$feature_selection <- feature_selection
     
     # Bind the new combinations to the growing hyperparameters dataframe
     hyperparameters_df <- dplyr::bind_rows(hyperparameters_df, all_combinations)
@@ -58,10 +67,43 @@ create_extended_options2 <- function(feature_hyperparameters_list, extended_opti
   # Merge the hyperparameters with the extended options dataframe
   extended_options_df2 <- merge(
     extended_options_df,
-    hyperparameters_df[hyperparameters_df$feature_set %in% unique(extended_options_df$feature_sets), ],
-    by.x = "feature_sets", by.y = "feature_set",
+    hyperparameters_df[hyperparameters_df$feature_selection %in% unique(extended_options_df$feature_selection), ],
+    by.x = "feature_selection", by.y = "feature_selection",
     all = TRUE
   )
   
   return(extended_options_df2)
 }
+
+
+
+
+# ---------------------------------------------------------------------------
+# Generate dataframe with all combinations of options
+# ---------------------------------------------------------------------------
+
+model_hyperparameters_list <- list(
+  radial = list(gamma = gamma_options),
+  polynomial = list(gamma = gamma_options, degree = degree_options),
+  sigmoid = list(gamma = gamma_options)
+)
+
+feature_hyperparameters_list <- list(
+  UMAP = list(min_dist = minimum_distance_options,
+              n_neighbours = num_neighbours_options,
+              metric = shape_metric_options),
+  RF = list(number_trees = number_trees_options,
+            number_features = number_features_options)
+)
+
+# just for SVM for now # need to expand later
+options_df <- expand.grid(targetActivity_options, 
+                          model_options,
+                          feature_selection, 
+                          feature_normalisation_options, 
+                          nu_options, 
+                          kernel_options)
+colnames(options_df) <- c("targetActivity", "model", "feature_selection", "feature_normalisation", "nu", "kernel")
+
+
+
