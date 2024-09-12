@@ -226,4 +226,8 @@ model_outcome <- as.data.frame(model_outcome)
 ensure.dir(file.path(base_path, "Output", dataset_name))
 fwrite(model_outcome, file.path(base_path, "Output", dataset_name, paste0(dataset_name, "_model_outcomes.csv")))
 
+# ---------------------------------------------------------------------------
+# Testing highest performing model hyperparameters
+# ---------------------------------------------------------------------------
 
+# in progress
