@@ -184,16 +184,12 @@ LDA_feature_selection <- function(feature_data, target_column, number_features) 
 }
 
 # Random Forest ####
-RF_feature_selection <- function(feature_data, target_column, n_trees, number_features) {
+RF_feature_selection <- function(data, target_column, n_trees, number_features) {
   
   # Extract numeric features and target variable
-  feature_data <- feature_data %>%
-    select(-Time, -ID) %>%
-    select(where(~ !is.na(.x[1]))) %>%
-    #, -X_nperiods, -X_seasonal_period, -Y_zero_proportion, -Y_nperiods, -Y_seasonal_period, -Z_nperiods, -Z_seasonal_period, -X_alpha, -X_beta, -X_gamma, -Y_alpha, -Y_beta, -Y_gamma, -Z_alpha, -Z_beta, -Z_gamma) %>% # these were all NA
-    na.omit()
-  target <- as.factor(feature_data[[target_column]])
-  numeric_features <- feature_data %>% select(-Activity)
+  data <- data[complete.cases(data), ]
+  target <- as.factor(data[[target_column]])
+  numeric_features <- data[, .SD, .SDcols = setdiff(names(data), c("Time", "ID", "Activity"))]
   
   # Fit Random Forest model
   rf_model <- randomForest(x = numeric_features, y = target, ntree = n_trees, importance = TRUE)

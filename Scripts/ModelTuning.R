@@ -18,12 +18,12 @@ perform_single_validation <- function(k, subset_data, validation_proportion,
   potential_features <- select_potential_features(training_data, threshold = 0.9)
   features_and_columsn <- c(potential_features, "Activity", "Time", "ID")
   training_data <- training_data[, ..features_and_columsn]
+  training_data <- training_data[complete.cases(training_data), ]
   
   label_columns <- c("Activity", "Time", "ID")
   
   # now using the more fancy methods
   if (feature_selection == "UMAP") {
-    training_data <- training_data[complete.cases(training_data), ]
     training_labels <- training_data[, Activity]
     training_numeric <- training_data[, .SD, .SDcols = setdiff(names(training_data), label_columns)]
     
@@ -38,7 +38,8 @@ perform_single_validation <- function(k, subset_data, validation_proportion,
     selected_feature_data <- as.data.frame(UMAP_representations$UMAP_2D_embeddings)
     
   } else if (feature_selection == "RF") {
-    RF_features <- RF_feature_selection(training_data, target_column = "Activity", 
+    RF_features <- RF_feature_selection(data = training_data, 
+                                        target_column = "Activity", 
                                         n_trees = options_row$number_trees, 
                                         number_features = options_row$number_features)
     
@@ -50,7 +51,8 @@ perform_single_validation <- function(k, subset_data, validation_proportion,
   #### Train model ####
   if (options_row$model == "SVM") {
     params <- list(gamma = options_row$gamma, degree = options_row$degree) %>% compact()
-    target_class_feature_data <- selected_feature_data[Activity == as.character(options_row$targetActivity)[1],
+    params <- Filter(Negate(is.na), params)
+    target_class_feature_data <- selected_feature_data[Activity == as.character(options_row$targetActivity),
                                                        !label_columns, with = FALSE] 
 
     single_class_SVM <- do.call(svm, c(list(target_class_feature_data, y = NULL, type = 'one-classification', 
@@ -65,18 +67,15 @@ perform_single_validation <- function(k, subset_data, validation_proportion,
     colnames(selected_validation_data) <- c("UMAP1", "UMAP2")
     
   } else if (feature_selection == "RF") {
-    selected_validation_data <- validation_data[, ..top_features]
+    selected_validation_data <- validation_data[, .SD, .SDcols = c("Activity", top_features)]
     selected_validation_data <- selected_validation_data[complete.cases(selected_validation_data), ]
   }
   
-  
-  
-  ### HERE ###
-  
-  ground_truth_labels <- validation_data %>% na.omit() %>% select(Activity)
+  ground_truth_labels <- selected_validation_data[, "Activity"]
   ground_truth_labels <- ifelse(ground_truth_labels == as.character(options_row$targetActivity), 1, -1)
   
-  decision_scores <- predict(single_class_SVM, newdata = selected_validation_data, decision.values = TRUE)
+  numeric_validation_data <- selected_validation_data[, !"Activity"]
+  decision_scores <- predict(single_class_SVM, newdata = numeric_validation_data, decision.values = TRUE)
   scores <- as.numeric(attr(decision_scores, "decision.values"))
   
   # Calculate AUC
@@ -106,21 +105,37 @@ perform_single_validation <- function(k, subset_data, validation_proportion,
 # for each row in the options_df, average the AUC results of the k_folds
 process_row <- function(options_row, k_folds, subset_data, validation_proportion, feature_selection, base_path, dataset_name, number_features) {
   
-  # do this 1:k_fold times
-  cross_outcome <- map_dfr(1:k_folds, ~perform_single_validation(.x, subset_data, 
-                                                                                  validation_proportion, 
-                                                                                  feature_selection, 
-                                                                                  options_row, 
-                                                                                  base_path, 
-                                                                                  dataset_name, 
-                                                                                  number_features))
+  # do this 1:k_fold times in parallel
+  plan(multisession, workers = parallel::detectCores())
+  
+  # Perform parallel cross-validation, k-fold times. Can be parallel as each split is independent
+  cross_outcome <- future_lapply(1:k_folds, function(k) {
+    perform_single_validation(k, 
+                              subset_data, 
+                              validation_proportion, 
+                              feature_selection, 
+                              options_row, 
+                              base_path, 
+                              dataset_name, 
+                              number_features)
+  }, future.seed = TRUE)  # Set future.seed = TRUE within the call so the numbers are safe
+  
+  # Combine the results
+  cross_results <- rbindlist(cross_outcome)
+  
+  # make sequential again
+  plan(sequential)
   
   # average these cross-validation results
-  cross_outcome <- as.data.table(cross_outcome)
-  cross_average <- cross_outcome[, .(
-    mean_AUC = mean(AUC_Value, na.rm = TRUE),
-    sd_AUC = sd(AUC_Value, na.rm = TRUE)
-  ), by = setdiff(names(cross_outcome), "AUC_Value")]
+  suppressMessages(
+    cross_average <- cross_results %>%
+      # Exclude 'AUC_Value' from the grouping columns
+      group_by(across(-AUC_Value)) %>%  
+      mutate(AUC_Value = as.numeric(AUC_Value)) %>%
+      summarise(
+        mean_AUC = mean(AUC_Value, na.rm = TRUE),  # Calculate the mean AUC
+        sd_AUC = sd(AUC_Value, na.rm = TRUE)       # Calculate the standard deviation of AUC
+      ))
   
   return(cross_average)
 }

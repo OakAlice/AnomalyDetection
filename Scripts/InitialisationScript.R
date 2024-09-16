@@ -9,7 +9,7 @@
 # load packages
 library(pacman)
 p_load(data.table, tidyverse, purrr, future.apply, e1071, zoo, caret,
-       tsfeatures, umap, plotly, randomForest, pROC)
+       tsfeatures, umap, plotly, randomForest, pROC, bench)
 #library(h2o) # for UMAP, but takes a while so ignore unless necessary
 
 # set base path/directory from where scripts, data, and output are stored
@@ -19,7 +19,7 @@ base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
 # load in the scripts
 scripts <- list("Dictionaries.R", "PlotFunctions.R", "FeatureGeneration.R",
                 "FeatureSelection.R", "OtherFunctions.R",
-                "UserInput.R") #, "DataExploration.R")
+                "UserInput.R", "ModelTuning.R") #, "DataExploration.R")
 
 # Function to source scripts and handle errors
 successful <- TRUE
@@ -85,14 +85,22 @@ if (file.exists(file.path(base_path, "Data", "Feature_data", paste0(dataset_name
 # AUC for the target class is recorded and saved in the output table
 
 # create all the options # options_df exists in a different script 'OtherFunctions.R'
-extended_options_df <- create_extended_options(model_hyperparameters_list, options_df)
-extended_options_df2 <- create_extended_options2(feature_hyperparameters_list, extended_options_df) %>% setDT()
+options_df <- expand_all_options(model_hyperparameters_list, feature_hyperparameters_list,
+                                             targetActivity_options, model_options, 
+                                             feature_selection, feature_normalisation_options, 
+                                             nu_options, kernel_options) 
+  
+# options_df <- options_df[1,]
+
 
 # example data for getting this working
-subset_data <- feature_data %>% group_by(ID, Activity) %>% slice(1:20) %>%ungroup() %>%setDT()
+#subset_data <- feature_data %>% group_by(ID, Activity) %>% slice(1:20) %>%ungroup() %>%setDT()
+
+subset_data <- feature_data
 
 # tune the model design by trialing each line in the extended_options_df2
-model_outcomes <- map_dfr(1:nrow(extended_options_df2), ~process_row(extended_options_df2[., ], 
+bench::mark(
+  model_outcomes <- map_dfr(1:nrow(options_df), ~process_row(options_df[., ], 
                                                                     k_folds, 
                                                                     subset_data, 
                                                                     validation_proportion, 
@@ -100,11 +108,15 @@ model_outcomes <- map_dfr(1:nrow(extended_options_df2), ~process_row(extended_op
                                                                     base_path, 
                                                                     dataset_name, 
                                                                     number_features))
-
+)
 # save to
-model_outcomes <- as.data.frame(model_outcomes)
+model_outcomes <- setDT(model_outcomes)
 ensure.dir(file.path(base_path, "Output", dataset_name))
-fwrite(model_outcome, file.path(base_path, "Output", dataset_name, paste0(dataset_name, "_model_outcomes.csv")))
+fwrite(model_outcomes, file.path(base_path, "Output", dataset_name, paste0(dataset_name, "_model_outcomes_test1.csv")))
+
+
+
+
 
 # ---------------------------------------------------------------------------
 # Testing highest performing model hyperparameters

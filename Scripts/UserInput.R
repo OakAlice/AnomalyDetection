@@ -13,15 +13,14 @@ targetActivity_options <- "Eating"
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
 
 # ---------------------------------------------------------------------------
-# Tunable Model Hyperparameter 
+# Tunable Model Hyperparameters
 # ---------------------------------------------------------------------------
 
-# Below are SVM-specific hyperparameters, but stuff for other methods can be added later
-nu_options <- c(0.01, 0.1)
-kernel_options <- "polynomial" #c("radial", "sigmoid", "polynomial", "linear")
-gamma_options <- c(0.001, 0.01)
-degree_options <- c(3) # If using a polynomial kernel
-
+# Below are SVM-specific hyperparameters - stuff for other methods to be added later
+nu_options <- c(0.001, 0.01, 0.05, 0.1, 0.2)
+kernel_options <- c("polynomial", "radial", "sigmoid", "linear")
+gamma_options <- c(0.0001, 0.001, 0.01, 0.1, 1)
+degree_options <- c(2, 3, 4, 5) # Only if using a polynomial kernel
 
 # ---------------------------------------------------------------------------
 # Validation Parameters 
@@ -57,7 +56,7 @@ shape_metric_options <- 'manhattan'  # Other options: 'euclidean', etc.
 
 ## Random Forest hyperparameters
 number_trees_options <- c(100)
-number_features_options <- c(50)
+number_features_options <- c(25, 50)
 
 
 

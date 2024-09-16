@@ -75,7 +75,6 @@ generate_features <- function(movement_data, data, normalise, features_type) {
     features_by_id[[id]] <- process_id_data(id_data = data_by_id[[id]], features_type)
   }
   
-  
   plan(sequential)  # Return to sequential execution
   
   # Combine all IDs' features into a single data frame
@@ -153,6 +152,8 @@ extract_FFT_features <- function(window_data, down_Hz) {
               Peak_Frequency = peak_frequency))
 }
 
+
+# making this faster using := which modifies in place rather than copying and modifying
 generate_statistical_features <- function(window_chunk, down_Hz) {
   
   # Determine the available axes from the dataset

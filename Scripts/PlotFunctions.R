@@ -1,4 +1,7 @@
-# all the plots I need for data exploration
+# ---------------------------------------------------------------------------
+# Functions for plotting
+# ---------------------------------------------------------------------------
+
 
 # set colours ####
 generate_random_colors <- function(n) {

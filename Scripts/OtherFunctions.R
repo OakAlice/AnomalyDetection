@@ -1,13 +1,13 @@
-# Other functions
+# ---------------------------------------------------------------------------
+# Assorted functions
+# ---------------------------------------------------------------------------
 
-
-
+# ensure a directory exists
 ensure.dir <- function(path) {
   if (!dir.exists(path)) {
     dir.create(path, recursive = TRUE)
   }
 }
-
 
 # increase hyperparameter options in options_df ####
 # bind this with the normal parameter options
@@ -82,6 +82,30 @@ create_extended_options2 <- function(feature_hyperparameters_list, extended_opti
 # Generate dataframe with all combinations of options
 # ---------------------------------------------------------------------------
 
+expand_all_options <- function(model_hyperparameters_list, feature_hyperparameters_list,
+                               targetActivity_options, model_options, 
+                               feature_selection, feature_normalisation_options, 
+                               nu_options, kernel_options) {
+  
+  # Create initial combinations of general options
+  options_df <- expand.grid(targetActivity = targetActivity_options, 
+                            model = model_options,
+                            feature_selection = feature_selection, 
+                            feature_normalisation = feature_normalisation_options, 
+                            nu = nu_options, 
+                            kernel = kernel_options)
+  
+  # Extend the options with model hyperparameters
+  extended_options_df <- create_extended_options(model_hyperparameters_list, options_df)
+  
+  # Further extend with feature hyperparameters and convert to data.table
+  extended_options_df2 <- create_extended_options2(feature_hyperparameters_list, extended_options_df) %>% setDT()
+  
+  return(extended_options_df2)
+}
+
+
+
 model_hyperparameters_list <- list(
   radial = list(gamma = gamma_options),
   polynomial = list(gamma = gamma_options, degree = degree_options),
@@ -95,15 +119,6 @@ feature_hyperparameters_list <- list(
   RF = list(number_trees = number_trees_options,
             number_features = number_features_options)
 )
-
-# just for SVM for now # need to expand later
-options_df <- expand.grid(targetActivity_options, 
-                          model_options,
-                          feature_selection, 
-                          feature_normalisation_options, 
-                          nu_options, 
-                          kernel_options)
-colnames(options_df) <- c("targetActivity", "model", "feature_selection", "feature_normalisation", "nu", "kernel")
 
 
 
