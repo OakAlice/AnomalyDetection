@@ -18,8 +18,8 @@ all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
 
 # Below are SVM-specific hyperparameters, but stuff for other methods can be added later
 nu_options <- c(0.01, 0.1)
-kernel_options <- c("radial")  # Other options: "sigmoid", "polynomial", "linear"
-gamma_options <- c(0.001)
+kernel_options <- "polynomial" #c("radial", "sigmoid", "polynomial", "linear")
+gamma_options <- c(0.001, 0.01)
 degree_options <- c(3) # If using a polynomial kernel
 
 
@@ -56,8 +56,8 @@ num_neighbours_options <- 10
 shape_metric_options <- 'manhattan'  # Other options: 'euclidean', etc.
 
 ## Random Forest hyperparameters
-number_trees_options <- c(50, 100)
-number_features_options <- c(20, 50)
+number_trees_options <- c(100)
+number_features_options <- c(50)
 
 
 

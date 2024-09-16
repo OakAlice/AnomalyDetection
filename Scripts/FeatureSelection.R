@@ -13,6 +13,7 @@ UMAP_reduction <- function(numeric_features, labels, minimum_distance, num_neigh
   
   # Save the trained UMAP models for future use (for transforming new data)
   if (!is.null(save_model_path)) {
+    ensure.dir(save_model_path)
     saveRDS(umap_model_2D, file = file.path(save_model_path, "umap_2D_model.rds"))
     saveRDS(umap_model_3D, file = file.path(save_model_path, "umap_3D_model.rds"))
   }
@@ -219,7 +220,7 @@ RF_feature_selection <- function(feature_data, target_column, n_trees, number_fe
   oob_error_rate <- rf_model$err.rate[, 1]
   
   oob_error_plot <- ggplot(data.frame(Trees = 1:length(oob_error_rate), OOB_Error = oob_error_rate), aes(x = Trees, y = OOB_Error)) +
-    geom_line(color = "blue", size = 1) +
+    geom_line(color = "blue", linewidth = 1) +
     labs(
       title = "Out-of-Bag (OOB) Error Rate vs. Number of Trees",
       x = "Number of Trees",
@@ -237,24 +238,26 @@ RF_feature_selection <- function(feature_data, target_column, n_trees, number_fe
 
 
   # select potential features 
-select_potential_features <- function(feature_data, threshold){
+select_potential_features <- function(feature_data, threshold) {
   
-  # Subset 40% of the data based on unique IDs
-  subset_data <- feature_data[feature_data$ID %in% sample(unique(feature_data$ID), ceiling(length(unique(feature_data$ID)) * 0.4)), ]
+  # Select only the features (numeric columns)
+  numeric_columns <- subset_data[, .SD, .SDcols = !c("Activity", "Time", "ID")]
   
   # Remove features with little variance (using a threshold)
-  variances <- apply(subset_data, 2, var, na.rm = TRUE)  # Calculate variances
-  variable_features <- subset_data[, variances > threshold]  %>% data.frame() %>% filter(. == TRUE) %>% rownames()
-  subset_data <- subset_data %>% select(all_of(variable_features))
+  variances <- numeric_columns[, lapply(.SD, var, na.rm = TRUE)]  # Calculate variances
+  selected_columns <- names(variances)[!is.na(variances) & variances > threshold]
+  numeric_columns <- numeric_columns[, ..selected_columns]
   
   # Remove features highly correlated to others
-  numeric_columns <- subset_data %>% select(-Time, -ID)  # Select numeric columns
-  corr_matrix <- cor(numeric_columns, use = "complete.obs")
+  corr_matrix <- cor(numeric_columns, use = "pairwise.complete.obs")
   
+  # Find correlated features
   high_corr <- findCorrelation(corr_matrix, cutoff = 0.9)  # Identify highly correlated features (cutoff at 0.9)
-  subset_data <- numeric_columns %>% select(-all_of(high_corr))  # Remove highly correlated features
+  remaining_features <- setdiff(names(numeric_columns), names(numeric_columns)[high_corr])
+  numeric_columns <- numeric_columns[, ..remaining_features]
   
-  potential_features <- colnames(numeric_columns)
+  # Return the names of potential features
+  potential_features <- names(numeric_columns)
   
   return(potential_features)
 }
