@@ -1,5 +1,47 @@
 # Feature selection and dimensionality reduction
 
+# feature selection ####
+feature_selection <- function(training_data, options_row){
+  
+  # firstly eliminate features that don't contribute anything (no variance, high correlation)
+  potential_features <- select_potential_features(training_data, threshold = 0.9)
+  features_and_columsn <- c(potential_features, "Activity", "Time", "ID")
+  training_data <- training_data[, ..features_and_columsn]
+  training_data <- training_data[complete.cases(training_data), ]
+  
+  label_columns <- c("Activity", "Time", "ID")
+  
+  
+  feature_selection <- "RF"
+  # now using the more fancy methods
+  if (feature_selection == "UMAP") {
+    training_labels <- training_data[, Activity]
+    training_numeric <- training_data[, .SD, .SDcols = setdiff(names(training_data), label_columns)]
+    
+    # not working, 16/09/2024
+    UMAP_representations <- UMAP_reduction(numeric_features = training_numeric,
+                                           labels = training_labels,
+                                           minimum_distance = options_row$min_dist,
+                                           num_neighbours = options_row$n_neighbours,
+                                           shape_metric = options_row$metric,
+                                           save_model_path = file.path(base_path, "Output", dataset_name))
+    
+    selected_feature_data <- as.data.frame(UMAP_representations$UMAP_2D_embeddings)
+    
+  } else if (feature_selection == "RF") {
+    RF_features <- RF_feature_selection(data = training_data, 
+                                        target_column = "Activity", 
+                                        n_trees = as.numeric(options_row$number_trees), 
+                                        number_features = as.numeric(options_row$number_features))
+    
+    top_features <- RF_features$Selected_Features$Feature[1:options_row$number_features]
+    all_columns <- c(top_features, label_columns)
+    selected_feature_data <- training_data[, ..all_columns]
+  }
+  
+  return(selected_feature_data)
+}
+
 # UMAP ####
 UMAP_reduction <- function(numeric_features, labels, minimum_distance, num_neighbours, shape_metric, save_model_path) {
   

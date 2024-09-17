@@ -14,43 +14,11 @@ perform_single_validation <- function(k, subset_data, validation_proportion,
   training_data <- subset_data[!ID %in% test_ids]
   
   #### Feature selection ####
-  # firstly eliminate features that don't contribute anything (no variance, high correlation)
-  potential_features <- select_potential_features(training_data, threshold = 0.9)
-  features_and_columsn <- c(potential_features, "Activity", "Time", "ID")
-  training_data <- training_data[, ..features_and_columsn]
-  training_data <- training_data[complete.cases(training_data), ]
-  
-  label_columns <- c("Activity", "Time", "ID")
-  
-  # now using the more fancy methods
-  if (feature_selection == "UMAP") {
-    training_labels <- training_data[, Activity]
-    training_numeric <- training_data[, .SD, .SDcols = setdiff(names(training_data), label_columns)]
-    
-    # not working, 16/09/2024
-    UMAP_representations <- UMAP_reduction(numeric_features = training_numeric,
-                                           labels = training_labels,
-                                           minimum_distance = options_row$min_dist,
-                                           num_neighbours = options_row$n_neighbours,
-                                           shape_metric = options_row$metric,
-                                           save_model_path = file.path(base_path, "Output", dataset_name))
-    
-    selected_feature_data <- as.data.frame(UMAP_representations$UMAP_2D_embeddings)
-    
-  } else if (feature_selection == "RF") {
-    RF_features <- RF_feature_selection(data = training_data, 
-                                        target_column = "Activity", 
-                                        n_trees = options_row$number_trees, 
-                                        number_features = options_row$number_features)
-    
-    top_features <- RF_features$Selected_Features$Feature[1:number_features]
-    all_columns <- c(top_features, label_columns)
-    selected_feature_data <- training_data[, ..all_columns]
-  }
+  selected_feature_data <- feature_selection(training_data, options_row)
   
   #### Train model ####
   if (options_row$model == "SVM") {
-    params <- list(gamma = options_row$gamma, degree = options_row$degree) %>% compact()
+    params <- list(gamma = options_row$gamma, degree = options_row$degree.x) %>% compact()
     params <- Filter(Negate(is.na), params)
     target_class_feature_data <- selected_feature_data[Activity == as.character(options_row$targetActivity),
                                                        !label_columns, with = FALSE] 

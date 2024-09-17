@@ -7,7 +7,7 @@
 model_options <- "SVM"
 
 # move this to be in the dictionaries
-targetActivity_options <- "Eating"
+targetActivity_options <- c("Eating", "Walking", "Sitting")
   
 ## Axes to Include in Model (just in case you don't have all of them)
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
@@ -17,10 +17,10 @@ all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
 # ---------------------------------------------------------------------------
 
 # Below are SVM-specific hyperparameters - stuff for other methods to be added later
-nu_options <- c(0.001, 0.01, 0.05, 0.1, 0.2)
-kernel_options <- c("polynomial", "radial", "sigmoid", "linear")
-gamma_options <- c(0.0001, 0.001, 0.01, 0.1, 1)
-degree_options <- c(2, 3, 4, 5) # Only if using a polynomial kernel
+nu_options <- c(0.01, 0.05)
+kernel_options <- c("radial", "linear") #"polynomial", "sigmoid
+gamma_options <- c(0.001, 0.01)
+degree_options <- c(3, 4) # Only if using a polynomial kernel
 
 # ---------------------------------------------------------------------------
 # Validation Parameters 

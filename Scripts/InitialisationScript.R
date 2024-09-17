@@ -1,15 +1,15 @@
-# ---------------------------------------------------------------------------
-# One Class Classification on Animal Accelerometer Data
-# ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+# One Class Classification on Animal Accelerometer Data                  ####
+---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Set Up
-# ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+# Set Up                                                                 ####
+---------------------------------------------------------------------------
 
 # load packages
 library(pacman)
 p_load(data.table, tidyverse, purrr, future.apply, e1071, zoo, caret,
-       tsfeatures, umap, plotly, randomForest, pROC, bench)
+       tsfeatures, umap, plotly, randomForest, pROC, bench, PRROC)
 #library(h2o) # for UMAP, but takes a while so ignore unless necessary
 
 # set base path/directory from where scripts, data, and output are stored
@@ -34,9 +34,9 @@ source_script <- function(script) {
 }
 walk(scripts, source_script)
 
-# ---------------------------------------------------------------------------
-# Define parameters and create data splits for this particular run
-# ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+# Define parameters and create data splits for this particular run       ####
+---------------------------------------------------------------------------
 
 dataset_name <- "Vehkaoja_Dog"
 list_name <- all_dictionaries[[dataset_name]]
@@ -65,9 +65,9 @@ if (file.exists(file.path(base_path, "Data", "Hold_out_test", paste0(dataset_nam
 # haven't automated this yet
 # when complete, add to dictionary
 
-# ---------------------------------------------------------------------------
-# Feature Generation and Elimination
-# ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+# Feature Generation and Elimination                                     ####
+---------------------------------------------------------------------------
 # generate all features, unless that has already been done 
 #(it can be very time consuming so I tend to save it when I've done it)
 
@@ -78,9 +78,9 @@ if (file.exists(file.path(base_path, "Data", "Feature_data", paste0(dataset_name
                                     normalise = "z_scale", features = features_type)
 }
 
-# ---------------------------------------------------------------------------
-# Tuning model hyperparameters
-# ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+# Tuning model hyperparameters                                           ####
+---------------------------------------------------------------------------
 # this section of the code iterates through hyperparameter combinations for OCC
 # AUC for the target class is recorded and saved in the output table
 
@@ -88,10 +88,7 @@ if (file.exists(file.path(base_path, "Data", "Feature_data", paste0(dataset_name
 options_df <- expand_all_options(model_hyperparameters_list, feature_hyperparameters_list,
                                              targetActivity_options, model_options, 
                                              feature_selection, feature_normalisation_options, 
-                                             nu_options, kernel_options) 
-  
-# options_df <- options_df[1,]
-
+                                             nu_options, kernel_options, degree_options)
 
 # example data for getting this working
 #subset_data <- feature_data %>% group_by(ID, Activity) %>% slice(1:20) %>%ungroup() %>%setDT()
@@ -99,8 +96,7 @@ options_df <- expand_all_options(model_hyperparameters_list, feature_hyperparame
 subset_data <- feature_data
 
 # tune the model design by trialing each line in the extended_options_df2
-bench::mark(
-  model_outcomes <- map_dfr(1:nrow(options_df), ~process_row(options_df[., ], 
+model_outcomes <- map_dfr(1:nrow(options_df), ~process_row(options_df[., ], 
                                                                     k_folds, 
                                                                     subset_data, 
                                                                     validation_proportion, 
@@ -108,18 +104,89 @@ bench::mark(
                                                                     base_path, 
                                                                     dataset_name, 
                                                                     number_features))
-)
+
 # save to
 model_outcomes <- setDT(model_outcomes)
 ensure.dir(file.path(base_path, "Output", dataset_name))
 fwrite(model_outcomes, file.path(base_path, "Output", dataset_name, paste0(dataset_name, "_model_outcomes_test1.csv")))
 
+---------------------------------------------------------------------------
+# Testing highest performing model hyperparameters                       ####
+---------------------------------------------------------------------------
+
+# load in the validation data and generate features
+testing_data <- fread(file.path(base_path, "Data", "Hold_out_test", paste0(dataset_name, "_Labelled_test.csv")))
+testing_data_sample <- testing_data %>% group_by(ID, Activity) %>% slice(1:100) %>% ungroup() %>% setDT()
+
+testing_feature_data <- generate_features(movement_data, data = testing_data, 
+                                          normalise = "z_scale", features_type = features_type)
+# save this for later
+fwrite(testing_feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
+
+  
+  
+# create optimal_row
+model_outcomes <- setDT(model_outcomes)
+optimal_rows <- model_outcomes[order(-mean_AUC), .SD[1], by = "Activity"]
+optimal_row <- optimal_rows[Activity == 'Eating']
+
+# load in training data and select features and target data
+training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_labelled_features.csv")))
+selected_feature_data <- feature_selection(training_data, optimal_row)
+target_selected_feature_data <- selected_feature_data[Activity == as.character(optimal_row$Activity),
+                                                   !label_columns, with = FALSE] 
+
+# create the optimal SVM
+params <- list(gamma = optimal_row$gamma, degree = NA) %>% compact()
+params <- Filter(Negate(is.na), params)
+optimal_single_class_SVM <- do.call(svm, c(list(target_selected_feature_data, y = NULL, type = 'one-classification', 
+                                                nu = optimal_row$nu, scale = TRUE, 
+                                                kernel = optimal_row$kernel), params))
+  
+# somehow get the top_features back out so it doesn't need to be extracted like this
+top_features <- colnames(target_selected_feature_data)
+selected_testing_data <- testing_feature_data[, .SD, .SDcols = c("Activity", top_features)]
+selected_testing_data <- selected_testing_data[complete.cases(selected_testing_data), ]
+
+# apply the SVM to the test data 
+ground_truth_labels <- selected_testing_data[, "Activity"]
+ground_truth_labels <- ifelse(ground_truth_labels$Activity == as.character(optimal_row$Activity), 1, -1)
+
+numeric_testing_data <- selected_testing_data[, !"Activity"]
+decision_scores <- predict(optimal_single_class_SVM, newdata = numeric_testing_data, decision.values = TRUE)
+scores <- as.numeric(attr(decision_scores, "decision.values"))
+
+# Calculate AUC
+roc_curve <- roc(as.vector(ground_truth_labels), scores)
+auc_value <- auc(roc_curve)
+
+plot(roc_curve, col = "blue", main = paste("ROC Curve (AUC =", round(auc_value, 2), ")"))
+
+pr_curve <- pr.curve(scores.class0 = scores[ground_truth_labels == 1],
+                     scores.class1 = scores[ground_truth_labels == -1], curve = TRUE)
+pr_auc_value <- pr_curve$auc.integral
 
 
+# find the threshold for classification that maximises F score
+thresholds <- seq(0, 1, by = 0.01) # Thresholds to trial
 
+metrics <- function(threshold) {
+  predicted_classes <- ifelse(scores > threshold, 1, -1)
+  confusion_matrix <- table(predicted_classes, ground_truth_labels)
+  accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+  
+  precision <- ifelse(sum(predicted_classes == 1) == 0, 0, confusion_matrix[2,2] / sum(predicted_classes == 1))
+  recall <- ifelse(sum(ground_truth_labels == 1) == 0, 0, confusion_matrix[2,2] / sum(ground_truth_labels == 1))
+  F1_score <- ifelse((precision + recall) == 0, 0, 2 * (precision * recall) / (precision + recall))
+  
+  return(c(threshold, F1_score))
+}
 
-# ---------------------------------------------------------------------------
-# Testing highest performing model hyperparameters
-# ---------------------------------------------------------------------------
+# Compute accuracy for each threshold
+results <- sapply(thresholds, metrics) %>% as.data.frame()
+results <- as.data.frame(t(results))
 
-# in progress
+plot(results$V1, results$V2, xlab = "Threshold", ylab = "F1Score")
+
+# Get the best threshold 
+best_threshold <- results$V1[which.max(results$V2)]

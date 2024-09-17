@@ -1,8 +1,9 @@
-# Processing scripts for generating statistical and time series features
-
+# ---------------------------------------------------------------------------
+# Generating statistical and time series features
+# ---------------------------------------------------------------------------
 
 # Function to process data for each ID
-process_id_data <- function(id_data, features_type) {
+process_id_data <- function(id_data, features_type, movement_data) {
   
   # calculate window length and overlap
   samples_per_window <- movement_data$window_length * movement_data$Frequency
@@ -21,7 +22,7 @@ process_id_data <- function(id_data, features_type) {
     } 
     
     # extract timeseries features and flatten
-    if ("timseries" %in% features_type){
+    if ("timeseries" %in% features_type){
       time_series_features <- generate_ts_features(data = window_chunk)
       single_row_features <- time_series_features %>%
         mutate(axis = c("X", "Y", "Z")) %>% 
@@ -62,23 +63,21 @@ process_id_data <- function(id_data, features_type) {
 generate_features <- function(movement_data, data, normalise, features_type) {
   
   # multiprocessing   
-  plan(multisession, workers = availableCores() - 2)  # Use cores
+  plan(multisession, workers = availableCores())  # Use parallel processing 
   
   # Split data by 'ID'
-  data_by_id <- split(data, data$ID)
+  data_by_id <- split(data, by = "ID")
   
-  # process each
+  # Process each ID's data
   features_by_id <- list()
-  
-  # Process each ID's data separately using a for loop
   for (id in names(data_by_id)) {
-    features_by_id[[id]] <- process_id_data(id_data = data_by_id[[id]], features_type)
+    features_by_id[[id]] <- process_id_data(id_data = data_by_id[[as.character(id)]], features_type, movement_data)
   }
+  all_features <- do.call(rbind, features_by_id)
   
   plan(sequential)  # Return to sequential execution
   
-  # Combine all IDs' features into a single data frame
-  all_features <- do.call(rbind, features_by_id)
+  all_features <- rbindlist(features_by_id)
   
   # Optionally normalise the feature
   #if (normalise == "z_scale") {
@@ -95,9 +94,9 @@ generate_features <- function(movement_data, data, normalise, features_type) {
 generate_ts_features <- function(data){
   # Convert each column (e.g., X, Y, Z) into a list of time series
   ts_list <- list(
-    X = data$Accelerometer.X,
-    Y = data$Accelerometer.Y,
-    Z = data$Accelerometer.Z
+    X = data[["Accelerometer.X"]],
+    Y = data[["Accelerometer.Y"]],
+    Z = data[["Accelerometer.Z"]]
   )
   
   # Generate ts features for the window
@@ -121,9 +120,6 @@ generate_ts_features <- function(data){
   
   return(time_series_features)
 }
-
-
-
 
 # generate statistical features ####
 # Fast Fourier Transformation based features
@@ -159,58 +155,74 @@ generate_statistical_features <- function(window_chunk, down_Hz) {
   # Determine the available axes from the dataset
   available_axes <- intersect(colnames(window_chunk), all_axes) # the ones we actually have
   
-  result <- data.frame(row.names = 1)
+  result <- data.table()
   
-  window_chunk <- data.frame(window_chunk)
+  window_chunk <- setDT(window_chunk)
 
   for (axis in available_axes) {
+    axis_data <- window_chunk[[axis]]  # Extract the data for the window
     
-    result[[paste0("mean_", axis)]] <- mean(window_chunk[[axis]], na.rm = TRUE)
-    result[[paste0("max_", axis)]] <- max(window_chunk[[axis]], na.rm = TRUE)
-    result[[paste0("min_", axis)]] <- min(window_chunk[[axis]], na.rm = TRUE)
-    result[[paste0("sd_", axis)]] <- sd(window_chunk[[axis]], na.rm = TRUE)
-    result[[paste0("sk_", axis)]] <- e1071::skewness(window_chunk[[axis]], na.rm = TRUE)
+    # Compute stats
+    stats <- lapply(list(mean = mean, max = max, min = min, sd = sd), 
+                    function(f) f(axis_data, na.rm = TRUE))
     
-    fft_features <- extract_FFT_features(window_chunk[[axis]], down_Hz)
-    result[[paste0("mean_mag_", axis)]] <- fft_features$Mean_Magnitude
-    result[[paste0("max_mag_", axis)]] <- fft_features$Max_Magnitude
-    result[[paste0("total_power_", axis)]] <- fft_features$Total_Power
-    result[[paste0("peak_freq_", axis)]] <- fft_features$Peak_Frequency
+    # Assign stats to result
+    result[, paste0(c("mean_", "max_", "min_", "sd_"), axis) := stats]
+    
+    # Calculate skewness
+    result[, paste0("sk_", axis) := e1071::skewness(axis_data, na.rm = TRUE)]
+    
+    # Extract FFT features
+    fft_features <- extract_FFT_features(axis_data, down_Hz)
+    
+    # Add FFT features to result as well
+    result[, paste0(c("mean_mag_", "max_mag_", "total_power_", "peak_freq_"), axis) := 
+             list(fft_features$Mean_Magnitude, fft_features$Max_Magnitude, 
+                  fft_features$Total_Power, fft_features$Peak_Frequency)]
   }
   
-  result$SMA <- sum(rowSums(abs(window_chunk[, available_axes]))) / nrow(window_chunk)
-  ODBA <- rowSums(abs(window_chunk[, available_axes]))
-  result$minODBA <- min(ODBA, na.rm = TRUE)
-  result$maxODBA <- max(ODBA, na.rm = TRUE)
+  # calculate SMA, ODBA, and VDBA
+  result[, SMA := sum(rowSums(abs(window_chunk[, ..available_axes]))) / nrow(window_chunk)]
+  ODBA <- rowSums(abs(window_chunk[, ..available_axes]))
+  result[, `:=`(
+    minODBA = min(ODBA, na.rm = TRUE),
+    maxODBA = max(ODBA, na.rm = TRUE)
+  )]
+  VDBA <- sqrt(rowSums(window_chunk[, ..available_axes]^2))
+  result[, `:=`(
+    minVDBA = min(VDBA, na.rm = TRUE),
+    maxVDBA = max(VDBA, na.rm = TRUE)
+  )]
   
-  VDBA <- sqrt(rowSums(window_chunk[, available_axes]^2))
-  result$minVDBA <- min(VDBA, na.rm = TRUE)
-  result$maxVDBA <- max(VDBA, na.rm = TRUE)
+  # Create all unique axis pairs
+  axis_pairs <- CJ(axis1 = available_axes, axis2 = available_axes)[axis1 < axis2]
   
-  for (i in 1:(length(available_axes) - 1)) {
-    for (j in (i + 1):length(available_axes)) {
-      axis1 <- available_axes[i]
-      axis2 <- available_axes[j]
-      
-      vec1 <- window_chunk[[axis1]]
-      vec2 <- window_chunk[[axis2]]
-      
-      # Check for NA variance and non-zero variance in both vectors
-      var_vec1 <- var(vec1, na.rm = TRUE)
-      var_vec2 <- var(vec2, na.rm = TRUE)
-      
-      if (!is.na(var_vec1) && var_vec1 != 0 && !is.na(var_vec2) && var_vec2 != 0) {
-        # Check for complete cases
-        complete_cases <- complete.cases(vec1, vec2)
-        if (any(complete_cases)) {
-          result[[paste0("cor_", axis1, "_", axis2)]] <- cor(vec1[complete_cases], vec2[complete_cases])
-        } else {
-          result[[paste0("cor_", axis1, "_", axis2)]] <- NA  # No complete pairs
-        }
+  # Calculate correlations for each
+  axis_correlations <- axis_pairs[, {
+    vec1 <- window_chunk[[axis1]]
+    vec2 <- window_chunk[[axis2]]
+    
+    # Check for non-NA and non-zero variance
+    var_vec1 <- var(vec1, na.rm = TRUE)
+    var_vec2 <- var(vec2, na.rm = TRUE)
+    
+    if (!is.na(var_vec1) && var_vec1 != 0 && !is.na(var_vec2) && var_vec2 != 0) {
+      complete_cases <- complete.cases(vec1, vec2)
+      if (any(complete_cases)) {
+        cor_value <- cor(vec1[complete_cases], vec2[complete_cases])
       } else {
-        result[[paste0("cor_", axis1, "_", axis2)]] <- NA  # No variability or NA returned
+        cor_value <- NA  # No complete pairs
       }
+    } else {
+      cor_value <- NA  # No variability or NA in variance
     }
+    
+    list(cor_value)
+  }, by = .(axis1, axis2)]
+  
+  # Add correlations to result data.table
+  for (i in seq_len(nrow(axis_correlations))) {
+    result[, paste0("cor_", axis_correlations$axis1[i], "_", axis_correlations$axis2[i]) := axis_correlations$cor_value[i]]
   }
 
   return(result)

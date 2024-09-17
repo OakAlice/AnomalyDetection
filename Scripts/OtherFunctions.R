@@ -85,7 +85,7 @@ create_extended_options2 <- function(feature_hyperparameters_list, extended_opti
 expand_all_options <- function(model_hyperparameters_list, feature_hyperparameters_list,
                                targetActivity_options, model_options, 
                                feature_selection, feature_normalisation_options, 
-                               nu_options, kernel_options) {
+                               nu_options, kernel_options, degree_options) {
   
   # Create initial combinations of general options
   options_df <- expand.grid(targetActivity = targetActivity_options, 
@@ -93,7 +93,8 @@ expand_all_options <- function(model_hyperparameters_list, feature_hyperparamete
                             feature_selection = feature_selection, 
                             feature_normalisation = feature_normalisation_options, 
                             nu = nu_options, 
-                            kernel = kernel_options)
+                            kernel = kernel_options,
+                            degree = degree_options)
   
   # Extend the options with model hyperparameters
   extended_options_df <- create_extended_options(model_hyperparameters_list, options_df)
