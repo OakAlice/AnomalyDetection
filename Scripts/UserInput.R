@@ -7,7 +7,7 @@
 model_options <- "SVM"
 
 # move this to be in the dictionaries
-targetActivity_options <- c("Eating", "Walking", "Sitting")
+targetActivity_options <- c("Eating", "Walking")
   
 ## Axes to Include in Model (just in case you don't have all of them)
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
@@ -18,8 +18,8 @@ all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
 
 # Below are SVM-specific hyperparameters - stuff for other methods to be added later
 nu_options <- c(0.01, 0.05)
-kernel_options <- c("radial", "linear") #"polynomial", "sigmoid
-gamma_options <- c(0.001, 0.01)
+kernel_options <- c("radial") #"polynomial", "sigmoid", "linear"
+gamma_options <- c(0.001, 0.01, 0.1)
 degree_options <- c(3, 4) # Only if using a polynomial kernel
 
 # ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ k_folds <- 3
 
 ## Method
 # Current support for RF and UMAP.
-feature_selection <- "RF" 
+feature_selection_method <- "RF" 
 
 ## Feature Normalization
 # Current Options: "Standardisation", "MinMaxScaling"
@@ -56,7 +56,7 @@ shape_metric_options <- 'manhattan'  # Other options: 'euclidean', etc.
 
 ## Random Forest hyperparameters
 number_trees_options <- c(100)
-number_features_options <- c(25, 50)
+number_features_options <- c(50)
 
 
 

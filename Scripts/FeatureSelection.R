@@ -11,10 +11,9 @@ feature_selection <- function(training_data, options_row){
   
   label_columns <- c("Activity", "Time", "ID")
   
-  
-  feature_selection <- "RF"
+  feature_selection_method <- "RF"
   # now using the more fancy methods
-  if (feature_selection == "UMAP") {
+  if (feature_selection_method == "UMAP") {
     training_labels <- training_data[, Activity]
     training_numeric <- training_data[, .SD, .SDcols = setdiff(names(training_data), label_columns)]
     
@@ -28,7 +27,7 @@ feature_selection <- function(training_data, options_row){
     
     selected_feature_data <- as.data.frame(UMAP_representations$UMAP_2D_embeddings)
     
-  } else if (feature_selection == "RF") {
+  } else if (feature_selection_method == "RF") {
     RF_features <- RF_feature_selection(data = training_data, 
                                         target_column = "Activity", 
                                         n_trees = as.numeric(options_row$number_trees), 

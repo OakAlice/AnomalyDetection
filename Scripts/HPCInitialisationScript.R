@@ -111,7 +111,7 @@ tryCatch({
 tryCatch({
   options_df <- expand_all_options(model_hyperparameters_list, feature_hyperparameters_list,
                                  targetActivity_options, model_options, 
-                                 feature_selection, feature_normalisation_options, 
+                                 feature_selection_method, feature_normalisation_options, 
                                  nu_options, kernel_options, degree_options)
 
 }, error = function(e) {
@@ -129,7 +129,7 @@ tryCatch({
                                                              k_folds, 
                                                              subset_data, 
                                                              validation_proportion, 
-                                                             feature_selection, 
+                                                             feature_selection_method, 
                                                              base_path, 
                                                              dataset_name, 
                                                              number_features))

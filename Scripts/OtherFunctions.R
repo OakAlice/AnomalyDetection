@@ -2,6 +2,8 @@
 # Assorted functions
 # ---------------------------------------------------------------------------
 
+source(file.path("C:/Users/oaw001/Documents/AnomalyDetection", "Scripts", "UserInput.R"))
+
 # ensure a directory exists
 ensure.dir <- function(path) {
   if (!dir.exists(path)) {
@@ -48,17 +50,17 @@ expand_hyperparameters <- function(model_hyperparameters_list) {
 create_extended_options2 <- function(feature_hyperparameters_list, extended_options_df) {
   
   # Initialize an empty dataframe for storing expanded hyperparameters
-  hyperparameters_df <- data.frame(feature_selection = character(0))
+  hyperparameters_df <- data.frame(feature_selection_method = character(0))
   
   # Iterate over each feature set in the hyperparameter list
-  for (feature_selection in names(feature_hyperparameters_list)) {
-    feature_hyperparameters <- feature_hyperparameters_list[[feature_selection]]
+  for (feature_selection_method in names(feature_hyperparameters_list)) {
+    feature_hyperparameters <- feature_hyperparameters_list[[feature_selection_method]]
     
     # Create all combinations of the hyperparameters
     all_combinations <- expand.grid(feature_hyperparameters)
     
     # Add a column for the feature set
-    all_combinations$feature_selection <- feature_selection
+    all_combinations$feature_selection_method <- feature_selection_method
     
     # Bind the new combinations to the growing hyperparameters dataframe
     hyperparameters_df <- dplyr::bind_rows(hyperparameters_df, all_combinations)
@@ -67,8 +69,8 @@ create_extended_options2 <- function(feature_hyperparameters_list, extended_opti
   # Merge the hyperparameters with the extended options dataframe
   extended_options_df2 <- merge(
     extended_options_df,
-    hyperparameters_df[hyperparameters_df$feature_selection %in% unique(extended_options_df$feature_selection), ],
-    by.x = "feature_selection", by.y = "feature_selection",
+    hyperparameters_df[hyperparameters_df$feature_selection_method %in% unique(extended_options_df$feature_selection_method), ],
+    by.x = "feature_selection_method", by.y = "feature_selection_method",
     all = TRUE
   )
   
@@ -84,13 +86,13 @@ create_extended_options2 <- function(feature_hyperparameters_list, extended_opti
 
 expand_all_options <- function(model_hyperparameters_list, feature_hyperparameters_list,
                                targetActivity_options, model_options, 
-                               feature_selection, feature_normalisation_options, 
+                               feature_selection_method, feature_normalisation_options, 
                                nu_options, kernel_options, degree_options) {
   
   # Create initial combinations of general options
   options_df <- expand.grid(targetActivity = targetActivity_options, 
                             model = model_options,
-                            feature_selection = feature_selection, 
+                            feature_selection_method = feature_selection_method, 
                             feature_normalisation = feature_normalisation_options, 
                             nu = nu_options, 
                             kernel = kernel_options,
