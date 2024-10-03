@@ -9,7 +9,7 @@
 # load packages
 library(pacman)
 p_load(data.table, tidyverse, purrr, future.apply, e1071, zoo, caret,
-       tsfeatures, umap, plotly, randomForest, pROC, bench, PRROC)
+       tsfeatures, umap, plotly, randomForest, pROC, bench, PRROC, rBaysianOptimization)
 #library(h2o) # for UMAP, but takes a while so ignore unless necessary
 
 # set base path/directory from where scripts, data, and output are stored
@@ -84,40 +84,74 @@ if (file.exists(file.path(base_path, "Data", "Feature_data", paste0(dataset_name
 # this section of the code iterates through hyperparameter combinations for OCC
 # PR-ROC for the target class is recorded and saved in the output table
 
-# create all the options # options_df exists in a different script 'OtherFunctions.R'
-options_df <- expand_all_options(model_hyperparameters_list, feature_hyperparameters_list,
-                                             targetActivity_options, model_options, 
-                                             feature_selection_method, feature_normalisation_options, 
-                                             nu_options, kernel_options, degree_options)
-
-options_row <- options_df[1:3,]
-
 # example data for getting this working
 #subset_data <- feature_data %>% group_by(ID, Activity) %>% slice(1:20) %>%ungroup() %>%setDT()
 
-subset_data <- feature_data
+# Define your bounds for Bayesian Optimization
+bounds <- list(
+  nu = c(0.01, 0.5),
+  kernel = c("linear", "radial"), 
+  gamma = c(0.01, 1),
+  normalise = "z-scale",
+  number_features = c(20, 50)
+)
 
-# tune the model design by trialing each line in the extended_options_df2
-model_outcomes <- map_dfr(1:nrow(options_df), ~process_row(options_df[., ], 
-                                                                    k_folds, 
-                                                                    subset_data, 
-                                                                    validation_proportion, 
-                                                                    feature_selection_method, 
-                                                                    base_path, 
-                                                                    dataset_name, 
-                                                                    number_features))
+# Run the optimization
+results <- BayesianOptimization(
+  FUN = model_train_and_validate,
+  bounds = bounds,
+  init_points = 5,    # Number of random initialization points
+  n_iter = 15,        # Number of iterations for Bayesian optimization
+  acq = "ucb",        # Acquisition function; can be 'ucb', 'ei', or 'poi'
+  kappa = 2.576       # Trade-off parameter for 'ucb'
+)
 
-# average these cross-validation results
-average_model_outcomes <- model_outcomes %>%
-    group_by(across(-PR_AUC)) %>%  
+
+# run for each hyperparameter set
+model_train_and_validate <- function(nu, kernel, gamma, number_trees, number_features, normalise) {
+  
+  # Perform a single validation three times
+  outcomes_list <- list()
+  
+  # Run the validation function 3 times (you can adjust this if needed)
+  for (i in 1:3) {
+    result <- perform_single_validation(
+      subset_data, 
+      validation_proportion, 
+      kernel = kernel,
+      nu = nu,
+      gamma = gamma,
+      number_trees = number_trees,
+      number_features = number_features
+    )
+    
+    outcomes_list[[i]] <- result  # Store all of the results
+  }
+  
+  # Combine the outcomes into a single data.table
+  model_outcomes <- rbindlist(outcomes_list)
+  
+  # Average these cross-validation results # modify this to change the optimisation metric
+  average_model_outcomes <- model_outcomes %>%
+    group_by(Activity, nu, gamma, kernel, number_features, number_trees) %>%  
     mutate(PR_AUC = as.numeric(PR_AUC)) %>%
     summarise(
-      mean_PR_AUC = mean(PR_AUC, na.rm = TRUE),  # Calculate the mean
-      sd_PR_AUC = sd(PR_AUC, na.rm = TRUE)       # Calculate the standard deviation between folds
+      mean_PR_AUC = mean(PR_AUC, na.rm = TRUE),  
+      sd_PR_AUC = sd(PR_AUC, na.rm = TRUE)
     )
+  
+  # extract the optimisation metric
+  PR_AUC <- as.numeric(average_model_outcomes$mean_PR_AUC)
+  
+  # Return the mean PR_AUC for optimization
+  return(PR_AUC)
+}
 
-# save to
-average_model_outcomes <- setDT(average_model_outcomes)
+
+
+
+
+
 ensure.dir(file.path(base_path, "Output", dataset_name))
 fwrite(average_model_outcomes, file.path(base_path, "Output", dataset_name, paste0(dataset_name, "_model_outcomes_test3.csv")))
 
@@ -141,9 +175,9 @@ fwrite(average_model_outcomes, file.path(base_path, "Output", dataset_name, past
 
 
 
----------------------------------------------------------------------------
+#---------------------------------------------------------------------------
 # Testing highest performing model hyperparameters                       ####
----------------------------------------------------------------------------
+#---------------------------------------------------------------------------
 
 # load in the validation data and generate features
 testing_data <- fread(file.path(base_path, "Data", "Hold_out_test", paste0(dataset_name, "_Labelled_test.csv")))
@@ -205,32 +239,6 @@ confusionMatrix(data = factor(predicted_classes, levels = c(-1, 1)), reference =
 
 # find the threshold for classification that maximises F score
 thresholds <- seq(0, 1, by = 0.01) # Thresholds to trial
-
-metrics <- function(threshold) {
-  # Assign predicted classes based on threshold
-  predicted_classes <- ifelse(scores > threshold, 1, -1)
-  
-  # Create confusion matrix, ensuring that both classes (-1 and 1) are represented
-  confusion_matrix <- table(factor(predicted_classes, levels = c(-1, 1)),
-                            factor(ground_truth_labels, levels = c(-1, 1)))
-  
-  # Extract values from confusion matrix or set to 0 if they don't exist
-  TP <- ifelse("1" %in% rownames(confusion_matrix) && "1" %in% colnames(confusion_matrix),
-               confusion_matrix["1", "1"], 0)
-  FP <- ifelse("1" %in% rownames(confusion_matrix) && "-1" %in% colnames(confusion_matrix),
-               confusion_matrix["1", "-1"], 0)
-  FN <- ifelse("-1" %in% rownames(confusion_matrix) && "1" %in% colnames(confusion_matrix),
-               confusion_matrix["-1", "1"], 0)
-  
-  # Calculate precision and recall with safeguards
-  precision <- ifelse((TP + FP) == 0, 0, TP / (TP + FP))
-  recall <- ifelse(sum(ground_truth_labels == 1) == 0, 0, TP / sum(ground_truth_labels == 1))
-  
-  # Calculate F1 score
-  F1_score <- ifelse((precision + recall) == 0, 0, 2 * (precision * recall) / (precision + recall))
-  
-  return(c(threshold, F1_score))
-}
 
 # Compute accuracy for each threshold
 results <- sapply(thresholds, metrics) %>% as.data.frame()
