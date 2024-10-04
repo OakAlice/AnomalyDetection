@@ -89,26 +89,28 @@ if (file.exists(file.path(base_path, "Data", "Feature_data", paste0(dataset_name
 
 # Define your bounds for Bayesian Optimization
 bounds <- list(
-  nu = c(0.01, 0.5),
-  kernel = c("linear", "radial"), 
-  gamma = c(0.01, 1),
-  normalise = "z-scale",
-  number_features = c(20, 50)
+  nu = c(0.01, 0.1),  
+  kernel = c(0, 1),     
+  gamma = c(0.01, 0.1),     
+  number_trees = c(100, 500), 
+  number_features = c(20, 50) 
 )
 
 # Run the optimization
-results <- BayesianOptimization(
-  FUN = model_train_and_validate,
-  bounds = bounds,
-  init_points = 5,    # Number of random initialization points
-  n_iter = 15,        # Number of iterations for Bayesian optimization
-  acq = "ucb",        # Acquisition function; can be 'ucb', 'ei', or 'poi'
-  kappa = 2.576       # Trade-off parameter for 'ucb'
-)
-
+bench_time({
+  # Run the Bayesian Optimization
+  results <- BayesianOptimization(
+    FUN = model_train_and_validate,
+    bounds = bounds,
+    init_points = 5,    # Number of random initialization points
+    n_iter = 15,        # Number of iterations for Bayesian optimization
+    acq = "ucb",        # Acquisition function; can be 'ucb', 'ei', or 'poi'
+    kappa = 2.576       # Trade-off parameter for 'ucb'
+  )
+})
 
 # run for each hyperparameter set
-model_train_and_validate <- function(nu, kernel, gamma, number_trees, number_features, normalise) {
+model_train_and_validate <- function(nu, kernel, gamma, number_trees, number_features) {
   
   # Perform a single validation three times
   outcomes_list <- list()
@@ -127,28 +129,27 @@ model_train_and_validate <- function(nu, kernel, gamma, number_trees, number_fea
     
     outcomes_list[[i]] <- result  # Store all of the results
   }
-  
   # Combine the outcomes into a single data.table
   model_outcomes <- rbindlist(outcomes_list)
   
-  # Average these cross-validation results # modify this to change the optimisation metric
-  average_model_outcomes <- model_outcomes %>%
-    group_by(Activity, nu, gamma, kernel, number_features, number_trees) %>%  
-    mutate(PR_AUC = as.numeric(PR_AUC)) %>%
-    summarise(
-      mean_PR_AUC = mean(PR_AUC, na.rm = TRUE),  
-      sd_PR_AUC = sd(PR_AUC, na.rm = TRUE)
-    )
+  # Calculate the mean and standard deviation of PR_AUC
+  average_model_outcomes <- model_outcomes[, .(
+    mean_PR_AUC = mean(PR_AUC, na.rm = TRUE),
+    sd_PR_AUC = sd(PR_AUC, na.rm = TRUE)
+  ), by = .(Activity, nu, gamma, kernel, number_features)]
   
-  # extract the optimisation metric
+  # Extract the mean PR_AUC for optimization
   PR_AUC <- as.numeric(average_model_outcomes$mean_PR_AUC)
   
-  # Return the mean PR_AUC for optimization
-  return(PR_AUC)
+  # Extract predictions (I dont want this but function requires it)
+  predictions <- NA
+  
+  # Return a named list with 'Score' and 'Pred'
+  return(list(
+    Score = PR_AUC,  # Metric to be maximized
+    Pred = predictions  # Validation predictions for ensembling/stacking
+  ))
 }
-
-
-
 
 
 

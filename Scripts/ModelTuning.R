@@ -5,13 +5,15 @@
 # train and validate these specific values 
 perform_single_validation <- function(subset_data, validation_proportion,
                                       kernel, nu, gamma, number_trees, number_features) {
+  # convert the kernel
+  kernel <- ifelse(kernel == 0, "linear", "radial")
+  
   
   # Create training and validation data
   unique_ids <- unique(subset_data$ID)
   test_ids <- sample(unique_ids, ceiling(length(unique_ids) * validation_proportion))
-  
-  validation_data <- subset_data[subset_data$ID %in% test_ids, ]
   training_data <- subset_data[!subset_data$ID %in% test_ids, ]
+  validation_data <- subset_data[subset_data$ID %in% test_ids, ]
   
   #### Feature selection ####
   # convert data to binary
@@ -37,7 +39,8 @@ perform_single_validation <- function(subset_data, validation_proportion,
   counts <- selected_validation_data[Activity == targetActivity, .N]
   selected_validation_data[Activity != targetActivity, Activity := "Other"]
   selected_validation_data <- selected_validation_data[, .SD[1:counts], by = Activity]
-  
+
+  # apply the ground truth labels
   ground_truth_labels <- selected_validation_data[, "Activity"]
   ground_truth_labels <- ifelse(ground_truth_labels == as.character(targetActivity), 1, -1)
   
@@ -80,3 +83,46 @@ perform_single_validation <- function(subset_data, validation_proportion,
   
   return(cross_result)
 }
+
+# run for each hyperparameter set
+model_train_and_validate <- function(nu, kernel, gamma, number_trees, number_features) {
+  
+  # Perform a single validation three times
+  outcomes_list <- list()
+  
+  # Run the validation function 3 times (you can adjust this if needed)
+  for (i in 1:3) {
+    result <- perform_single_validation(
+      subset_data, 
+      validation_proportion, 
+      kernel = kernel,
+      nu = nu,
+      gamma = gamma,
+      number_trees = number_trees,
+      number_features = number_features
+    )
+    
+    outcomes_list[[i]] <- result  # Store all of the results
+  }
+  # Combine the outcomes into a single data.table
+  model_outcomes <- rbindlist(outcomes_list)
+  
+  # Calculate the mean and standard deviation of PR_AUC
+  average_model_outcomes <- model_outcomes[, .(
+    mean_PR_AUC = mean(PR_AUC, na.rm = TRUE),
+    sd_PR_AUC = sd(PR_AUC, na.rm = TRUE)
+  ), by = .(Activity, nu, gamma, kernel, number_features)]
+  
+  # Extract the mean PR_AUC for optimization
+  PR_AUC <- as.numeric(average_model_outcomes$mean_PR_AUC)
+  
+  # Extract predictions (I dont want this but function requires it)
+  predictions <- NA
+  
+  # Return a named list with 'Score' and 'Pred'
+  return(list(
+    Score = PR_AUC,  # Metric to be maximized
+    Pred = predictions  # Validation predictions for ensembling/stacking
+  ))
+}
+
