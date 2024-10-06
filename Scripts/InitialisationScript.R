@@ -9,7 +9,7 @@
 # load packages
 library(pacman)
 p_load(data.table, tidyverse, purrr, future.apply, e1071, zoo, caret,
-       tsfeatures, umap, plotly, randomForest, pROC, bench, PRROC, rBaysianOptimization)
+       tsfeatures, umap, plotly, randomForest, pROC, bench, PRROC, rBayesianOptimization)
 #library(h2o) # for UMAP, but takes a while so ignore unless necessary
 
 # set base path/directory from where scripts, data, and output are stored
@@ -148,95 +148,75 @@ gamma <- 0.08586
 
 
 # load in the test data and generate features
-testing_data <- fread(file.path(base_path, "Data", "Hold_out_test", paste0(dataset_name, "_Labelled_test.csv")))
-testing_data_sample <- testing_data %>% group_by(ID, Activity) %>% slice(1:100) %>% ungroup() %>% setDT()
+#testing_data <- fread(file.path(base_path, "Data", "Hold_out_test", paste0(dataset_name, "_Labelled_test.csv")))
+#testing_data_sample <- testing_data %>% group_by(ID, Activity) %>% slice(1:100) %>% ungroup() %>% setDT()
 
-testing_feature_data <- generate_features(movement_data, data = testing_data, 
-                                          normalise = "z_scale", features_type = features_type)
+#testing_feature_data <- generate_features(movement_data, data = testing_data, 
+#                                          normalise = "z_scale", features_type = features_type)
 # save this for later
-fwrite(testing_feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
-testing_feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
+#fwrite(testing_feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
 
 # load in training data and select features and target data
 training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_labelled_features.csv")))
 selected_feature_data <- feature_selection(training_data, number_trees, number_features)
 target_selected_feature_data <- selected_feature_data[Activity == as.character(targetActivity),
                                                    !label_columns, with = FALSE] 
-
 # create the optimal SVM
 optimal_single_class_SVM <- do.call(svm, list(target_selected_feature_data, y = NULL, type = 'one-classification', 
                                                 nu = nu, scale = TRUE, 
                                                 kernel = kernel, 
                                                 gamma = gamma))
 
-# training accuracy
-predictions <- predict(optimal_single_class_SVM, target_selected_feature_data)
-true_labels <- rep(TRUE, nrow(target_selected_feature_data)) # because they are all from the training class
-
-# Create a confusion matrix
-tp <- sum(predictions == TRUE & true_labels == TRUE)
-fp <- sum(predictions == TRUE & true_labels == FALSE)
-fn <- sum(predictions == FALSE & true_labels == TRUE)
-
-# Precision, Recall, F1-Score
-precision <- tp / (tp + fp)
-recall <- tp / (tp + fn)
-f1_score <- 2 * (precision * recall) / (precision + recall)
-
-
-
-
-# somehow get the top_features back out so it doesn't need to be extracted like this
-top_features <- colnames(target_selected_feature_data)
-selected_testing_data <- testing_feature_data[, .SD, .SDcols = c("Activity", top_features)]
-selected_testing_data <- selected_testing_data[complete.cases(selected_testing_data), ]
-
-# apply the SVM to the test data 
-ground_truth_labels <- selected_testing_data[, "Activity"]
-ground_truth_labels <- ifelse(ground_truth_labels$Activity == as.character(targetActivity), 1, -1)
-
-
-
-# random test
-summary <- selected_testing_data %>% group_by(Activity) %>% count()
-random_indices <- sample(1:length(ground_truth_labels), size = 750)
-ground_truth_labels <- ifelse(row_number(ground_truth_labels) %in% random_indices, 1, -1)
-
-
-
-numeric_testing_data <- selected_testing_data[, !"Activity"]
-decision_scores <- predict(optimal_single_class_SVM, newdata = numeric_testing_data, decision.values = TRUE)
+# calculate performance on the training set ####
+decision_scores <- predict(optimal_single_class_SVM, newdata = target_selected_feature_data, decision.values = TRUE)
 scores <- as.numeric(attr(decision_scores, "decision.values"))
+true_labels <- rep(1, nrow(target_selected_feature_data)) # because they are all from the training class
 
-# Calculate AUC
-roc_curve <- roc(as.vector(ground_truth_labels), scores)
-auc_value <- auc(roc_curve)
+training_results <- get_performance(scores, ground_truth_labels = true_labels)
 
-plot(roc_curve, col = "blue", main = paste("ROC Curve (AUC =", round(auc_value, 2), ")"))
+# Calculate performance on the test set ####
+# Format the test data
+top_features <- colnames(target_selected_feature_data)
+testing_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
+filtered_test_data <- testing_data[, .SD, .SDcols = c("Activity", top_features)]
+balanced_test_data <- filtered_test_data[complete.cases(filtered_test_data), ]
 
-pr_curve <- pr.curve(scores.class0 = scores[ground_truth_labels == 1],
-                     scores.class1 = scores[ground_truth_labels == -1], curve = TRUE)
-pr_auc_value <- pr_curve$auc.integral
-plot(pr_curve)
+# Balance the testing data
+activity_count <- balanced_test_data[Activity == targetActivity, .N]
+balanced_test_data[Activity != targetActivity, Activity := "Other"]
+balanced_test_data <- balanced_test_data[, .SD[1:activity_count], by = Activity]
 
-# find the threshold for classification that maximises F score
-thresholds <- seq(0, 1, by = 0.01) # Thresholds to trial
+# Extract the ground truth labels from the balanced test data
+test_labels <- balanced_test_data[, "Activity"]
+test_labels <- ifelse(test_labels$Activity == as.character(targetActivity), 1, -1)
 
-# Compute accuracy for each threshold
-results <- sapply(thresholds, function(threshold) {
-  threshold_metrics(scores, ground_truth_labels, threshold)
-}) %>% as.data.frame()
-results <- as.data.frame(t(results))
+# Predict using the trained SVM model
+numeric_test_features <- balanced_test_data[, !"Activity"]
+decision_scores <- predict(optimal_single_class_SVM, newdata = numeric_test_features, decision.values = TRUE)
+predicted_scores <- as.numeric(attr(decision_scores, "decision.values"))
 
-plot(results$threshold, results$F1_score, xlab = "Threshold", ylab = "F1Score")
-
-# Get the best threshold 
-best_threshold <- results$threshold[which.max(results$F1_score)]
-
-# therefore calculate the threshold metrics 
-results <- threshold_metrics(scores, ground_truth_labels, best_threshold)
-
-results
+# Get performance for the balanced test data
+balanced_test_results <- get_performance(predicted_scores, test_labels)
 
 
+# Calculate performance on the randomized test set ####
+# Randomize 'Activity' column to generate a randomized test set
+randomized_test_data <- filtered_test_data[complete.cases(filtered_test_data), ]
+randomized_test_data$Activity <- sample(randomized_test_data$Activity)
 
+# Balance the randomized test data
+random_activity_count <- randomized_test_data[Activity == targetActivity, .N]
+randomized_test_data[Activity != targetActivity, Activity := "Other"]
+balanced_random_test_data <- randomized_test_data[, .SD[1:random_activity_count], by = Activity]
+
+# Extract the ground truth labels from the randomized test data
+random_test_labels <- balanced_random_test_data[, "Activity"]
+random_test_labels <- ifelse(random_test_labels$Activity == as.character(targetActivity), 1, -1)
+
+# Predict using the trained SVM model
+numeric_random_test_features <- balanced_random_test_data[, !"Activity"]
+random_decision_scores <- predict(optimal_single_class_SVM, newdata = numeric_random_test_features, decision.values = TRUE)
+random_predicted_scores <- as.numeric(attr(random_decision_scores, "decision.values"))
+
+# Get performance for the randomized test data
+random_test_results <- get_performance(random_predicted_scores, random_test_labels)

@@ -11,6 +11,7 @@ targetActivity_options <- c("Eating", "Walking")
   
 ## Axes to Include in Model (just in case you don't have all of them)
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
+label_columns <- c("Activity", "Time", "ID")
 
 # ---------------------------------------------------------------------------
 # Validation Parameters 
