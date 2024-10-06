@@ -13,16 +13,6 @@ targetActivity_options <- c("Eating", "Walking")
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
 
 # ---------------------------------------------------------------------------
-# Tunable Model Hyperparameters
-# ---------------------------------------------------------------------------
-
-# Below are SVM-specific hyperparameters - stuff for other methods to be added later
-nu_options <- c(0.01, 0.05)
-kernel_options <- c("radial") #"polynomial", "sigmoid", "linear"
-gamma_options <- c(0.001, 0.01, 0.1)
-degree_options <- c(3, 4) # Only if using a polynomial kernel
-
-# ---------------------------------------------------------------------------
 # Validation Parameters 
 # ---------------------------------------------------------------------------
 
@@ -48,15 +38,6 @@ feature_normalisation_options <- c("z-scale")
 # features type as in timeseries from tsfeatures package and/or statistical from Tatler et al., 2018
 features_type <- c("timeseries", "statistical")
 number_features <- 50
-
-## UMAP hyperparameters 
-minimum_distance_options <- c(0.7)
-num_neighbours_options <- 10
-shape_metric_options <- 'manhattan'  # Other options: 'euclidean', etc.
-
-## Random Forest hyperparameters
-number_trees_options <- c(100)
-number_features_options <- c(50)
 
 
 

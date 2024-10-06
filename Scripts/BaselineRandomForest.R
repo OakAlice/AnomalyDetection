@@ -47,6 +47,24 @@ labelled_data <- fifteen_class_feature_data
   # validate
   predictions <- predict(rf_model, validation_data)
   confusion_matrix <- table(predictions, validation_data$Activity)
+
+  # Add row and column names
+  rownames(confusion_matrix) <- c("Bowing", "Carrying object", "Drinking", "Eating", "Galloping", "Jumping", "Lying chest", "Pacing", "Panting", "Playing", "Shaking", "Sitting", "Sniffing", "Standing", "Trotting", "Tugging", "Walking")
+  colnames(confusion_matrix) <- rownames(confusion_matrix)
   
+  # Calculate performance metrics
+  confusion_mtx <- confusionMatrix(confusion_matrix)
   
+  # Extract precision, recall, and F1-score
+  precision <- confusion_mtx$byClass[, "Precision"]
+  recall <- confusion_mtx$byClass[, "Recall"]
+  f1 <- confusion_mtx$byClass[, "F1"]
+  accuracy <- confusion_mtx$byClass[, "Balanced Accuracy"]
+  
+  # Calculate macro-averaged precision, recall, and F1-score
+  macro_precision <- mean(precision, na.rm = TRUE)
+  macro_recall <- mean(recall, na.rm = TRUE)
+  macro_f1 <- mean(f1, na.rm = TRUE)
+  macro_accuracy <- mean(accuracy, na.rm = TRUE)
+
   
