@@ -1,3 +1,7 @@
+# Dump space for exploration #### Need to clean up and simplify ####
+
+
+
 # Plotting the features
 
 # plot the training_data features ####
@@ -145,83 +149,231 @@ beh_trace_plot <- plot_behaviours(behaviours = unique(data_other$Activity), data
 
 
 
+# ---------------------------------------------------------------------------
+# Functions for plotting
+# ---------------------------------------------------------------------------
+
+
+# set colours ####
+generate_random_colors <- function(n) {
+  colors <- rgb(runif(n), runif(n), runif(n))
+  return(colors)
+}
+set.seed(123)
+
+# total volume by Activity and ID ####
+plot_activity_ID <- function(data, frequency, colours) {
+  my_colours <- generate_random_colors(colours)
+  # summarise into a table
+  labelledDataSummary <- data %>%
+    #filter(!Activity %in% ignore_behaviours) %>%
+    count(ID, Activity)
+  
+  # account for the HZ, convert to minutes
+  labelledDataSummaryplot <- labelledDataSummary %>%
+    mutate(minutes = (n/frequency)/60)
+  
+  # Plot the stacked bar graph
+  behaviourIndividualDistribution <- ggplot(labelledDataSummaryplot, aes(x = Activity, y = minutes, fill = as.factor(ID))) +
+    geom_bar(stat = "identity") +
+    labs(x = "Activity",
+         y = "minutes") +
+    theme_minimal() +
+    scale_fill_manual(values = my_colours) +
+    theme(axis.line = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          panel.border = element_rect(color = "black", fill = NA),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank())
+  
+  return(behaviourIndividualDistribution)
+}
 
 
 
-# Feature discovery ####
-data_other <- fread(file.path(base_path, "Data", "Hold_out_test", "Vehkaoja_2018_other.csv")) %>%
-  mutate(Activity = ifelse(Activity %in% c("Panting", "Sitting", "Lying chest"), 
-                           "Stationary",  Activity))
-
-data_test <- fread(file.path(base_path, "Data", "Hold_out_test", "Vehkaoja_2018_test.csv")) %>%
-  mutate(Activity = ifelse(Activity %in% c("Panting", "Sitting", "Lying chest"), 
-                           "Stationary",  Activity))
-
-data_test<- create_windows(data_test, 200)
-
-
-#keras::install_keras()
-library(keras)
-library(dplyr)
-h2o.init()
-
-# Select relevant columns for the autoencoder
-data <- create_format_data(training_data = data_other, targetActivity = "Galloping", window_size = 200)
-data_autoencoder <- data$target_windows
-
-
-# Define the input shape
-input_dim <- ncol(data_autoencoder)
-encoding_dim <- 2  # Number of features to discover
-
-# Input layer
-input_layer <- layer_input(shape = c(input_dim))
-
-# Encoder layer
-encoder <- input_layer %>%
-  layer_dense(units = encoding_dim, activation = 'relu') # can change the function
-
-# Decoder layer
-decoder <- encoder %>%
-  layer_dense(units = input_dim, activation = 'sigmoid') # and this one
-
-# Define the autoencoder model
-autoencoder <- keras_model(inputs = input_layer, outputs = decoder)
-
-# Compile the model
-autoencoder %>% compile(
-  optimizer = 'adam',
-  loss = 'mean_squared_error'
-)
-
-
-# Fit the autoencoder to the data
-data_matrix <- as.matrix(as.data.frame(data_autoencoder))
-history <- autoencoder %>% fit(
-  x = data_matrix,      # Input data
-  y = data_matrix,      # Target data is the same as input for an autoencoder
-  epochs = 50,
-  batch_size = 32,
-  shuffle = TRUE,
-  validation_split = 0.2
-)
+# DISPLAYING SAMPLES OF EACH TRACE TYPE ####
+plot_trace_example <- function(behaviours, data, n_samples, n_col) {
+  # Function to create the plot for each behavior
+  plot_behaviour <- function(behaviour, n_samples) {
+    df <- data %>%
+      filter(Activity == behaviour) %>%
+      group_by(ID, Activity) %>%
+      slice(1:n_samples) %>%
+      mutate(relative_time = row_number())
+    
+    
+    ggplot(df, aes(x = relative_time)) +
+      geom_line(aes(y = Accelerometer.X, color = "X"), show.legend = FALSE) +
+      geom_line(aes(y = Accelerometer.Y, color = "Y"), show.legend = FALSE) +
+      geom_line(aes(y = Accelerometer.Z, color = "Z"), show.legend = FALSE) +
+      labs(title = paste(behaviour),
+           x = NULL, y = NULL) +
+      scale_color_manual(values = c(X = "salmon", Y = "turquoise", Z = "darkblue"), guide = "none") +
+      facet_wrap(~ ID, nrow = 1, scales = "free_x") +
+      theme_minimal() +
+      theme(panel.grid = element_blank(),
+            axis.text.x = element_blank(),
+            axis.text.y = element_blank())
+  }
+  
+  # Create plots for each behavior (with error catching)
+  plots <- purrr::map(behaviours, function(behaviour) {
+    tryCatch(
+      {
+        plot_behaviour(behaviour, n_samples)
+      },
+      error = function(e) {
+        message("Skipping plot for ", behaviour, ": ", e$message)
+        NULL  # Return NULL to indicate skipping
+      }
+    )
+  })
+  
+  # Combine plots into a single grid
+  # plots <- plots[1:13]
+  grid_plot <- cowplot::plot_grid(plotlist = plots, ncol = n_col)
+  
+  return(grid_plot)
+}
 
 
-# apply it to the validation data to see what happens
-data_matrix_test <- as.matrix(as.data.frame(data_test))
-predicted <- autoencoder %>% predict(data_matrix_test)
+# average duration of behaviours ####
+average_duration <- function(data, sample_rate){
+  
+  summary <- data %>%
+    arrange(ID) %>%                     # Sort by ID (not time because multiple trials)
+    group_by(ID) %>%                         # Group by ID
+    mutate(
+      behavior_change = lag(Activity) != Activity,  # Detect changes in Activity
+      behavior_change = ifelse(is.na(behavior_change), TRUE, behavior_change)  # Handle the first row
+    ) %>%
+    mutate(
+      behavior_id = cumsum(behavior_change)  # Create an identifier for each continuous behavior segment
+    ) %>%
+    group_by(ID, behavior_id) %>%            # Group by ID and behavior_id
+    mutate(
+      row_count = row_number()                # Count rows within each behavior segment
+    ) %>%
+    ungroup() %>%
+    select(ID, Time, Activity, row_count, behavior_id) %>%   # Select relevant columns
+    group_by(ID, Activity, behavior_id) %>%
+    summarise(duration_sec = max(row_count)/100)
+  
+  duration_stats <- summary %>%
+    group_by(Activity) %>%
+    summarise(
+      average_duration = mean(duration_sec, na.rm = TRUE),
+      variation_duration = sd(duration_sec, na.rm = TRUE),
+      minimum_duration = min(duration_sec, na.rm = TRUE),
+      third_quartile_duration = quantile(duration_sec, 0.25, na.rm = TRUE),  # Add third quartile
+      count = n()
+    )
+
+  # plot that
+  duration_plot <- ggplot(summary, aes(x = Activity, y = duration_sec)) +
+    geom_boxplot(aes(color = Activity)) +  # Use color to distinguish activities
+    theme_minimal() +
+    theme(
+      legend.position = "none",             # Remove legend
+      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),  # Rotate x-axis labels 90 degrees
+      panel.grid = element_blank(),         # Remove grid lines
+      panel.border = element_rect(color = "black", fill = NA)  # Add black border around the plot
+    ) +
+    labs(
+      x = "Activity",
+      y = "Duration (seconds)"
+    ) +
+    scale_y_continuous(
+      limits = c(min(summary$duration_sec, na.rm = TRUE), max(summary$duration_sec, na.rm = TRUE)),  # Set y-axis limits
+      breaks = seq(0, max(summary$duration_sec, na.rm = TRUE), by = 160)  # Adjust the step size as needed
+    )
+
+  return(list(duration_plot = duration_plot,
+              duration_stats = duration_stats))
+}
+
+# ---------------------------------------------------------------------------
+# Preprocessing Decisions
+# Script for exploring data to determine behavioural groupings and window length
+# ---------------------------------------------------------------------------
 
 
-# Define the encoder model
-encoder_model <- keras_model(inputs = input_layer, outputs = encoder)
+# generate plots
+# volume of data per individual and activity
+plot_activity_ID_graph <- plot_activity_ID(data = move_data, 
+                                           frequency = movement_data$Frequency, colours = length(unique(move_data$ID)))
+# examples of each trace
+plot_trace_example_graph <- plot_trace_example(behaviours = unique(move_data$Activity), 
+                                               data = move_data, n_samples = 200, n_col = 4)
 
-# Get the encoded features
-encoded_features <- encoder_model %>% predict(data_autoencoder)
+# other exploratory plots
+## Prt 1: Determine Window Length ####
+duration_info <- average_duration(data = data_other, sample_rate = movement_data$Frequency)
+stats <- duration_info$duration_stats %>% 
+  filter(Activity %in% movement_data$target_behaviours)
+plot <- duration_info$duration_plot
 
-# Add the new features to your original data
-data_with_features <- data_other %>%
-  mutate(Feature1 = encoded_features[, 1],
-         Feature2 = encoded_features[, 2])
 
-# View the data with the new features
-head(data_with_features)
+
+# UMAP visualisation
+
+
+# UMAP ####
+UMAP_reduction <- function(numeric_features, labels, minimum_distance, num_neighbours, shape_metric, save_model_path = NULL) {
+  # Train UMAP model on the known data
+  umap_model_2D <- umap::umap(numeric_features, n_neighbors = num_neighbours, min_dist = minimum_distance, metric = shape_metric)
+  umap_model_3D <- umap::umap(numeric_features, n_neighbors = num_neighbours, min_dist = minimum_distance, metric = shape_metric, n_components = 3)
+  
+  # Save the trained UMAP models for future use (for transforming new data)
+  if (!is.null(save_model_path)) {
+    saveRDS(umap_model_2D, file = file.path(save_model_path, "umap_2D_model.rds"))
+    saveRDS(umap_model_3D, file = file.path(save_model_path, "umap_3D_model.rds"))
+  }
+  
+  # Apply the trained UMAP model on training data
+  umap_result_2D <- umap_model_2D$layout
+  umap_result_3D <- umap_model_3D$layout
+  
+  # Create dataframes for 2D and 3D embeddings, add labels back
+  umap_df <- as.data.frame(umap_result_2D)
+  colnames(umap_df) <- c("UMAP1", "UMAP2")
+  umap_df$Activity <- labels[1:nrow(umap_df), ]
+  umap_df$Activity <- as.factor(umap_df$Activity$Activity)
+  
+  umap_df_3 <- as.data.frame(umap_result_3D)
+  colnames(umap_df_3) <- c("UMAP1", "UMAP2", "UMAP3")
+  umap_df_3$Activity <- labels[1:nrow(umap_df_3), ]
+  umap_df_3$Activity <- as.factor(umap_df_3$Activity$Activity)
+  
+  # Plot the clusters in 2D
+  UMAP_2D_plot <- ggplot(umap_df, aes(x = UMAP1, y = UMAP2, colour = Activity)) +
+    geom_point(alpha = 0.6) +
+    theme_minimal() +
+    labs(x = "Dimension 1", y = "Dimension 2", colour = "Activity") +
+    theme(legend.position = "right") +
+    annotate("text", x = Inf, y = -Inf, label = paste("n_neighbors:", num_neighbours, "\nmin_dist:", minimum_distance, "\nmetric:", shape_metric),
+             hjust = 1.1, vjust = -0.5, size = 3, color = "black", fontface = "italic") +
+    scale_color_discrete()
+  
+  # Plot in 3D
+  UMAP_3D_plot <- plotly::plot_ly(umap_df_3, x = ~UMAP1, y = ~UMAP2, z = ~UMAP3, 
+                                  color = ~Activity, colors = "Set1", 
+                                  type = "scatter3d", mode = "markers",
+                                  marker = list(size = 3, opacity = 0.5)) %>% 
+    plotly::layout(scene = list(xaxis = list(title = "UMAP1"), yaxis = list(title = "UMAP2"), zaxis = list(title = "UMAP3")))
+  
+  return(list(
+    UMAP_3D_plot = UMAP_3D_plot,
+    UMAP_2D_plot = UMAP_2D_plot,
+    UMAP_2D_model = umap_model_2D,
+    UMAP_3D_model = umap_model_3D,
+    UMAP_2D_embeddings = umap_df,
+    UMAP_3D_embeddings = umap_df_3
+  ))
+}
+
+#UMAP_transform_new_data <- function(new_data, umap_model_path) {
+#  umap_model <- readRDS(umap_model_path)
+#  transformed_data <- predict(umap_model, new_data)
+#  return(transformed_data)
+#}

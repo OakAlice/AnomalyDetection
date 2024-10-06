@@ -5,16 +5,12 @@
 training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_labelled_features.csv")))
 testing_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
 
-number_trees <- 500
-mtry <- 3
-
-
-  potential_features <- select_potential_features(training_data, threshold = 0.9)
-  features_and_columsn <- c(potential_features, "Activity", "ID")
-  training_data <- training_data[, ..features_and_columsn]
-  training_data$Activity <- as.factor(training_data$Activity)
-  training_data <- training_data[complete.cases(training_data), ]
+  selected_feature_data <- feature_selection(training_data, number_trees = 105, number_features=23)
+  selected_feature_data <- selected_feature_data[, !c("Time", "ID"), with = FALSE]
+  selected_feature_data$Activity <- as.factor(selected_feature_data$Activity)
+  selected_feature_data <- selected_feature_data[complete.cases(selected_feature_data), ]
  
+  
   # Tune multiclass SVM parameters ### TODO
   
   # Train multiclass SVM with chosen parameters 
@@ -23,7 +19,7 @@ mtry <- 3
   gamma <- 0.08586
   
   svm_model <- svm(Activity ~ ., 
-                   data = training_data, 
+                   data = selected_feature_data, 
                    type = 'C-classification',   
                    kernel = kernel,           
                    cost = cost,           
@@ -31,25 +27,15 @@ mtry <- 3
   
   
   # validate
-  testing_data <- testing_data[, ..features_and_columsn]
+  top_features <- colnames(selected_feature_data)
+  testing_data <- testing_data[, ..top_features]
   testing_data <- testing_data[complete.cases(testing_data), ]
   numeric_testing_data <- testing_data %>% select(!"Activity")
   
-  decision_scores <- predict(svm_model, newdata = numeric_testing_data, decision.values = TRUE)
-  scores <- as.numeric(attr(decision_scores, "decision.values"))
+  predictions <- predict(svm_model, newdata = numeric_testing_data)
   ground_truth_labels <- testing_data$Activity
   
-  training_results <- get_performance(scores, ground_truth_labels)
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  confusion_matrix <- table(predictions, testing_data$Activity)
+  confusion_matrix <- table(predictions, ground_truth_labels)
 
   # Add row and column names
   rownames(confusion_matrix) <- c("Bowing", "Carrying object", "Drinking", "Eating", "Galloping", "Jumping", "Lying chest", "Pacing", "Panting", "Playing", "Shaking", "Sitting", "Sniffing", "Standing", "Trotting", "Tugging", "Walking")

@@ -38,17 +38,15 @@ walk(scripts, source_script)
 # Define parameters and create data splits for this run                 ####
 #---------------------------------------------------------------------------
 dataset_name <- "Vehkaoja_Dog"
-list_name <- all_dictionaries[[dataset_name]]
-movement_data <- get(list_name)
 
 # load in data
-move_data <- fread(file.path(base_path, "Data", paste0(movement_data$name, "_Corrected.csv")))
+move_data <- fread(file.path(base_path, "Data", paste0(dataset_name, "_Corrected.csv")))
 
 # Split Data ####
 if (file.exists(file.path(base_path, "Data", "Hold_out_test", paste0(dataset_name, "_Labelled_test.csv")))){
   # if this has been run before, just load in the split data  
-    data_test <- fread(file.path(base_path, "Data/Hold_out_test", paste0(movement_data$name, "_test.csv")))
-    data_other <-fread(file.path(base_path, "Data/Hold_out_test", paste0(movement_data$name, "_other.csv")))
+    data_test <- fread(file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_test.csv")))
+    data_other <-fread(file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_other.csv")))
   } else {
     # if this is the first time running code for this dataset, create hold-out test set
     unique_ids <- unique(move_data$ID)
@@ -56,13 +54,17 @@ if (file.exists(file.path(base_path, "Data", "Hold_out_test", paste0(dataset_nam
     data_test <- move_data[ID %in% test_ids]
     data_other <- move_data[!ID %in% test_ids]
   # save these
-    fwrite(data_test, file.path(base_path, "Data/Hold_out_test", paste0(movement_data$name, "_test.csv")))
-    fwrite(data_other, file.path(base_path, "Data/Hold_out_test", paste0(movement_data$name, "_other.csv")))
+    fwrite(data_test, file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_test.csv")))
+    fwrite(data_other, file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_other.csv")))
   }
 
 # explore data in PreProcessingDecisions.R to determine window length and behavioural clustering
 # haven't automated this yet
 # when complete, add to dictionary
+
+sample-frequency <- 100
+overlap_percent <- 0
+window_length <-1
 
 #---------------------------------------------------------------------------
 # Feature Generation                                                    ####
@@ -73,8 +75,10 @@ if (file.exists(file.path(base_path, "Data", "Hold_out_test", paste0(dataset_nam
 if (file.exists(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_labelled_features.csv")))){
   feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_labelled_features.csv")))
 } else {
-  feature_data <- generate_features(movement_data, data = data_other, 
-                                    normalise = "z_scale", features = features_type)
+  feature_data <- generate_features(window_length, sample_frequency, overlap_percent,
+                                    data = data_other, 
+                                    normalise = "z_scale", 
+                                    features = features_type)
 }
 
 #---------------------------------------------------------------------------

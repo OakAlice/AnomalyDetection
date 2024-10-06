@@ -3,11 +3,11 @@
 # ---------------------------------------------------------------------------
 
 # Function to process data for each ID
-process_id_data <- function(id_data, features_type, movement_data) {
+process_id_data <- function(id_data, features_type, window_length, sample_frequency, overlap_percent) {
   
   # calculate window length and overlap
-  samples_per_window <- movement_data$window_length * movement_data$Frequency
-  overlap_samples <- if (movement_data$overlap_percent > 0) ((movement_data$overlap_percent / 100) * samples_per_window) else 0
+  samples_per_window <- window_length * sample_frequency
+  overlap_samples <- if (overlap_percent > 0) ((overlap_percent / 100) * samples_per_window) else 0
   num_windows <- ceiling((nrow(id_data) - overlap_samples) / (samples_per_window - overlap_samples))
   
   # Function to process each window for this specific ID
@@ -60,7 +60,7 @@ process_id_data <- function(id_data, features_type, movement_data) {
 }
 
 
-generate_features <- function(movement_data, data, normalise, features_type) {
+generate_features <- function(window_length,, sample_frequency, overlap_percent, data, normalise, features_type) {
   
   # multiprocessing   
   plan(multisession, workers = availableCores())  # Use parallel processing 
@@ -71,7 +71,7 @@ generate_features <- function(movement_data, data, normalise, features_type) {
   # Process each ID's data
   features_by_id <- list()
   for (id in names(data_by_id)) {
-    features_by_id[[id]] <- process_id_data(id_data = data_by_id[[as.character(id)]], features_type, movement_data)
+    features_by_id[[id]] <- process_id_data(id_data = data_by_id[[as.character(id)]], features_type, window_length, sample_frequency, overlap_percent)
   }
   all_features <- do.call(rbind, features_by_id)
   
