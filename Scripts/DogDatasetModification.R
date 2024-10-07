@@ -2,7 +2,7 @@
 
 
 # load in the data and select the relevant columns ####
-dog_data <- fread(file.path(base_path, "Data", "Vehkaoja_Dog_Labelled.csv"))
+dog_data <- fread(file.path(base_path, "Data", "Vehkaoja_Dog.csv"))
 dog_data2 <- dog_data %>%
   select("DogID", "t_sec", "ANeck_x", "ANeck_y","ANeck_z", "Behavior_1" ,"Behavior_2", "Behavior_3") %>%
   rename("ID" = "DogID",
@@ -35,11 +35,11 @@ Walking_data <- dog_data3 %>%
   filter(Behavior_1 == "Sniffing")
 
 # plot
-plot_trace_example(behaviours = unique(Walking_data$Label_1_2_3), 
+plotTraceExamples(behaviours = unique(Walking_data$Label_1_2_3), 
                    data = Walking_data, n_samples = 200, n_col = 2, 
                    label_choice = "Label_1_2_3")
 # function
-plot_trace_example <- function(behaviours, data, n_samples, n_col, label_choice) {
+plotTraceExamples <- function(behaviours, data, n_samples, n_col, label_choice) {
   # Function to create the plot for each behavior
   plot_behaviour <- function(behaviour, n_samples, label_choice) {
     df <- data %>%
@@ -99,7 +99,7 @@ dog_data4 <- dog_data3 %>%
   na.omit()
 
 # write this out 
-fwrite(dog_data4, file.path(base_path, "Data", "Vehkaoja_Dog_Labelled_Corrected.csv"))
+fwrite(dog_data4, file.path(base_path, "Data", "Vehkaoja_Dog.csv"))
 
 
 summary <- dog_data4 %>% group_by(Activity) %>% count()
@@ -114,4 +114,4 @@ combined_data <- files %>%
   bind_rows()
 
 
-fwrite(combined_data, file.path(base_path, "Data", "Feature_data", "Vehkaoja_Dog_labelled_features.csv"))
+fwrite(combined_data, file.path(base_path, "Data", "Feature_data", "Vehkaoja_Dog_other_features.csv"))

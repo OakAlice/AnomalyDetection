@@ -1,16 +1,16 @@
 # Feature selection and dimensionality reduction
 
 # Feature Selection using Random Forest ####
-feature_selection <- function(training_data, number_trees, number_features) {
+featureSelection <- function(training_data, number_trees, number_features) {
   
   # Step 1: Eliminate features with no variance and high correlation
-  potential_features <- select_potential_features(training_data, threshold = 0.9)
+  potential_features <- removeBadFeatures(training_data, threshold = 0.9)
   selected_columns <- c(potential_features, "Activity", "Time", "ID")
   training_data <- training_data[, ..selected_columns]
   training_data <- training_data[complete.cases(training_data), ]
   
   # Step 2: Perform feature selection using Random Forest
-  RF_features <- RF_feature_selection(
+  RF_features <- featureSelectionRF(
     data = training_data,
     target_column = "Activity",
     n_trees = as.numeric(number_trees),
@@ -26,7 +26,7 @@ feature_selection <- function(training_data, number_trees, number_features) {
 }
 
 # Random Forest Feature Selection ####
-RF_feature_selection <- function(data, target_column, n_trees, number_features) {
+featureSelectionRF <- function(data, target_column, n_trees, number_features) {
   
   # Ensure complete cases and extract target
   data <- data[complete.cases(data), ]
@@ -69,7 +69,7 @@ RF_feature_selection <- function(data, target_column, n_trees, number_features) 
 }
 
 # Select Potential Features (Variance and Correlation Threshold) ####
-select_potential_features <- function(feature_data, threshold) {
+removeBadFeatures <- function(feature_data, threshold) {
   
   # Step 1: Calculate variance for numeric columns
   numeric_columns <- feature_data[, .SD, .SDcols = !c("Activity", "Time", "ID")]

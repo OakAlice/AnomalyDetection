@@ -7,7 +7,7 @@
 # plot the training_data features ####
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
 
-feature_distribution_1 <- function(data_processed) {
+plotFeatureDistribution <- function(data_processed) {
   # Reshape data from wide to long format
   data_long <- data_processed %>%
     pivot_longer(
@@ -192,7 +192,7 @@ plot_activity_ID <- function(data, frequency, colours) {
 
 
 # DISPLAYING SAMPLES OF EACH TRACE TYPE ####
-plot_trace_example <- function(behaviours, data, n_samples, n_col) {
+plotTraceExamples <- function(behaviours, data, n_samples, n_col) {
   # Function to create the plot for each behavior
   plot_behaviour <- function(behaviour, n_samples) {
     df <- data %>%
@@ -303,7 +303,7 @@ average_duration <- function(data, sample_rate){
 plot_activity_ID_graph <- plot_activity_ID(data = move_data, 
                                            frequency = movement_data$Frequency, colours = length(unique(move_data$ID)))
 # examples of each trace
-plot_trace_example_graph <- plot_trace_example(behaviours = unique(move_data$Activity), 
+plotTraceExamples_graph <- plotTraceExamples(behaviours = unique(move_data$Activity), 
                                                data = move_data, n_samples = 200, n_col = 4)
 
 # other exploratory plots
@@ -319,7 +319,7 @@ plot <- duration_info$duration_plot
 
 
 # UMAP ####
-UMAP_reduction <- function(numeric_features, labels, minimum_distance, num_neighbours, shape_metric, save_model_path = NULL) {
+UMAPReduction <- function(numeric_features, labels, minimum_distance, num_neighbours, shape_metric, save_model_path = NULL) {
   # Train UMAP model on the known data
   umap_model_2D <- umap::umap(numeric_features, n_neighbors = num_neighbours, min_dist = minimum_distance, metric = shape_metric)
   umap_model_3D <- umap::umap(numeric_features, n_neighbors = num_neighbours, min_dist = minimum_distance, metric = shape_metric, n_components = 3)

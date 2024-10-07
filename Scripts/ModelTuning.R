@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 
 # train and validate these specific values 
-perform_single_validation <- function(subset_data, validation_proportion,
+performSingleValidation <- function(subset_data, validation_proportion,
                                       kernel, nu, gamma, number_trees, number_features) {
   # convert the kernel
   kernel <- ifelse(kernel == 0, "linear", "radial")
@@ -17,14 +17,14 @@ perform_single_validation <- function(subset_data, validation_proportion,
   
   #### Feature selection ####
   # convert data to binary
-  training_data$Activity <- ifelse(training_data$Activity == as.character(targetActivity), 
+  training_data$Activity <- ifelse(training_data$Activity == as.character(target_activity), 
                                    training_data$Activity, 
                                    "Other")
-  selected_feature_data <- feature_selection(training_data, number_trees, number_features)
+  selected_feature_data <- featureSelection(training_data, number_trees, number_features)
   
   #### Train model ####
   label_columns <- c("Activity", "Time", "ID")
-  target_class_feature_data <- selected_feature_data[Activity == as.character(targetActivity),
+  target_class_feature_data <- selected_feature_data[Activity == as.character(target_activity),
                                                      !label_columns, with = FALSE] 
   
   single_class_SVM <- do.call(svm, list(target_class_feature_data, y = NULL, type = 'one-classification', 
@@ -36,23 +36,23 @@ perform_single_validation <- function(subset_data, validation_proportion,
   selected_validation_data <- selected_validation_data[complete.cases(selected_validation_data), ]
   
   # balance the validation data
-  counts <- selected_validation_data[Activity == targetActivity, .N]
-  selected_validation_data[Activity != targetActivity, Activity := "Other"]
+  counts <- selected_validation_data[Activity == target_activity, .N]
+  selected_validation_data[Activity != target_activity, Activity := "Other"]
   selected_validation_data <- selected_validation_data[, .SD[1:counts], by = Activity]
   
   # apply the ground truth labels
   ground_truth_labels <- selected_validation_data[, "Activity"]
-  ground_truth_labels <- ifelse(ground_truth_labels == as.character(targetActivity), 1, -1)
+  ground_truth_labels <- ifelse(ground_truth_labels == as.character(target_activity), 1, -1)
   
   numeric_validation_data <- selected_validation_data[, !"Activity"]
   decision_scores <- predict(single_class_SVM, newdata = numeric_validation_data, decision.values = TRUE)
   scores <- as.numeric(attr(decision_scores, "decision.values"))
   
-  results <- get_performance(scores, ground_truth_labels)
+  results <- calculatePerformance(scores, ground_truth_labels)
     
   # Create a tibble for the cross-validation result
   cross_result <- tibble(
-    Activity = as.character(targetActivity),
+    Activity = as.character(target_activity),
     
     nu = as.character(nu),
     gamma = as.character(gamma),
@@ -74,7 +74,7 @@ perform_single_validation <- function(subset_data, validation_proportion,
 
 
 
-get_performance <- function(scores, ground_truth_labels){
+calculatePerformance <- function(scores, ground_truth_labels){
   
   auc_value <- NA
   pr_auc_value <- NA
@@ -93,7 +93,7 @@ get_performance <- function(scores, ground_truth_labels){
   
   }
   # calculate threshold metrics
-  metrics_0.5_threshold <- threshold_metrics(scores, ground_truth_labels)
+  metrics_0.5_threshold <- calculateThresholdMetrics(scores, ground_truth_labels)
   
   return(list(auc_value = auc_value,
               pr_auc_value = pr_auc_value,
@@ -112,14 +112,14 @@ get_performance <- function(scores, ground_truth_labels){
 }
 
 # run for each hyperparameter set
-model_train_and_validate <- function(nu, kernel, gamma, number_trees, number_features) {
+modelTuning <- function(nu, kernel, gamma, number_trees, number_features) {
   
   # Perform a single validation three times
   outcomes_list <- list()
   
   # Run the validation function 3 times (you can adjust this if needed)
   for (i in 1:3) {
-    result <- perform_single_validation(
+    result <- performSingleValidation(
       subset_data, 
       validation_proportion, 
       kernel = kernel,

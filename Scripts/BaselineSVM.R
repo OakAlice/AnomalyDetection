@@ -1,11 +1,11 @@
 #---------------------------------------------------------------------------
-# Baseline performance of multi-class Random Forest (for comparison)   ####
+# Baseline performance of multi-class SVM                               ####
 #---------------------------------------------------------------------------
 
-training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_labelled_features.csv")))
+training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))
 testing_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
 
-  selected_feature_data <- feature_selection(training_data, number_trees = 105, number_features=23)
+  selected_feature_data <- featureSelection(training_data, number_trees = 105, number_features=23)
   selected_feature_data <- selected_feature_data[, !c("Time", "ID"), with = FALSE]
   selected_feature_data$Activity <- as.factor(selected_feature_data$Activity)
   selected_feature_data <- selected_feature_data[complete.cases(selected_feature_data), ]
@@ -55,5 +55,3 @@ testing_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(datase
   macro_recall <- mean(recall, na.rm = TRUE)
   macro_f1 <- mean(f1, na.rm = TRUE)
   macro_accuracy <- mean(accuracy, na.rm = TRUE)
-
-  

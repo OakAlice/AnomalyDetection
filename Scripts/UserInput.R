@@ -1,8 +1,9 @@
 # ---------------------------------------------------------------------------
-# Defining Parameters for OCC Model Tuning, Random Additional Atuff
+# Defining Parameters for OCC Model Tuning, Random Additional Stuff
 # ---------------------------------------------------------------------------
-## Model Selection Options
-targetActivity_options <- c("Eating", "Walking")
+
+# data to be used
+dataset_name <- "Vehkaoja_Dog"
 
 ## Axes to Include in Model (just in case you don't have all of them)
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
@@ -16,7 +17,7 @@ validation_proportion <- 0.2
 k_folds <- 3
 
 ## Method
-feature_selection_method <- "RF" 
+featureSelection_method <- "RF" 
 
 ## features type as in timeseries from tsfeatures package and/or statistical from Tatler et al., 2018
 features_type <- c("timeseries", "statistical")

@@ -60,7 +60,7 @@ process_id_data <- function(id_data, features_type, window_length, sample_freque
 }
 
 
-generate_features <- function(window_length,, sample_frequency, overlap_percent, data, normalise, features_type) {
+generateFeatures <- function(window_length, sample_frequency, overlap_percent, data, normalise, features_type) {
   
   # multiprocessing   
   plan(multisession, workers = availableCores())  # Use parallel processing 
