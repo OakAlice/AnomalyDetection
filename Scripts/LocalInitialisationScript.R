@@ -3,6 +3,14 @@
 #---------------------------------------------------------------------------
 
 #---------------------------------------------------------------------------
+# User Defined Variables                                                ####
+#---------------------------------------------------------------------------
+# set base path/directory from where scripts, data, and output are stored
+base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
+dataset_name <- "Pagano_Bear"
+sample_rate <- 16
+
+#---------------------------------------------------------------------------
 # Set Up                                                                 ####
 #---------------------------------------------------------------------------
 
@@ -14,10 +22,6 @@ p_load(
   randomForest, tsfeatures, tidyverse, umap, zoo
 )
 #library(h2o) # for UMAP, but takes a while so ignore unless necessary
-
-# set base path/directory from where scripts, data, and output are stored
-base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
-#setwd("C:/Users/oaw001/Documents/AnomalyDetection")
 
 # load in the scripts
 scripts <-
@@ -43,6 +47,13 @@ source_script <- function(script) {
   )
 }
 walk(scripts, source_script)
+
+# some other things I need defined
+all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
+label_columns <- c("Activity", "Time", "ID")
+test_proportion <- 0.2 
+validation_proportion <- 0.2
+features_type <- c("timeseries", "statistical")
 
 #---------------------------------------------------------------------------
 # Create data splits for this run                                       ####

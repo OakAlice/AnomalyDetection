@@ -83,7 +83,7 @@ processDataPerID <- function(id_data, features_type, window_length, sample_frequ
 generateFeatures <- function(window_length, sample_frequency, overlap_percent, data, normalise, features_type) {
   
   # multiprocessing   
-  #plan(multisession, workers = availableCores())  # Use parallel processing 
+  plan(multisession, workers = availableCores())  # Use parallel processing 
   
   # Split data by 'ID'
   data_by_id <- split(data, by = "ID")
@@ -96,7 +96,7 @@ generateFeatures <- function(window_length, sample_frequency, overlap_percent, d
   }
   all_features <- do.call(rbind, features_by_id)
   
-  #plan(sequential)  # Return to sequential execution
+  plan(sequential)  # Return to sequential execution
   
   all_features <- rbindlist(features_by_id)
   
