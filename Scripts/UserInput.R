@@ -3,7 +3,8 @@
 # ---------------------------------------------------------------------------
 
 # data to be used
-dataset_name <- "Vehkaoja_Dog"
+dataset_name <- "Pagano_Bear"
+sample_rate <- 16
 
 ## Axes to Include in Model (just in case you don't have all of them)
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")

@@ -49,7 +49,7 @@ walk(scripts, source_script)
 #---------------------------------------------------------------------------
 
 # load in data
-move_data <- fread(file.path(base_path, "Data", paste0(dataset_name, "_Corrected.csv")))
+move_data <- fread(file.path(base_path, "Data", paste0(dataset_name, ".csv")))
 
 # Split Data ####
 if (file.exists(file.path(
@@ -78,11 +78,71 @@ if (file.exists(file.path(
 #---------------------------------------------------------------------------
 # Explore data                                                          ####
 #---------------------------------------------------------------------------
+total_individuals <- length(unique(data_other$ID))
+plot_trace_examples <- plotTraceExamples(behaviours = unique(data_other$Activity), 
+                                         data = data_other, 
+                                         individuals = 4,
+                                         n_samples = 250, 
+                                         n_col = 2)
 
-# explore data in PreProcessingDecisions.R to determine window length and behavioural clustering
-# haven't automated this yet
-# when complete, add to dictionary
+plot_activity_by_ID <- plotActivityByID(data = data_other, 
+                                        frequency = frequency, 
+                                        colours = length(unique(data_other$ID)))
 
+# from the plots above, manually specify the behaviours you want to find
+target_activities <- c("walk", "rest", "eat")
+  
+plot_behaviour_durations <- BehaviourDuration(data = data_other, 
+                                              sample_rate = sample_rate, 
+                                              target_activities = target_activities)
+  
+plot <- plot_behaviour_durations$duration_plot
+stats <- plot_behaviour_durations$duration_stats
+
+# from the above, manually specify the window lengths 
+# these may in some cases be different, in which case I need to change this #TODO
+window_length <- 10
+overlap_percent <- 0 # also specify this, but I will generally choose 0
+
+#---------------------------------------------------------------------------
+# Feature Generation                                                    ####
+#---------------------------------------------------------------------------
+# generate all features, unless that has already been done
+#(it can be very time consuming so I tend to save it when I've done it)
+
+
+if (file.exists(
+  file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")
+))) {
+  feature_data <-
+    fread(
+      file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")
+    ))
+} else {
+  
+  
+for (id in unique(data_other$ID))  {
+  
+  dat <- data_other %>% filter(ID == id)
+  
+  feature_data <-
+    generateFeatures(
+      window_length,
+      sample_rate,
+      overlap_percent,
+      data = dat,
+      normalise = "z_scale",
+      features = features_type
+    )
+  # save it 
+  fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_", id, "_other_features.csv")))
+}
+  
+}
+
+#---------------------------------------------------------------------------
+# UMAP Visualisation                                                    ####
+#---------------------------------------------------------------------------
 # Using a UMAP, plot samples of the behaviours to determine which are easy to find
 vis_feature_data <- feature_data[1:2000,] %>%
   select_if( ~ !is.na(.[1])) %>% na.omit()
@@ -100,35 +160,7 @@ UMAP <- UMAPReduction(
 UMAP$UMAP_2D_plot
 UMAP$UMAP_3D_plot
 
-target_activity <- "Walking"
-sample_frequency <- 100
-overlap_percent <- 0
-window_length <- 1
 
-#---------------------------------------------------------------------------
-# Feature Generation                                                    ####
-#---------------------------------------------------------------------------
-# generate all features, unless that has already been done
-#(it can be very time consuming so I tend to save it when I've done it)
-
-if (file.exists(
-  file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")
-))) {
-  feature_data <-
-    fread(
-      file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")
-    ))
-} else {
-  feature_data <-
-    generateFeatures(
-      window_length,
-      sample_frequency,
-      overlap_percent,
-      data = data_other,
-      normalise = "z_scale",
-      features = features_type
-    )
-}
 
 #---------------------------------------------------------------------------
 # Tuning model hyperparameters                                           ####
@@ -183,11 +215,11 @@ nu <- 0.092827
 gamma <- 0.08586
 
 # make a SVM with training data
-# load in training data and select features and target data
+## load in training data and select features and target data ####
 training_data <-fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))
 selected_feature_data <- featureSelection(training_data, number_trees, number_features)
 target_selected_feature_data <- selected_feature_data[Activity == as.character(target_activity),!label_columns, with = FALSE]
-# create the optimal SVM
+## create the optimal SVM ####
 optimal_single_class_SVM <-
   do.call(
     svm,
@@ -202,7 +234,7 @@ optimal_single_class_SVM <-
     )
   )
 
-# load in the test data and generate appropriate features
+## load in the test data and generate appropriate features ####
 if (file.exists(file.path(
   file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")
 )))) {
@@ -211,13 +243,12 @@ if (file.exists(file.path(
 } else { 
   # calculate and save
   testing_data <- fread(file.path(base_path, "Data", "Hold_out_test", paste0(dataset_name, "_test.csv")))
-  testing_feature_data <- generateFeatures(window_length, sample_frequency, overlap_percent, data, normalise, features_type)
+  testing_feature_data <- generateFeatures(window_length, sample_rate, overlap_percent, data, normalise, features_type)
   fwrite(data_test,
          file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
 }
 
-# calculate performance of the final model ####
-# For training data:
+# calculate performance of the final model in various conditions ####
 training_results <- finalModelPerformance(mode = "training", 
                                           training_data = target_selected_feature_data, 
                                           optimal_model = optimal_single_class_SVM)
@@ -233,3 +264,8 @@ random_results <- finalModelPerformance(mode = "random",
                                          optimal_model = optimal_single_class_SVM, 
                                          testing_data = testing_feature_data, 
                                          target_activity = target_activity)
+
+baseline_results <- baselineMultiClass(training_data = training_data, 
+                                       testing_data = testing_feature_data, 
+                                       number_trees = 105, 
+                                       number_features = 23)
