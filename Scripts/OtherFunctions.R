@@ -2,8 +2,6 @@
 # Assorted functions
 # ---------------------------------------------------------------------------
 
-source(file.path("C:/Users/oaw001/Documents/AnomalyDetection", "Scripts", "UserInput.R"))
-
 # ensure a directory exists
 ensure.dir <- function(path) {
   if (!dir.exists(path)) {

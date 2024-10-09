@@ -7,8 +7,8 @@
 #---------------------------------------------------------------------------
 # set base path/directory from where scripts, data, and output are stored
 base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
-dataset_name <- "Pagano_Bear"
-sample_rate <- 16
+dataset_name <- "Ladds_Seal"
+sample_rate <- 25
 
 #---------------------------------------------------------------------------
 # Set Up                                                                 ####
@@ -31,7 +31,6 @@ scripts <-
     "FeatureGeneration.R",
     "FeatureSelection.R",
     "OtherFunctions.R",
-    "UserInput.R",
     "ModelTuning.R"
   )
 
@@ -51,7 +50,7 @@ walk(scripts, source_script)
 # some other things I need defined
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
 label_columns <- c("Activity", "Time", "ID")
-test_proportion <- 0.2 
+test_proportion <- 0.2
 validation_proportion <- 0.2
 features_type <- c("timeseries", "statistical")
 
@@ -92,16 +91,21 @@ if (file.exists(file.path(
 total_individuals <- length(unique(data_other$ID))
 plot_trace_examples <- plotTraceExamples(behaviours = unique(data_other$Activity), 
                                          data = data_other, 
-                                         individuals = 4,
+                                         individuals = 9,
                                          n_samples = 250, 
-                                         n_col = 2)
+                                         n_col = 4)
 
-plot_activity_by_ID <- plotActivityByID(data = data_other, 
-                                        frequency = frequency, 
+# regroup the behaviours 
+visualisation_data <- data_other %>% mutate(Activity =
+                                              ifelse(Activity %in% c("swimming", "moving", "out", "lying"), Activity, "Other")) %>%
+                                     filter(!Activity == "Other")
+
+plot_activity_by_ID <- plotActivityByID(data = visualisation_data, 
+                                        frequency = sample_rate, 
                                         colours = length(unique(data_other$ID)))
 
 # from the plots above, manually specify the behaviours you want to find
-target_activities <- c("walk", "rest", "eat")
+target_activities <- c("swimming", "moving", "still", "chewing")
   
 plot_behaviour_durations <- BehaviourDuration(data = data_other, 
                                               sample_rate = sample_rate, 
@@ -112,7 +116,7 @@ stats <- plot_behaviour_durations$duration_stats
 
 # from the above, manually specify the window lengths 
 # these may in some cases be different, in which case I need to change this #TODO
-window_length <- 10
+window_length <- 1
 overlap_percent <- 0 # also specify this, but I will generally choose 0
 
 #---------------------------------------------------------------------------
@@ -120,7 +124,6 @@ overlap_percent <- 0 # also specify this, but I will generally choose 0
 #---------------------------------------------------------------------------
 # generate all features, unless that has already been done
 #(it can be very time consuming so I tend to save it when I've done it)
-
 
 if (file.exists(
   file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")
@@ -148,30 +151,38 @@ for (id in unique(data_other$ID))  {
   # save it 
   fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_", id, "_other_features.csv")))
 }
+  # stitch all the id feature data back together
+  files <- list.files(file.path(base_path, "Data/Feature_data"), pattern = "*.csv", full.names = TRUE)
+  matching_files <- grep(dataset_name, files, value = TRUE)
   
+  feature_data_list <- lapply(matching_files, read.csv)
+  feature_data <- do.call(rbind, feature_data_list)
+  # save this as well
+  fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))
 }
 
 #---------------------------------------------------------------------------
 # UMAP Visualisation                                                    ####
 #---------------------------------------------------------------------------
 # Using a UMAP, plot samples of the behaviours to determine which are easy to find
-vis_feature_data <- feature_data[1:2000,] %>%
-  select_if( ~ !is.na(.[1])) %>% na.omit()
-numeric_features <-
-  vis_feature_data %>% select(-c('Activity', 'Time', 'ID'))
+vis_feature_data <- feature_data[1:10000,] %>%
+  select_if( ~ !is.na(.[1])) %>% na.omit() %>%
+  mutate(Activity =
+           ifelse(Activity %in% c("swimming", "moving", "out", "lying"), Activity, "Other"))
+numeric_features <- vis_feature_data %>% select(-c('Activity', 'Time', 'ID'))
 labels <- vis_feature_data %>% select('Activity')
+
 UMAP <- UMAPReduction(
   numeric_features,
   labels,
-  minimum_distance = 0.2,
-  num_neighbours = 10,
-  shape_metric = 'euclidean'
+  minimum_distance = 0.01,
+  num_neighbours = 5,
+  shape_metric = 'manhattan',
+  spread = 2
 )
 
 UMAP$UMAP_2D_plot
 UMAP$UMAP_3D_plot
-
-
 
 #---------------------------------------------------------------------------
 # Tuning model hyperparameters                                           ####
@@ -182,7 +193,6 @@ UMAP$UMAP_3D_plot
 # example data for getting this working
 #subset_data <- feature_data %>% group_by(ID, Activity) %>% slice(1:20) %>%ungroup() %>%setDT()
 
-target_activity <- "Lying chest"
 # Define your bounds for Bayesian Optimization
 bounds <- list(
   nu = c(0.01, 0.1),
@@ -192,12 +202,9 @@ bounds <- list(
   number_features = c(20, 50)
 )
 
-behList <- c("Tugging", "Sniffing", "Panting")
 
-for (beh in behList) {
+for (beh in target_activities) {
   target_activity <- beh
-  # Run the optimization
-  bench_time({
     # Run the Bayesian Optimization
     results <- BayesianOptimization(
       FUN = modelTuning,
@@ -210,7 +217,6 @@ for (beh in behList) {
       acq = "ucb",
       kappa = 2.576       # Trade-off parameter for 'ucb'
     )
-  })
 }
 
 #---------------------------------------------------------------------------
