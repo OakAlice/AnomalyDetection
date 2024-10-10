@@ -1,6 +1,7 @@
-# One Class Classification on Animal Accelerometer Data --------------------
-
-interactive <- FALSE # am I running it or playing with it?
+#!/usr/bin/env Rscript
+# ---------------------------------------------------------------------------
+# One Class Classification on Animal Accelerometer Data                  ####
+# ---------------------------------------------------------------------------
 
 # User Defined Variables ---------------------------------------------------
 # set base path/directory from where scripts, data, and output are stored
@@ -8,9 +9,13 @@ base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
 dataset_name <- "Ladds_Seal"
 sample_rate <- 25
 
-
 # Set up ------------------------------------------------------------------
-# load packages
+library(renv)
+# commented out as I already have this
+# if (file.exists(file.path(base_path, "renv.lock"))) {
+#   renv::restore() # this will install all the right versions of the packages
+# }
+
 library(pacman)
 p_load(
   bench, caret, data.table, e1071, future,
@@ -23,7 +28,6 @@ p_load(
 scripts <-
   list(
     "BaselineSVM.R",
-    "DataExploration.R",
     "FeatureGeneration.R",
     "FeatureSelection.R",
     "OtherFunctions.R",
@@ -52,8 +56,6 @@ features_type <- c("timeseries", "statistical")
 
 
 # Create hold out test data -----------------------------------------------
-
-# load in data
 move_data <- fread(file.path(base_path, "Data", paste0(dataset_name, ".csv")))
 
 # Split Data ####
@@ -80,46 +82,15 @@ if (file.exists(file.path(
          ))
 }
 
-
 # Explore Data ------------------------------------------------------------
+# Go into the ExploreData.Rmd RMarkdown file to find variables
+# then manually specify below
 
-if (interactive == TRUE){
-  total_individuals <- length(unique(data_other$ID))
-  plot_trace_examples <- plotTraceExamples(behaviours = unique(data_other$Activity), 
-                                         data = data_other, 
-                                         individuals = 9,
-                                         n_samples = 250, 
-                                         n_col = 4)
-
-  # regroup the behaviours 
-  visualisation_data <- data_other %>% mutate(Activity =
-                                              ifelse(Activity %in% c("swimming", "moving", "out", "lying"), Activity, "Other")) %>%
-                                     filter(!Activity == "Other")
-
-  plot_activity_by_ID <- plotActivityByID(data = visualisation_data, 
-                                        frequency = sample_rate, 
-                                        colours = length(unique(data_other$ID)))
-
-  # specify the target behaviours here
-  plot_behaviour_durations <- BehaviourDuration(data = data_other, 
-                                              sample_rate = sample_rate, 
-                                              target_activities = target_activities)
-  
-  plot <- plot_behaviour_durations$duration_plot
-  stats <- plot_behaviour_durations$duration_stats
-}
-
-  # from the above, manually specify variables 
-  # these may in some cases be different, in which case I need to change this #TODO
-  target_activities <- c("swimming", "moving", "still", "chewing")
-  window_length <- 1
-  overlap_percent <- 0 # also specify this, but I will generally choose 0
-
-# generate all features, unless that has already been done
-#(it can be very time consuming so I tend to save it when I've done it)
+target_activities <- c("swimming", "moving", "still", "chewing")
+window_length <- 1 # TODO: Add that each behaviour has a different one
+overlap_percent <- 0
 
 # Feature Generation ------------------------------------------------------
-
 if (file.exists(
   file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")
 ))) {
@@ -154,47 +125,22 @@ if (file.exists(
   fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))
 }
 
-if(interactive == TRUE){
-  # Using a UMAP, plot samples of the behaviours to determine which are easy to find
-  vis_feature_data <- feature_data[1:10000,] %>%
-    select_if( ~ !is.na(.[1])) %>% na.omit() %>%
-    mutate(Activity =
-             ifelse(Activity %in% c("swimming", "moving", "out", "lying"), Activity, "Other"))
-  numeric_features <- vis_feature_data %>% select(-c('Activity', 'Time', 'ID'))
-  labels <- vis_feature_data %>% select('Activity')
-
-# UMAP Visualisation ------------------------------------------------------
-  UMAP <- UMAPReduction(
-    numeric_features,
-    labels,
-    minimum_distance = 0.01,
-    num_neighbours = 5,
-    shape_metric = 'manhattan',
-    spread = 2
-  )
-  
-  UMAP$UMAP_2D_plot
-  UMAP$UMAP_3D_plot
-}
-  
+# Tuning model hyperparameters --------------------------------------------
 # this section of the code iterates through hyperparameter combinations for OCC
 # PR-ROC for the target class is recorded and saved in the output table
-
-# Tuning model hyperparameters --------------------------------------------
-# example data for getting this working
-#subset_data <- feature_data %>% group_by(ID, Activity) %>% slice(1:20) %>%ungroup() %>%setDT()
 
 # Define your bounds for Bayesian Optimization
 bounds <- list(
   nu = c(0.01, 0.1),
   gamma = c(0.01, 0.1),
   number_trees = c(100, 500),
-  number_features = c(10, 30)
+  number_features = c(10, 50)
 )
 
-for (beh in target_activities) {
-  #beh <- target_activities[2]
-  target_activity <- beh
+ensure.dir(file.path(base_path, "Output"))
+
+for (target_activity in target_activities) {
+  target_activity <- "moving"
   # Run the Bayesian Optimization
   results <- BayesianOptimization(
     FUN = function(nu, gamma, number_trees, number_features) {
@@ -216,11 +162,12 @@ for (beh in target_activities) {
     acq = "ucb",
     kappa = 2.576      # Trade-off parameter for 'ucb'
   )
+  
 }
- 
-# write out the best performing hyperparameters
 
 # Testing highest performing hyperparmeters -------------------------------
+# write out the best performing hyperparameters
+
 
 # target_activity <- "Walking"
 # number_trees <- 105

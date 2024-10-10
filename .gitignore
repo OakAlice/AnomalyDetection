@@ -1,6 +1,7 @@
 # Ignore all files and directories named 'Data' and 'Output' at any level
 */Data/
 */Output/
+*/renv/
 
 # Ignore R history files
 *.Rhistory
