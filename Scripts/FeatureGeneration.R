@@ -3,24 +3,23 @@
 # ---------------------------------------------------------------------------
 
 # Function to process data for each ID
-processDataPerID <- function(id_data, features_type, window_length, sample_frequency, overlap_percent) {
+processDataPerID <- function(id_raw_data, features_type, window_length, sample_rate, overlap_percent) {
   
   # Calculate window length and overlap
-  samples_per_window <- window_length * sample_frequency
+  samples_per_window <- window_length * sample_rate
   overlap_samples <- if (overlap_percent > 0) ((overlap_percent / 100) * samples_per_window) else 0
-  num_windows <- ceiling((nrow(id_data) - overlap_samples) / (samples_per_window - overlap_samples))
+  num_windows <- ceiling((nrow(id_raw_data) - overlap_samples) / (samples_per_window - overlap_samples))
   
   # Function to process each window for this specific ID
   process_window <- function(i) {
-    print(i)
     start_index <- max(1, round((i - 1) * (samples_per_window - overlap_samples) + 1))
-    end_index <- min(start_index + samples_per_window - 1, nrow(id_data))
-    window_chunk <- id_data[start_index:end_index, ]
+    end_index <- min(start_index + samples_per_window - 1, nrow(id_raw_data))
+    window_chunk <- id_raw_data[start_index:end_index, ]
     
     # Initialize output features
     window_info <- tibble(Time = NA, ID = NA, Activity = NA)
-    statistical_features <- tibble()  # Start with an empty tibble for statistical features
-    single_row_features <- tibble()  # Start with an empty tibble for timeseries features
+    statistical_features <- tibble() 
+    single_row_features <- tibble()  
     
     # Extract statistical features
     if ("statistical" %in% features_type) {
@@ -80,23 +79,31 @@ processDataPerID <- function(id_data, features_type, window_length, sample_frequ
 }
 
 
-generateFeatures <- function(window_length, sample_frequency, overlap_percent, data, normalise, features_type) {
+generateFeatures <- function(window_length, sample_rate, overlap_percent, raw_data, features_type) {
   
   # multiprocessing   
-  plan(multisession, workers = availableCores())  # Use parallel processing 
+  #plan(multisession, workers = availableCores())  # Use parallel processing 
   
-  # Split data by 'ID'
-  data_by_id <- split(data, by = "ID")
+  # Split raw_data by 'ID'
+  if (length(unique(raw_data$ID)) == 1){
+    raw_data_by_id <- raw_data
+  } else {
+    raw_data_by_id <- split(raw_data, by = "ID")
+  }
   
-  # Process each ID's data
+  # Process each ID's raw_data
   features_by_id <- list()
-  for (id in names(data_by_id)) {
+  for (id in unique(raw_data$ID)) {
     print(id)
-    features_by_id[[id]] <- processDataPerID(id_data = data_by_id[[as.character(id)]], features_type, window_length, sample_frequency, overlap_percent)
+    features_by_id[[id]] <- processDataPerID(id_raw_data = raw_data_by_id[ID == as.character(id), ], 
+                                             features_type, 
+                                             window_length, 
+                                             sample_rate, 
+                                             overlap_percent)
   }
   all_features <- do.call(rbind, features_by_id)
   
-  plan(sequential)  # Return to sequential execution
+  #plan(sequential)  # Return to sequential execution
   
   all_features <- rbindlist(features_by_id)
   
@@ -143,8 +150,6 @@ generateTsFeatures <- function(data){
   # error statement for debugging purposes
   if (nrow(time_series_features) == 0) {
     message("No features were generated. Returning empty tibble.")
-  } else {
-    message("Features successfully generated.")
   }
   
   return(time_series_features)
