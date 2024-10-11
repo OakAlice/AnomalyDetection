@@ -35,7 +35,8 @@ scripts <-
     "FeatureGeneration.R",
     "FeatureSelection.R",
     "OtherFunctions.R",
-    "ModelTuning.R"
+    "ModelTuning.R",
+    "CalculatePerformance.R"
   )
 
 # Function to source scripts and handle errors
@@ -191,20 +192,21 @@ if (testing == TRUE){
   } else {
     # calculate and save
     testing_data <- fread(file.path(base_path, "Data", "Hold_out_test", paste0(dataset_name, "_test.csv")))
-    
+   
     for (id in unique(testing_data$ID)){
-      testing_data <- testing_data[ID == id, ]
       testing_feature_data <- generateFeatures(window_length, 
                                                sample_rate, 
                                                overlap_percent, 
                                                testing_data,
                                                features_type)
-      fwrite(data_test,
-           file.path(base_path, "Data", "Feature_data", paste0(dataset_name, ID, "_test_features.csv")))
+      fwrite(testing_feature_data,
+           file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
     }
   }
   print("generating optimal model")
   
+  
+  target_activity <- "chewing"
   # # make a SVM with training data
   # ## load in training data and select features and target data ####
   training_data <-fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))

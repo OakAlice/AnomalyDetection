@@ -35,13 +35,18 @@ baselineMultiClass <- function(training_data, testing_data, number_trees, number
   ground_truth_labels <- testing_data$Activity
   
   confusion_matrix <- table(predictions, ground_truth_labels)
-
-  # Add row and column names
-  rownames(confusion_matrix) <- c("Bowing", "Carrying object", "Drinking", "Eating", "Galloping", "Jumping", "Lying chest", "Pacing", "Panting", "Playing", "Shaking", "Sitting", "Sniffing", "Standing", "Trotting", "Tugging", "Walking")
-  colnames(confusion_matrix) <- rownames(confusion_matrix)
+  
+  # soemtimes the confusion matrix isn't equal dimensions
+  all_classes <- sort(union(colnames(confusion_matrix), rownames(confusion_matrix)))
+  conf_matrix_padded <- matrix(0, 
+                               nrow = length(all_classes), 
+                               ncol = length(all_classes),
+                               dimnames = list(all_classes, all_classes))
+  conf_matrix_padded[rownames(confusion_matrix), colnames(confusion_matrix)] <- confusion_matrix
+  
   
   # Calculate performance metrics
-  confusion_mtx <- confusionMatrix(confusion_matrix)
+  confusion_mtx <- confusionMatrix(conf_matrix_padded)
   
   # Extract precision, recall, and F1-score
   precision <- confusion_mtx$byClass[, "Precision"]
