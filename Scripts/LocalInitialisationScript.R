@@ -3,7 +3,8 @@
 # ---------------------------------------------------------------------------
 
 # script mode
-# tuning for HPO finding, testing for final validation
+# mark TRUE what stage you want to execute
+# exploration for generating PDF, tuning for HPO finding, testing for final validation
 exploration <- FALSE
 tuning <- TRUE
 testing <- FALSE
@@ -26,9 +27,10 @@ library(pacman)
 p_load(
   bench, caret, data.table, e1071, future, future.apply, parallelly,
   plotly, PRROC, purrr, pROC, rBayesianOptimization,
-  randomForest, tsfeatures, tidyverse, umap, zoo
+  randomForest, tsfeatures, tidyverse, umap, zoo, tinytex
 )
-#library(h2o) # for UMAP, but takes a while so ignore unless necessary
+# note that tinytex needs this too -> tinytex::install_tinytex()
+#library(h2o) is for UMAP, but takes a while so ignore unless necessary
 
 # load in the scripts
 scripts <-
@@ -93,18 +95,23 @@ if (file.exists(file.path(
 # need to check whether this works yet
 if (exploration == TRUE) {
   tryCatch({
-  # Knit the ExploreData.Rmd file as a PDF and save it to the output folder
-  rmarkdown::render(
-    input = file.path(base_path, "ExploreData.Rmd"),
-    output_format = "pdf_document",
-    output_file = file.path(base_path, "Output", paste0(dataset_name, "_exploration.pdf"))
-  )
+  # Knit the ExploreData.Rmd file as a PDF and save it to the output folder in base dir
+    rmarkdown::render(
+      input = file.path(base_path, "Scripts", "ExploreData.Rmd"),
+      output_format = "pdf_document",
+      output_file = paste0(dataset_name, "_exploration.pdf"),  # Only file name here
+      output_dir = file.path(base_path, "Output"),  # Use output_dir for the path
+      params = list(
+        base_path = base_path,
+        dataset_name = dataset_name,
+        sample_rate = sample_rate
+      )
+    )
   message("Exploration PDF saved to: ", output_file)
   }, error = function(e) {
     message("Error in making the data exploration pdf: ", e$message)
     stop()
   })
-
 }
 
 # look at the file and then manually specify details below
@@ -228,7 +235,7 @@ if (tuning == TRUE){
       },
       bounds = bounds,
       init_points = 3,
-      n_iter = 5,
+      n_iter = 3,
       acq = "ucb",
       kappa = 2.576 
     )

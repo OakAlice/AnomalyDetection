@@ -1,69 +1,26 @@
 ---
 title: "DataExploration"
-output: html_document
-date: "2024-10-10"
+output: pdf_document
+date: "`r Sys.Date()`" # date of knitting
+params:
+  base_path: "C:/Users/oaw001/Documents/AnomalyDetection"
+  dataset_name: "Vehkaoja_Dog"
+  sample_rate: "100"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE, fig.width = 5.625, fig.height = 4.5) # smaller plots
 
-base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
-scripts <-
-  list(
-    "LocalInitialisationScript.R",
-    "DataExploration.R"
-  )
-source_script <- function(script) {
-    source(file.path(base_path, "Scripts", script))
-}
-walk(scripts, source_script)
-
+library(data.table)
+library(purrr)
+library(tidyverse)
+library(kableExtra)
 ```
 
-## Data Exploration
-
-This is the R markdown for exploring the data for the one-class-classification workflow after the test data has been removed. This document will plot the behavioural examples, the volumes of data, as well as perform analysis to determine the optimal window durations for each behaviour.
-
-All plot functions are provided at the bottom of the Rmd file (hidden in pdf output) and can be edited. While this file can be run independently, it is easier to run in sequence with the other scripts as I call on information and data from the main initialisation script.
-
-### Plot examples of the data
-The following plots will show trace examples from each category and the first 5 individuals. 5 individuals were selected to limit the size of the plot, but this number be changed in the Rmd file.
-
-This plot can be used to assess the consistency of the behavioural annotations. If there are any behaviours that look very similar to each other, or dissimilar from each other, classification may be difficult, and more exploration may be necessary.
-
-```{r plot_trace_examples, echo=FALSE}
-  plot_trace_examples <- plotTraceExamples(behaviours = unique(data_other$Activity), 
-                                         data = data_other, 
-                                         individuals = 9,
-                                         n_samples = 250, 
-                                         n_col = 4)
-  plot_trace_examples
+```{r load data, include= FALSE}
+data_other <-
+    fread(file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_other.csv")))
 ```
-
-### Plot volumes of data
-This plot shows the volume of data for each behavioural class in the non-test dataset. It helps in assessing class imbalance, noting that categories with fewer samples may be harder to classify, as well as relative minority classes struggling compared to majority classes. Additionally, the plot shows how individuals are distributed across different activities. Note whether there are any behaviours that are not well distributed across multiple individuals. If so, this may cause problems when not every training/validation split contains the same behaviours.
-
-```{r plot_activity_by_ID, echo=FALSE}
-  plot_activity_by_ID <- plotActivityByID(data = data_other, 
-                                        frequency = sample_rate, 
-                                        colours = length(unique(data_other$ID)))
-  plot_activity_by_ID
-```
-
-### Behaviour durations
-In order to select the custom window length for each behaviour's OCC model, the duration of the behaviours can be assessed. A boxplot and summary statistics can be used to explore the averages and spreads of the bout durations (where bouts are continuous sequences of the same behavioural type).
-```{r plot_behaviour_durations, echo=FALSE}
-
-  plot_behaviour_durations <- BehaviourDuration(data = data_other, 
-                                              sample_rate = sample_rate, 
-                                              target_activities = unique(data_other$Activity))
-  
-  plot <- plot_behaviour_durations$duration_plot
-  plot
-  stats <- plot_behaviour_durations$duration_stats
-  ktable(stats)
-```
-
 
 ```{r Functions, include= FALSE}
 plotTraceExamples <- function(behaviours, data, individuals, n_samples, n_col) {
@@ -158,8 +115,8 @@ BehaviourDuration <- function(data, sample_rate, target_activities){
   
   summary <- data %>%
     mutate(Activity = ifelse(Activity %in% target_activities, Activity, "Other")) %>%
-    arrange(ID) %>%                     # Sort by ID (not time because multiple trials in dog data)
-    group_by(ID) %>%                    # Group by ID
+    arrange(ID) %>%             # Sort by ID (not time because multiple trials in dog data)
+    group_by(ID) %>%      
     mutate(
       behavior_change = lag(Activity) != Activity,  # Detect changes in Activity
       behavior_change = ifelse(is.na(behavior_change), TRUE, behavior_change)  # Handle the first row
@@ -180,13 +137,9 @@ BehaviourDuration <- function(data, sample_rate, target_activities){
   duration_stats <- summary %>%
     group_by(Activity) %>%
     summarise(
-      average_behaviour_duration = mean(duration_sec, na.rm = TRUE),
-      median_behaviour_duration = median(duration_sec, na.rm = TRUE),
-      variation_duration = sd(duration_sec, na.rm = TRUE),
-      maximum_duration = max(duration_sec, na.rm = TRUE),
-      minimum_duration = min(duration_sec, na.rm = TRUE),
-      third_quartile_duration = quantile(duration_sec, 0.25, na.rm = TRUE),  # Add third quartile
-      count = n()
+      median = median(duration_sec, na.rm = TRUE),
+      maximum = max(duration_sec, na.rm = TRUE),
+      minimum = min(duration_sec, na.rm = TRUE)
     )
   
   # plot that
@@ -212,4 +165,52 @@ BehaviourDuration <- function(data, sample_rate, target_activities){
               duration_stats = duration_stats))
 }
 ```
+## Data Exploration
+
+This is the R markdown for exploring the data for the one-class-classification workflow after the test data has been removed. This document will plot the behavioural examples, the volumes of data, as well as perform analysis to determine the optimal window durations for each behaviour.
+
+All plot functions are provided in the Rmd file (hidden in pdf output) and can be edited. This document works best when sourced from the main document rather than rendered seperately.
+
+### Plot examples of the data
+The following plots will show trace examples from each category and the first 5 individuals. 5 individuals were selected to limit the size of the plot, but this number be changed in the Rmd file.
+
+This plot can be used to assess the consistency of the behavioural annotations. If there are any behaviours that look very similar to each other, or dissimilar from each other, classification may be difficult, and more exploration may be necessary.
+
+```{r plot_trace_examples, echo=FALSE}
+  plot_trace_examples <- plotTraceExamples(behaviours = unique(data_other$Activity), 
+                                         data = data_other, 
+                                         individuals = 9,
+                                         n_samples = 250, 
+                                         n_col = 4)
+  plot_trace_examples
+```
+
+### Plot volumes of data
+This plot shows the volume of data for each behavioural class in the non-test dataset. It helps in assessing class imbalance, noting that categories with fewer samples may be harder to classify, as well as relative minority classes struggling compared to majority classes. Additionally, the plot shows how individuals are distributed across different activities. Note whether there are any behaviours that are not well distributed across multiple individuals. If so, this may cause problems when not every training/validation split contains the same behaviours.
+
+```{r plot_activity_by_ID, echo=FALSE}
+  plot_activity_by_ID <- plotActivityByID(data = data_other, 
+                                        frequency = sample_rate, 
+                                        colours = length(unique(data_other$ID)))
+  plot_activity_by_ID
+```
+
+### Behaviour durations
+In order to select the custom window length for each behaviour's OCC model, the duration of the behaviours can be assessed. A boxplot and summary statistics can be used to explore the averages and spreads of the bout durations (where bouts are continuous sequences of the same behavioural type).
+```{r plot_behaviour_durations, echo=FALSE}
+
+  plot_behaviour_durations <- BehaviourDuration(data = data_other, 
+                                              sample_rate = sample_rate, 
+                                              target_activities = unique(data_other$Activity))
+  
+  plot <- plot_behaviour_durations$duration_plot
+  plot
+  
+  stats <- plot_behaviour_durations$duration_stats
+  stats %>%
+    kable(format = "latex") %>% 
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed")) %>%
+    column_spec(1:ncol(stats), width = "4em")
+```
+
 
