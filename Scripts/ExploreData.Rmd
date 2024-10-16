@@ -6,81 +6,210 @@ date: "2024-10-10"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
+scripts <-
+  list(
+    "LocalInitialisationScript.R",
+    "DataExploration.R"
+  )
+source_script <- function(script) {
+    source(file.path(base_path, "Scripts", script))
+}
+walk(scripts, source_script)
+
 ```
 
-## R Markdown
+## Data Exploration
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+This is the R markdown for exploring the data for the one-class-classification workflow after the test data has been removed. This document will plot the behavioural examples, the volumes of data, as well as perform analysis to determine the optimal window durations for each behaviour.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+All plot functions are provided at the bottom of the Rmd file (hidden in pdf output) and can be edited. While this file can be run independently, it is easier to run in sequence with the other scripts as I call on information and data from the main initialisation script.
 
-```{r cars}
-summary(cars)
-```
+### Plot examples of the data
+The following plots will show trace examples from each category and the first 5 individuals. 5 individuals were selected to limit the size of the plot, but this number be changed in the Rmd file.
 
-## Including Plots
+This plot can be used to assess the consistency of the behavioural annotations. If there are any behaviours that look very similar to each other, or dissimilar from each other, classification may be difficult, and more exploration may be necessary.
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
-
-
-
-
-
-if (interactive == TRUE){
-  total_individuals <- length(unique(data_other$ID))
+```{r plot_trace_examples, echo=FALSE}
   plot_trace_examples <- plotTraceExamples(behaviours = unique(data_other$Activity), 
                                          data = data_other, 
                                          individuals = 9,
                                          n_samples = 250, 
                                          n_col = 4)
+  plot_trace_examples
+```
 
-  # regroup the behaviours 
-  visualisation_data <- data_other %>% mutate(Activity =
-                                              ifelse(Activity %in% c("swimming", "moving", "out", "lying"), Activity, "Other")) %>%
-                                     filter(!Activity == "Other")
+### Plot volumes of data
+This plot shows the volume of data for each behavioural class in the non-test dataset. It helps in assessing class imbalance, noting that categories with fewer samples may be harder to classify, as well as relative minority classes struggling compared to majority classes. Additionally, the plot shows how individuals are distributed across different activities. Note whether there are any behaviours that are not well distributed across multiple individuals. If so, this may cause problems when not every training/validation split contains the same behaviours.
 
-  plot_activity_by_ID <- plotActivityByID(data = visualisation_data, 
+```{r plot_activity_by_ID, echo=FALSE}
+  plot_activity_by_ID <- plotActivityByID(data = data_other, 
                                         frequency = sample_rate, 
                                         colours = length(unique(data_other$ID)))
+  plot_activity_by_ID
+```
 
-  # specify the target behaviours here
+### Behaviour durations
+In order to select the custom window length for each behaviour's OCC model, the duration of the behaviours can be assessed. A boxplot and summary statistics can be used to explore the averages and spreads of the bout durations (where bouts are continuous sequences of the same behavioural type).
+```{r plot_behaviour_durations, echo=FALSE}
+
   plot_behaviour_durations <- BehaviourDuration(data = data_other, 
                                               sample_rate = sample_rate, 
-                                              target_activities = target_activities)
+                                              target_activities = unique(data_other$Activity))
   
   plot <- plot_behaviour_durations$duration_plot
+  plot
   stats <- plot_behaviour_durations$duration_stats
+  ktable(stats)
+```
+
+
+```{r Functions, include= FALSE}
+plotTraceExamples <- function(behaviours, data, individuals, n_samples, n_col) {
+  
+  data <- data %>% filter(ID %in% sample(unique(data$ID), individuals))
+  
+  # Create plots for each behavior (with error catching)
+  plots <- purrr::map(behaviours, function(behaviour) {
+    tryCatch(
+      {
+        plot_behaviour(behaviour, n_samples, data)
+      },
+      error = function(e) {
+        message("Skipping plot for ", behaviour, ": ", e$message)
+        NULL  # Return NULL to indicate skipping
+      }
+    )
+  })
+  
+  # Remove NULL plots (for behaviors with no data)
+  plots <- purrr::compact(plots)
+  
+  # Combine plots into a single grid
+  grid_plot <- cowplot::plot_grid(plotlist = plots, ncol = n_col)
+  
+  return(grid_plot)
 }
 
- 
- 
- 
- if(interactive == TRUE){
-  # Using a UMAP, plot samples of the behaviours to determine which are easy to find
-  vis_feature_data <- feature_data[1:10000,] %>%
-    select_if( ~ !is.na(.[1])) %>% na.omit() %>%
-    mutate(Activity =
-             ifelse(Activity %in% c("swimming", "moving", "out", "lying"), Activity, "Other"))
-  numeric_features <- vis_feature_data %>% select(-c('Activity', 'Time', 'ID'))
-  labels <- vis_feature_data %>% select('Activity')
-
-
-  UMAP <- UMAPReduction(
-    numeric_features,
-    labels,
-    minimum_distance = 0.01,
-    num_neighbours = 5,
-    shape_metric = 'manhattan',
-    spread = 2
-  )
+# Function to create the plot for each behavior
+plot_behaviour <- function(behaviour, n_samples, data) {
+  df <- data %>%
+    filter(Activity == behaviour) %>%
+    group_by(ID, Activity) %>%
+    slice(1:n_samples) %>%
+    mutate(relative_time = row_number())
   
-  UMAP$UMAP_2D_plot
-  UMAP$UMAP_3D_plot
+  # Check if the filtered dataframe is empty
+  if (nrow(df) == 0) {
+    stop("No data available for behaviour: ", behaviour)
+  }
+  
+  ggplot(df, aes(x = relative_time)) +
+    geom_line(aes(y = Accelerometer.X, color = "X"), show.legend = FALSE) +
+    geom_line(aes(y = Accelerometer.Y, color = "Y"), show.legend = FALSE) +
+    geom_line(aes(y = Accelerometer.Z, color = "Z"), show.legend = FALSE) +
+    labs(title = paste(behaviour),
+         x = NULL, y = NULL) +
+    scale_color_manual(values = c(X = "salmon", Y = "turquoise", Z = "darkblue"), guide = "none") +
+    facet_wrap(~ ID, nrow = 1, scales = "free_x") +
+    theme_minimal() +
+    theme(panel.grid = element_blank(),
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank())
 }
+
+## set colours ####
+generate_random_colors <- function(n) {
+  colors <- rgb(runif(n), runif(n), runif(n))
+  return(colors)
+}
+
+## total volume by Activity and ID ####
+plotActivityByID <- function(data, frequency, colours) {
+  my_colours <- generate_random_colors(colours)
+  # summarise into a table
+  labelledDataSummary <- data %>%
+    #filter(!Activity %in% ignore_behaviours) %>%
+    count(ID, Activity)
   
+  # account for the HZ, convert to minutes
+  labelledDataSummaryplot <- labelledDataSummary %>%
+    mutate(minutes = (n/frequency)/60)
+  
+  # Plot the stacked bar graph
+  plot_activity_by_ID <- ggplot(labelledDataSummaryplot, aes(x = Activity, y = minutes, fill = as.factor(ID))) +
+    geom_bar(stat = "identity") +
+    labs(x = "Activity",
+         y = "minutes") +
+    theme_minimal() +
+    scale_fill_manual(values = my_colours) +
+    theme(axis.line = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          panel.border = element_rect(color = "black", fill = NA),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank())
+  
+  return(plot_activity_by_ID)
+}
+
+## duration of each of the behaviours ####
+BehaviourDuration <- function(data, sample_rate, target_activities){
+  
+  summary <- data %>%
+    mutate(Activity = ifelse(Activity %in% target_activities, Activity, "Other")) %>%
+    arrange(ID) %>%                     # Sort by ID (not time because multiple trials in dog data)
+    group_by(ID) %>%                    # Group by ID
+    mutate(
+      behavior_change = lag(Activity) != Activity,  # Detect changes in Activity
+      behavior_change = ifelse(is.na(behavior_change), TRUE, behavior_change)  # Handle the first row
+    ) %>%
+    mutate(
+      behavior_id = cumsum(behavior_change)  # Create an identifier for each continuous behavior segment
+    ) %>%
+    group_by(ID, behavior_id) %>%            # Group by ID and behavior_id
+    mutate(
+      row_count = row_number()                # Count rows within each behavior segment
+    ) %>%
+    ungroup() %>%
+    select(ID, Time, Activity, row_count, behavior_id) %>%   # Select relevant columns
+    group_by(ID, Activity, behavior_id) %>%
+    summarise(duration_sec = max(row_count)/100) %>%
+    filter(Activity %in% target_activities)
+  
+  duration_stats <- summary %>%
+    group_by(Activity) %>%
+    summarise(
+      average_behaviour_duration = mean(duration_sec, na.rm = TRUE),
+      median_behaviour_duration = median(duration_sec, na.rm = TRUE),
+      variation_duration = sd(duration_sec, na.rm = TRUE),
+      maximum_duration = max(duration_sec, na.rm = TRUE),
+      minimum_duration = min(duration_sec, na.rm = TRUE),
+      third_quartile_duration = quantile(duration_sec, 0.25, na.rm = TRUE),  # Add third quartile
+      count = n()
+    )
+  
+  # plot that
+  duration_plot <- ggplot(summary, aes(x = Activity, y = as.numeric(duration_sec))) +
+    geom_boxplot(aes(color = Activity)) +  # Use color to distinguish activities
+    theme_minimal() +
+    theme(
+      legend.position = "none",             # Remove legend
+      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),  # Rotate x-axis labels 90 degrees
+      panel.grid = element_blank(),         # Remove grid lines
+      panel.border = element_rect(color = "black", fill = NA)  # Add black border around the plot
+    ) +
+    labs(
+      x = "Activity",
+      y = "Duration (seconds)"
+    ) +
+    scale_y_continuous(
+      limits = c(min(summary$duration_sec, na.rm = TRUE), max(summary$duration_sec, na.rm = TRUE)),  # Set y-axis limits
+      breaks = seq(0, max(summary$duration_sec, na.rm = TRUE), by = 160)  # Adjust the step size as needed
+    )
+  
+  return(list(duration_plot = duration_plot,
+              duration_stats = duration_stats))
+}
+```
+

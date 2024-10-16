@@ -109,49 +109,14 @@ performSingleValidation <- function(feature_data, validation_proportion,
   })
 }
 
-
-calculatePerformance <- function(scores, ground_truth_labels){
-  
-  auc_value <- NA
-  pr_auc_value <- NA
-  
-  if (length(levels(as.factor(ground_truth_labels))) == 2){
-  # Calculate AUC-ROC
-  roc_curve <- roc(as.vector(ground_truth_labels), scores)
-  auc_value <- auc(roc_curve)
-  # plot(roc_curve)
-  
-  # Calculate PR-ROC
-  pr_curve <- pr.curve(scores.class0 = scores[ground_truth_labels == 1],
-                       scores.class1 = scores[ground_truth_labels == -1], curve = TRUE)
-  pr_auc_value <- pr_curve$auc.integral
-  #plot(pr_curve)
-  
-  }
-  # calculate threshold metrics
-  metrics_0.5_threshold <- calculateThresholdMetrics(scores, ground_truth_labels)
-  
-  return(list(auc_value = auc_value,
-              pr_auc_value = pr_auc_value,
-              threshold = metrics_0.5_threshold$threshold,
-              TP = metrics_0.5_threshold$TP,
-              TN = metrics_0.5_threshold$TN,
-              FP = metrics_0.5_threshold$FP,
-              FN = metrics_0.5_threshold$FN,
-              F1_score = metrics_0.5_threshold$F1_score,
-              Precision = metrics_0.5_threshold$Precision,
-              Recall = metrics_0.5_threshold$Recall,
-              Recall_neg = metrics_0.5_threshold$Recall_neg,
-              Accuracy = metrics_0.5_threshold$Accuracy,
-              Balanced_Accuracy = metrics_0.5_threshold$Balanced_Accuracy
-              ))
-}
-
 # run for each hyperparameter set
 modelTuning <- function(feature_data, nu, kernel, gamma, number_trees, number_features) {
   tryCatch({
     # Perform a single validation three times
     outcomes_list <- list()
+    
+    kernel <- ifelse(kernel < 0.5, "linear", 
+                     ifelse(kernel > 0.5 & kernel < 1.5, "radial", "polynomial"))
     
     # Run the validation function 3 times
     for (i in 1:3) {
@@ -205,3 +170,109 @@ modelTuning <- function(feature_data, nu, kernel, gamma, number_trees, number_fe
   })
 }
 
+
+# for the multiclass models 
+library(data.table)
+library(e1071)
+library(caret)
+
+multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, number_trees, number_features, validation_proportion = 0.2) {
+  
+  # Convert kernel from numeric to kernel type
+  kernel <- ifelse(kernel < 0.5, "linear", 
+                   ifelse(kernel > 0.5 & kernel < 1.5, "radial", "polynomial"))
+  
+  f1_scores <- list()  # List to store F1-scores
+  
+  # Repeat the process 3 times
+  for (i in 1:3) {
+    message(i)
+    flush.console()
+    tryCatch({
+      #### Create training and validation data ####
+      unique_ids <- unique(multiclass_data$ID)
+      test_ids <- sample(unique_ids, ceiling(length(unique_ids) * validation_proportion))
+      
+      training_data <- multiclass_data[!ID %in% test_ids]
+      validation_data <- multiclass_data[ID %in% test_ids]
+      
+      #### Feature selection ####
+      selected_feature_data <- featureSelection(training_data, number_trees, number_features)
+      selected_feature_data <- selected_feature_data[complete.cases(selected_feature_data), ]
+      
+      message("features selected")
+      flush.console()
+      
+    }, error = function(e) {
+      message("Error in data splitting or feature selection: ", e$message)
+    })
+    
+    #### Train SVM model ####
+    tryCatch({
+      # SVM training
+      svm_args <- list(
+        x = as.matrix(selected_feature_data[, !("Activity"), with = FALSE]),  # Features
+        y = as.factor(selected_feature_data$Activity),  # Labels
+        type = "C-classification",
+        nu = nu,
+        scale = TRUE,
+        kernel = kernel,
+        gamma = gamma
+      )
+      
+      multiclass_SVM <- do.call(svm, svm_args)
+      
+      message("model trained")
+      flush.console()
+      
+    }, error = function(e) {
+      message("Error in SVM training: ", e$message)
+      stop()
+    })
+    
+    #### Validate the model ####
+    tryCatch({
+      # Subset validation data with selected features
+      top_features <- colnames(selected_feature_data)
+      validation_data <- validation_data[, ..top_features]
+      validation_data <- validation_data[complete.cases(validation_data), ]
+      
+      numeric_validation_data <- as.matrix(validation_data[, !("Activity"), with = FALSE])
+      ground_truth_labels <- validation_data$Activity
+      
+      # Predict on validation data
+      predictions <- predict(multiclass_SVM, newdata = numeric_validation_data)
+      
+      message("predictions made")
+      flush.console()
+      
+      }, error = function(e) {
+      message("Error in making predictions: ", e$message)
+      stop()
+    })
+    
+      # Confusion matrix and performance metrics
+      confusion_matrix <- table(predictions, ground_truth_labels)
+      
+      # Handling mismatched dimensions
+      all_classes <- sort(union(colnames(confusion_matrix), rownames(confusion_matrix)))
+      conf_matrix_padded <- matrix(0, 
+                                   nrow = length(all_classes), 
+                                   ncol = length(all_classes),
+                                   dimnames = list(all_classes, all_classes))
+      conf_matrix_padded[rownames(confusion_matrix), colnames(confusion_matrix)] <- confusion_matrix
+      
+      # Calculate F1 scores
+      confusion_mtx <- confusionMatrix(conf_matrix_padded)
+      f1 <- confusion_mtx$byClass[, "F1"]
+      macro_f1 <- mean(f1, na.rm = TRUE)
+      
+      # Store the F1 score
+      f1_scores[[i]] <- macro_f1
+  }
+  
+  #### Calculate average F1-score ####
+  average_macro_f1 <- mean(unlist(f1_scores), na.rm = TRUE)
+  
+  return(list(Score = average_macro_f1, Pred = NA))
+}

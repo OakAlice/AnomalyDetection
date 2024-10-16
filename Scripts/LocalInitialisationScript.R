@@ -4,17 +4,19 @@
 
 # script mode
 # tuning for HPO finding, testing for final validation
-tuning <- FALSE
-testing <- TRUE
+exploration <- FALSE
+tuning <- TRUE
+testing <- FALSE
 
 # User Defined Variables ---------------------------------------------------
 # set base path/directory from where scripts, data, and output are stored
 base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
-dataset_name <- "Ladds_Seal"
-sample_rate <- 25
+# dataset_name <- "Ladds_Seal"
+dataset_name <- "Vehkaoja_Dog"
+sample_rate <- 100
 
 # Set up ------------------------------------------------------------------
-library(renv)
+#library(renv)
 # commented out as I already have this
 # if (file.exists(file.path(base_path, "renv.lock"))) {
 #   renv::restore() # this will install all the right versions of the packages
@@ -52,7 +54,7 @@ source_script <- function(script) {
 }
 walk(scripts, source_script)
 
-# some other things I need defined globally
+# some other things I need defined globally :'(
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
 label_columns <- c("Activity", "Time", "ID")
 test_proportion <- 0.2
@@ -88,10 +90,26 @@ if (file.exists(file.path(
 }
 
 # Explore Data ------------------------------------------------------------
-# Go into the ExploreData.Rmd RMarkdown file to find variables
-# then manually specify below
+# need to check whether this works yet
+if (exploration == TRUE) {
+  tryCatch({
+  # Knit the ExploreData.Rmd file as a PDF and save it to the output folder
+  rmarkdown::render(
+    input = file.path(base_path, "ExploreData.Rmd"),
+    output_format = "pdf_document",
+    output_file = file.path(base_path, "Output", paste0(dataset_name, "_exploration.pdf"))
+  )
+  message("Exploration PDF saved to: ", output_file)
+  }, error = function(e) {
+    message("Error in making the data exploration pdf: ", e$message)
+    stop()
+  })
 
-target_activities <- c("swimming", "moving", "still", "chewing")
+}
+
+# look at the file and then manually specify details below
+#target_activities <- c("swimming", "moving", "still", "chewing")
+target_activities <- c("Walking", "Lying chest", "Eating", "Sahking")
 window_length <- 1 # TODO: Add that each behaviour has a different one
 overlap_percent <- 0
 
@@ -130,30 +148,31 @@ if (file.exists(
   fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))
 }
 
-# Tuning model hyperparameters --------------------------------------------
+# Tuning OCC model hyperparameters --------------------------------------
 # this section of the code iterates through hyperparameter combinations for OCC
-# PR-ROC for the target class is recorded and saved in the output table
+# PR-AUC for the target class is optimised
 
 # Define your bounds for Bayesian Optimization
 bounds <- list(
-  nu = c(0.01, 0.1),
-  gamma = c(0.01, 0.1),
+  nu = c(0.001, 0.1),
+  gamma = c(0.001, 0.1),
+  kernel = c(1, 2, 3),
   number_trees = c(100, 500),
-  number_features = c(10, 50)
+  number_features = c(10, 75)
 )
 
 ensure.dir(file.path(base_path, "Output"))
 if (tuning == TRUE){
 
   for (target_activity in target_activities) {
-    target_activity <- "swimming"
+    print(target_activity)
     # Run the Bayesian Optimization
     results <- BayesianOptimization(
-      FUN = function(nu, gamma, number_trees, number_features) {
+      FUN = function(nu, gamma, kernel, number_trees, number_features) {
         modelTuning(
           feature_data = feature_data,  # Pass feature_data as a fixed argument
           nu = nu,
-          kernel = "radial",
+          kernel = kernel,
           gamma = gamma,
           number_trees = number_trees,
           number_features = number_features
@@ -161,7 +180,55 @@ if (tuning == TRUE){
       },
       bounds = bounds,
       init_points = 5,
-      n_iter = 15,
+      n_iter = 10,
+      acq = "ucb",
+      kappa = 2.576 
+    )
+  }
+}
+
+# Tuning multiclass model hyperparameters ---------------------------------
+# this section of the code tunes the multiclass model, optimising macro average PR-AUC
+# the same bounds as in the above section are used for comparison sake
+
+if (tuning == TRUE){
+  for (behaviours in c("all", "catgories")){
+    
+    if(behaviours == "categories"){
+      
+      ## add these categories to the raw data so I don't have to do this manually
+      if (dataset_name == "Vehkaoja_Dog"){
+        feature_data[, Activity := fifelse( # nested ifelse
+          Activity %in% c("Walking", "Trotting", "Pacing", "Tugging", "Jumping", "Galloping", "Carrying object"), "Travelling",
+          fifelse(Activity %in% c("Eating", "Drinking", "Sniffing"), "Feeding",
+                  fifelse(Activity %in% c("Sitting", "Lying chest", "Standing"), "Resting",
+                          fifelse(Activity == "Shaking", "Grooming", NA_character_)
+          )))]
+      } else {
+        print("behavioural categories have not been defined for this dataset")
+      }
+      
+      multiclass_data <- feature_data[!is.na(Activity)] # get rid of the remainder
+    } else {
+      multiclass_data <- feature_data
+    }
+    
+    print(behaviours)
+    # Run the Bayesian Optimization
+    results <- BayesianOptimization(
+      FUN = function(nu, gamma, kernel, number_trees, number_features) {
+        multiclassModelTuning(
+          multiclass_data = multiclass_data,
+          nu = nu,
+          kernel = kernel,
+          gamma = gamma,
+          number_trees = number_trees,
+          number_features = number_features
+        )
+      },
+      bounds = bounds,
+      init_points = 3,
+      n_iter = 5,
       acq = "ucb",
       kappa = 2.576 
     )
@@ -172,12 +239,12 @@ if (tuning == TRUE){
 # currently have to write out the best performing hyperparameters then run
 # haven't got it automated yet
 
-target_activity <- "swimming"
-number_trees <- 500
-number_features <- 10
-kernel <- "radial"
-nu <- 0.01
-gamma <- 0.06
+target_activity <- "chewing"
+number_trees <- 132
+number_features <- 75
+kernel <- "polynomial"
+nu <- 0.02
+gamma <- 0.001
 
 if (testing == TRUE){
   
@@ -205,8 +272,6 @@ if (testing == TRUE){
   }
   print("generating optimal model")
   
-  
-  target_activity <- "chewing"
   # # make a SVM with training data
   # ## load in training data and select features and target data ####
   training_data <-fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))
@@ -226,6 +291,10 @@ if (testing == TRUE){
         gamma = gamma
       )
     )
+  
+  # save this model
+  model_path <- file.path(base_path, "Output", "Models", paste0(target_activity, "_", dataset_name, "_model.rda"))
+  save(optimal_single_class_SVM, file = model_path)
   
   print("calculating performance")
   # # calculate performance of the final model in various conditions ####
@@ -258,3 +327,6 @@ if (testing == TRUE){
   print("Baseline data:")
   baseline_results
 }
+
+
+
