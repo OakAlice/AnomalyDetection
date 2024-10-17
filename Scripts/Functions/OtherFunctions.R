@@ -9,6 +9,24 @@ ensure.dir <- function(path) {
   }
 }
 
+# Function to apply column selection changes to both training and testing data
+update_feature_data <- function(data, multi) {
+  
+  cols_to_remove <- c("Activity", "GeneralisedActivity", "OtherActivity")
+  # classes to remove logic
+  if (multi == "OtherActivity") {
+    col_to_rename <- "OtherActivity"
+  } else if (multi == "GeneralisedActivity") {
+    col_to_rename <- "GeneralisedActivity"
+  } else if (multi == "all") {
+    col_to_rename <- NULL
+  }
+  
+  data <- data %>% select(-(setdiff(cols_to_remove, col_to_rename))) %>%
+  rename(Activity = col_to_rename)
+  
+  return(data)
+}
 
 # add the columns to categroies
 renameColumns <- function(data, dataset_name){

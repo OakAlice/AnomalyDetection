@@ -2,7 +2,7 @@
 # Baseline performance of multi-class SVM                               ####
 #---------------------------------------------------------------------------
 
-baselineMultiClass <- function(training_data, testing_data, number_trees, number_features, kernel, cost, gamma){
+baselineMultiClass <- function(training_data, testing_data, number_trees, number_features, kernel, gamma){
 
   selected_feature_data <- featureSelection(training_data, number_trees, number_features)
   #selected_feature_data <- selected_feature_data[, !c("Time", "ID"), with = FALSE]
@@ -13,7 +13,6 @@ baselineMultiClass <- function(training_data, testing_data, number_trees, number
                    data = selected_feature_data, 
                    type = 'C-classification',   
                    kernel = kernel,           
-                   cost = cost,           
                    gamma = gamma)
   
   
@@ -29,16 +28,14 @@ baselineMultiClass <- function(training_data, testing_data, number_trees, number
   confusion_matrix <- table(predictions, ground_truth_labels)
   
   # soemtimes the confusion matrix isn't equal dimensions
-  all_classes <- sort(union(colnames(confusion_matrix), rownames(confusion_matrix)))
-  conf_matrix_padded <- matrix(0, 
-                               nrow = length(all_classes), 
-                               ncol = length(all_classes),
-                               dimnames = list(all_classes, all_classes))
-  conf_matrix_padded[rownames(confusion_matrix), colnames(confusion_matrix)] <- confusion_matrix
-  
-  
-  # Calculate performance metrics
-  confusion_mtx <- confusionMatrix(conf_matrix_padded)
+    all_classes <- sort(union(colnames(confusion_matrix), rownames(confusion_matrix)))
+    conf_matrix_padded <- matrix(0, 
+                                 nrow = length(all_classes), 
+                                 ncol = length(all_classes),
+                                 dimnames = list(all_classes, all_classes))
+    conf_matrix_padded[rownames(confusion_matrix), colnames(confusion_matrix)] <- confusion_matrix
+    # Calculate performance metrics
+    confusion_mtx <- confusionMatrix(conf_matrix_padded)
   
   # Extract precision, recall, and F1-score
   precision <- confusion_mtx$byClass[, "Precision"]

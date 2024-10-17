@@ -2,14 +2,15 @@
 # One Class Classification on Animal Accelerometer Data                  ####
 # ---------------------------------------------------------------------------
 
-#### REMEMBER TO ACCOUNT FOR ADDING THE GENERALISED CATEGORIES TO THE DATA ####
-
 # script mode
 # mark TRUE what stage you want to execute
 # exploration for generating PDF, tuning for HPO finding, testing for final validation
-exploration <- FALSE
-tuning <- TRUE
-testing <- FALSE
+exploration   <- FALSE
+renamed       <- TRUE # whether I have already added in the general beh categories
+tuningOCC     <- FALSE
+tuningMulti   <- FALSE
+testingOCC    <- FALSE
+testingMulti  <- TRUE
 
 # User Defined Variables ---------------------------------------------------
 # set base path/directory from where scripts, data, and output are stored
@@ -25,6 +26,7 @@ sample_rate <- 100
 #   renv::restore() # this will install all the right versions of the packages
 # }
 
+# install.packages("pacman")
 library(pacman)
 p_load(
   bench, caret, data.table, e1071, future, future.apply, parallelly,
@@ -37,19 +39,19 @@ p_load(
 # load in the scripts
 scripts <-
   list(
-    "BaselineSVM.R",
-    "FeatureGeneration.R",
-    "FeatureSelection.R",
-    "OtherFunctions.R",
-    "ModelTuning.R",
-    "CalculatePerformance.R"
+    "Scripts/Functions/BaselineSVMFunctions.R",
+    "Scripts/Functions/FeatureGenerationFunctions.R",
+    "Scripts/Functions/FeatureSelectionFunctions.R",
+    "Scripts/Functions/OtherFunctions.R",
+    "Scripts/Functions/ModelTuningFunctions.R",
+    "Scripts/Functions/CalculatePerformanceFunctions.R"
   )
 
 # Function to source scripts and handle errors
 successful <- TRUE
 source_script <- function(script) {
   tryCatch(
-    source(file.path(base_path, "Scripts", script)),
+    source(file.path(base_path, script)),
     error = function(e) {
       successful <<- FALSE
       message(paste("Error sourcing script:", script))
@@ -124,16 +126,15 @@ overlap_percent <- 0
 
 # Adding activity category columns ----------------------------------------
 # specifying categories for the behaviours so we can test different combinations
-
-for (condition in c("other", "test")){
-  data <- fread(file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_", condition, ".csv")))
-  new_column_data <- renameColumns(data, dataset_name)
-  fwrite(new_column_data, file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_", condition, ".csv")))
+if (renamed == FALSE){
+  for (condition in c("other", "test")){
+    data <- fread(file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_", condition, ".csv")))
+    new_column_data <- renameColumns(data, dataset_name)
+    fwrite(new_column_data, file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_", condition, ".csv")))
+  }
 }
 
 # Feature Generation ------------------------------------------------------
-
-####### CHANGE THIS TO ACCOUTN FOR MULTIPLE ACTIVITY COLUMNS
 if (file.exists(
   file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")
 ))) {
@@ -182,7 +183,7 @@ bounds <- list(
 )
 
 ensure.dir(file.path(base_path, "Output"))
-if (tuning == TRUE){
+if (tuningOCC == TRUE){
 
   for (target_activity in target_activities) {
     print(target_activity)
@@ -212,11 +213,14 @@ if (tuning == TRUE){
 # Tuning multiclass model hyperparameters ---------------------------------
 # this section of the code tunes the multiclass model, optimising macro average PR-AUC
 # the same bounds as in the above section are used for comparison sake
+# remmeber to account for there being multiple types of activity columns 
+behaviour_columns <- c("Activity", "OtherActivity", "GeneralisedActivity")
 
-if (tuning == TRUE){
-  for (behaviours in c("Activity", "Other", "GeneralisedActivity")){
+if (tuningMulti == TRUE){
+  for (behaviours in behaviour_columns){
     
-  Activity <- feature_data[Activity == behaviours] # account for this!!!
+    multiclass_data <- feature_data %>%
+      select(-(setdiff(behaviour_columns, behaviours)))
     
     # Run the Bayesian Optimization
     results <- BayesianOptimization(
@@ -250,8 +254,7 @@ kernel <- "radial"
 nu <- 0.03
 gamma <- 0.03
 
-if (testing == TRUE){
-  #### REMEMBER TO ACCOUNT FOR THE MULTIPLE BEHAVIOUR COLUMNS 
+if (testingOCC == TRUE){
   print("generating features for test data")
   
   # ## load in the test data and generate appropriate features ####
@@ -275,6 +278,8 @@ if (testing == TRUE){
     }
   }
   print("generating optimal model")
+  
+  # remove the other columns for the OCC models
   testing_feature_data <- testing_feature_data %>% select(-c("Other", "GeneralisedActivity"))
   
   # # make a SVM with training data
@@ -302,57 +307,44 @@ if (testing == TRUE){
   model_path <- file.path(base_path, "Output", "Models", paste0(target_activity, "_", dataset_name, "_model.rda"))
   save(optimal_single_class_SVM, file = model_path)
   
-  print("calculating performance")
-  # # calculate performance of the final model in various conditions ####
-  training_results <- finalModelPerformance(mode = "training",
-                                            training_data = target_selected_feature_data,
-                                            optimal_model = optimal_single_class_SVM)
-  print("Training data:")
-  training_results
+  print("calculating test performance")
+  # I also wrote it so if you change mode to training and remove 
+  # testing data it shows performance on the training set
+  # also has a random mode if want to randomise target activity
   
   testing_results <- finalModelPerformance(mode = "testing",
                                             training_data = target_selected_feature_data,
                                             optimal_model = optimal_single_class_SVM,
                                             testing_data = testing_feature_data,
                                             target_activity = target_activity)
-  print("Testing data:")
   testing_results
 } 
 
 
 # Testing highest performing hyperparmeters for multi----------------------
-multi <- "generalised" # "Other", "generalised"
+multi <- "GeneralisedActivity" # "OtherActivity", "Activity"
 number_trees <- 232
-number_features <- 45
+number_features <- 100
 kernel <- "radial"
-nu <- 0.09
 gamma <- 0.003
 
-training_feature_data <-fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))
-testing_feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
-
-# classes or not
-if (multi == "Other"){
-  training_feature_data <- training_feature_data %>% select(-c("Activity", "GeneralisedActivity")) %>%
-    rename(Activity = OtherActivity)
-  testing_feature_data <- testing_feature_data %>% select(-c("Activity", "GeneralisedActivity")) %>%
-    rename(Activity = OtherActivity)
-} else if (multi == "generalised"){
-  training_feature_data <- training_feature_data %>% select(-c("Activity", "OtherActivity")) %>%
-    rename(Activity = GeneralisedActivity)
-  testing_feature_data <- testing_feature_data %>% select(-c("Activity", "OtherActivity")) %>%
-    rename(Activity = "GeneralisedActivity")
-} else if (multi == "all"){
-  training_feature_data <- training_feature_data %>% select(-c("GeneralisedActivity", "OtherActivity"))
-  testing_feature_data <- testing_feature_data %>% select(-c("GeneralisedActivity", "OtherActivity"))
+if (testingMulti == TRUE){
+  training_data <-fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))
+  testing_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
+  
+  # select the right column for the testing activity based on multi, and remove the others
+  training_feature_data <- update_feature_data(training_data, multi)
+  training_feature_data <- training_feature_data[!Activity == ""]
+  testing_feature_data <- update_feature_data(testing_data, multi)
+  testing_feature_data <- testing_feature_data[!Activity == ""]
+  
+  baseline_results <- baselineMultiClass(training_data = training_feature_data,
+                                           testing_data = testing_feature_data,
+                                           number_trees = number_trees,
+                                           number_features = number_features,
+                                           kernel = kernel,
+                                           gamma = gamma)
+  
+  print(paste0(multi, " multi results:"))
+  baseline_results
 }
-
-baseline_results <- baselineMultiClass(training_data = training_feature_data,
-                                         testing_data = testing_feature_data,
-                                         number_trees = number_trees,
-                                         number_features = number_features,
-                                         kernel = kernel,
-                                         cost = nu,
-                                         gamma = gamma)
-print(paste0("Baseline ", multi, ":"))
-baseline_results

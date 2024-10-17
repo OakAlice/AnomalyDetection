@@ -18,7 +18,7 @@ processDataPerID <- function(id_raw_data, features_type, window_length, sample_r
     window_chunk <- id_raw_data[start_index:end_index, ]
     
     # Initialize output features
-    window_info <- tibble(Time = NA, ID = NA, Activity = NA)
+    window_info <- tibble(Time = NA, ID = NA, Activity = NA, GeneralisedActivity = NA, OtherActivity = NA)
     statistical_features <- tibble() 
     single_row_features <- tibble()  
     
@@ -55,8 +55,11 @@ processDataPerID <- function(id_raw_data, features_type, window_length, sample_r
           Time = Time[1],
           ID = ID[1],
           Activity = as.character(
-            names(sort(table(Activity), decreasing = TRUE))[1]
-          )
+            names(sort(table(Activity), decreasing = TRUE))[1]),
+          GeneralisedActivity = as.character(
+              names(sort(table(Activity), decreasing = TRUE))[1]), 
+          OtherActivity = as.character(
+                names(sort(table(Activity), decreasing = TRUE))[1])
         ) %>% ungroup()
     }
     
