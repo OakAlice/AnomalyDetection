@@ -2,21 +2,13 @@
 # Baseline performance of multi-class SVM                               ####
 #---------------------------------------------------------------------------
 
-baselineMultiClass <- function(training_data, testing_data, number_trees, number_features){
+baselineMultiClass <- function(training_data, testing_data, number_trees, number_features, kernel, cost, gamma){
 
   selected_feature_data <- featureSelection(training_data, number_trees, number_features)
-  selected_feature_data <- selected_feature_data[, !c("Time", "ID"), with = FALSE]
+  #selected_feature_data <- selected_feature_data[, !c("Time", "ID"), with = FALSE]
   selected_feature_data$Activity <- as.factor(selected_feature_data$Activity)
   selected_feature_data <- selected_feature_data[complete.cases(selected_feature_data), ]
  
-  
-  # Tune multiclass SVM parameters ### TODO
-  
-  # Train multiclass SVM with chosen parameters 
-  kernel <- "radial"
-  cost <- 0.092827
-  gamma <- 0.08586
-  
   svm_model <- svm(Activity ~ ., 
                    data = selected_feature_data, 
                    type = 'C-classification',   

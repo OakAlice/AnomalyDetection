@@ -10,6 +10,31 @@ ensure.dir <- function(path) {
 }
 
 
+# add the columns to categroies
+renameColumns <- function(data, dataset_name){
+  
+  if (dataset_name == "Vehkaoja_Dog"){
+    # 4 general categories, discarding difficuelt behaviours
+    data[, GeneralisedActivity := fifelse( # nested ifelse
+      Activity %in% c("Walking", "Trotting", "Pacing", "Tugging", "Jumping", "Galloping", "Carrying object"), "Travelling",
+      fifelse(Activity %in% c("Eating", "Drinking", "Sniffing"), "Feeding",
+              fifelse(Activity %in% c("Sitting", "Lying chest", "Standing"), "Resting",
+                      fifelse(Activity == "Shaking", "Grooming", NA_character_)
+              )))]
+    # 4 specific categories and a non-specific "other"
+    data[, OtherActivity := ifelse(Activity %in% target_activities, Activity, "Other")]
+    
+    
+  } else if (dataset_name == "LaddsSeal") {
+    print("still have to add these")
+  } else {
+    print("behavioural categories have not been defined for this dataset")
+  }
+  
+  return(data)
+}
+
+
 # check which packages are used from SibyllWang on Stack Exchange
 checkPacks <- function(path) {
   

@@ -1,4 +1,4 @@
-# Ignore all files and directories named 'Data' and 'Output' at any level
+# Ignore all files and directories named 'Data', 'Output', and 'renv' at any level
 */Data/
 */Output/
 */renv/
@@ -9,3 +9,4 @@
 # Ignore CSV and RDS files
 *.csv
 *.rds
+*.rda
