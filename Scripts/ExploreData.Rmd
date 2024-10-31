@@ -107,7 +107,8 @@ plotActivityByID <- function(data, frequency, colours) {
           panel.grid.major = element_blank(),
           panel.grid.minor = element_blank())
   
-  return(plot_activity_by_ID)
+  return(list(plot = plot_activity_by_ID,
+              stats = labelledDataSummaryplot))
 }
 
 ## duration of each of the behaviours ####
@@ -179,9 +180,9 @@ This plot can be used to assess the consistency of the behavioural annotations. 
 ```{r plot_trace_examples, echo=FALSE}
   plot_trace_examples <- plotTraceExamples(behaviours = unique(data_other$Activity), 
                                          data = data_other, 
-                                         individuals = 9,
+                                         individuals = 5,
                                          n_samples = 250, 
-                                         n_col = 4)
+                                         n_col = 3)
   plot_trace_examples
 ```
 
@@ -189,10 +190,10 @@ This plot can be used to assess the consistency of the behavioural annotations. 
 This plot shows the volume of data for each behavioural class in the non-test dataset. It helps in assessing class imbalance, noting that categories with fewer samples may be harder to classify, as well as relative minority classes struggling compared to majority classes. Additionally, the plot shows how individuals are distributed across different activities. Note whether there are any behaviours that are not well distributed across multiple individuals. If so, this may cause problems when not every training/validation split contains the same behaviours.
 
 ```{r plot_activity_by_ID, echo=FALSE}
-  plot_activity_by_ID <- plotActivityByID(data = data_other, 
+  activity_by_ID <- plotActivityByID(data = data_other, 
                                         frequency = sample_rate, 
                                         colours = length(unique(data_other$ID)))
-  plot_activity_by_ID
+  activity_by_ID$plot
 ```
 
 ### Behaviour durations

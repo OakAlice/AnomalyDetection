@@ -39,12 +39,8 @@ tryCatch({
 # load in the scripts
 scripts <-
   list(
-    "BaselineSVM.R",
     "FeatureGeneration.R",
-    "FeatureSelection.R",
-    "OtherFunctions.R",
-    "UserInput.R",
-    "ModelTuning.R"
+    "FeatureSelection.R"
   )
 
 # Function to source scripts and handle errors

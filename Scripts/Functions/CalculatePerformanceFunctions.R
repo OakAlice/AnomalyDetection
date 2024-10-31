@@ -2,7 +2,7 @@
 # Calculate performance under different conditions                      ####
 #---------------------------------------------------------------------------
 
-finalModelPerformance <- function(mode, training_data, optimal_model, testing_data = NULL, target_activity = NULL) {
+finalModelPerformance <- function(mode, training_data, optimal_model, testing_data = NULL, target_activity = NULL, balance = NULL) {
   # Prepare data based on mode (training, testing, or randomized)
   if (mode == "training") {
     # For training, all labels are from the taregt class
@@ -22,13 +22,15 @@ finalModelPerformance <- function(mode, training_data, optimal_model, testing_da
     }
     
     # Balance the testing data
-    activity_count <- filtered_test_data[Activity  == target_activity, .N]
-    filtered_test_data[Activity  != target_activity,  Activity  := "Other"]
-    balanced_test_data <- filtered_test_data[, .SD[1:activity_count], by = Activity]
-  
+    if (balance == TRUE){
+      activity_count <- filtered_test_data[Activity  == target_activity, .N]
+      filtered_test_data[Activity  != target_activity,  Activity  := "Other"]
+      filtered_test_data <- filtered_test_data[, .SD[1:activity_count], by = Activity]
+    }
+    
     # Extract ground truth labels
-    ground_truth_labels <- ifelse(balanced_test_data$Activity == as.character(target_activity), 1, -1)
-    numeric_features <- balanced_test_data[, !"Activity"]
+    ground_truth_labels <- ifelse(filtered_test_data$Activity == as.character(target_activity), 1, -1)
+    numeric_features <- filtered_test_data[, !"Activity"]
   }
   
   # Predict using the trained model

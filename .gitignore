@@ -2,6 +2,7 @@
 */Data/
 */Output/
 */renv/
+*/Figures/
 
 # Ignore R history files
 *.Rhistory

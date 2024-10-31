@@ -106,13 +106,6 @@ generateFeatures <- function(window_length, sample_rate, overlap_percent, raw_da
   
   all_features <- rbindlist(features_by_id)
   
-  # Optionally normalise the feature
-  #if (normalise == "z_scale") {
-  #  normal_ts <- as.data.frame(scale(do.call(rbind, time_series_list)))
-  #  normal_stat <- as.data.frame(scale(do.call(rbind, statistical_list)))
-  #  all_features <- cbind(do.call(rbind, window_info_list), normal_ts, normal_stat)
-  #}
-  
   return(all_features)
 }
 
@@ -261,3 +254,53 @@ generateStatisticalFeatures <- function(window_chunk, down_Hz) {
   
   return(result)
 }
+
+
+
+# select a subset of data so I dont have to process too much
+selectRelevantData <- function(dat, target_activity, window_samples) {
+  
+  if (target_activity %in% unique(dat$Activity)) {
+    
+    # Select the rows of target data (with additional windows)
+    selected_rows <- dat %>%
+      arrange(row_id) %>%
+      mutate(
+        Activity_Group = cumsum(c(TRUE, diff(Activity == target_activity) != 0)) * (Activity == target_activity),
+        row_number = ifelse(Activity_Group > 0, row_number(), NA)
+      ) %>%
+      group_by(Activity_Group) %>%
+      summarise(
+        First = ceiling(first(na.omit(row_number)) - window_samples),
+        Last = floor(last(na.omit(row_number)) + window_samples)
+      ) %>%
+      ungroup() %>%
+      na.omit()
+    
+    new_dataframe <- selected_rows %>%
+      rowwise() %>%
+      mutate(Sequence = list(seq(First, Last))) %>%
+      unnest(cols = c(Sequence)) %>%
+      select(Activity_Group, Sequence)
+    
+    filtered_dat <- dat %>% 
+      arrange(row_id) %>%
+      filter(row_number() %in% new_dataframe$Sequence)
+    
+    # Grab non-target data to balance it as well
+    samples <- nrow(filtered_dat)
+    
+    non_target_dat <- dat %>% 
+      arrange(row_id) %>% 
+      slice(1:samples)
+    
+    subset_data <- rbind(filtered_dat, non_target_dat) %>%
+      arrange(row_id)
+    
+    return(subset_data)
+  } else {
+    stop("The target activity is not present in the dataset.")
+  }
+}
+
+  
