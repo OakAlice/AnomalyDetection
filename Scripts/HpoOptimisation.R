@@ -55,12 +55,10 @@ behaviour_columns <- c("Activity", "OtherActivity", "GeneralisedActivity")
 feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))
 feature_data <- feature_data %>% as.data.table()
 
-
 if (tuningMulti == TRUE){
-  for (behaviours in behaviour_columns){
+  #for (behaviours in behaviour_columns){
     
-    behaviours <- "GeneralisedActivity"
-    
+    behaviours <- "OtherActivity"
     
     multiclass_data <- feature_data %>%
       select(-(setdiff(behaviour_columns, behaviours))) %>%
@@ -84,10 +82,10 @@ if (tuningMulti == TRUE){
         )
       },
       bounds = bounds,
-      init_points = 3,
-      n_iter = 5,
+      init_points = 5,
+      n_iter = 10,
       acq = "ucb",
       kappa = 2.576 
     )
-  }
+#  }
 }
