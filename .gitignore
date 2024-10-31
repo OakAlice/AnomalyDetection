@@ -1,4 +1,4 @@
-# Ignore all files and directories named 'Data', 'Output', and 'renv' at any level
+# Ignore these directories at any level
 */Data/
 */Output/
 */renv/
@@ -7,7 +7,8 @@
 # Ignore R history files
 *.Rhistory
 
-# Ignore CSV and RDS files
+# Ignore various other file types
 *.csv
 *.rds
 *.rda
+*.pdf

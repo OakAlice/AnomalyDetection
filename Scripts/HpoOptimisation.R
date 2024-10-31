@@ -1,12 +1,13 @@
 # ---------------------------------------------------------------------------
-# One Class Classification on Animal Accelerometer Data                  ####
+# One Class Classification on Animal Accelerometer Data 3                ####
 # ---------------------------------------------------------------------------
+# Hyperparmeter Optimisation, one-class and multi-class
 
-
+base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
+source(file.path(base_path, "Scripts", "SetUp.R"))
 
 # Tuning OCC model hyperparameters --------------------------------------
 # PR-AUC for the target class is optimised
-
 
 # Define your bounds for Bayesian Optimization
 bounds <- list(
@@ -17,23 +18,18 @@ bounds <- list(
   number_features = c(10, 75)
 )
 
-feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))
-target_activities <- c("swimming", "scratch", "still", "chewing")
-feature_data <- feature_data %>% select(-c("OtherActivity", "GeneralisedActivity")) %>%
-  as.data.table()
-
-ensure.dir(file.path(base_path, "Output"))
-
-#if (tuningOCC == TRUE){
-
-for (target_activity in target_activities) {
-  print(target_activity)
+for (activity in target_activities) {
+  print(activity)
+  
+  feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_", activity, "_features.csv")))
+  feature_data <- feature_data %>% select(-c("OtherActivity", "GeneralisedActivity")) %>% as.data.table()
   
   # Run the Bayesian Optimization
   results <- BayesianOptimization(
     FUN = function(nu, gamma, kernel, number_trees, number_features) {
       modelTuning(
-        feature_data = feature_data,  # Pass feature_data as a fixed argument
+        feature_data = feature_data,
+        target_activity = activity, 
         nu = nu,
         kernel = kernel,
         gamma = gamma,

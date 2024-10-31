@@ -1,8 +1,8 @@
 # ---------------------------------------------------------------------------
-# One Class Classification on Animal Accelerometer Data                  ####
+# One Class Classification on Animal Accelerometer Data 1                 ####
 # ---------------------------------------------------------------------------
+# set up R environment, choose variables
 
-# PART ONE: SET UP ----------------------------------------------------------
 # script mode
 # mark TRUE what stage you want to execute
 # exploration for generating PDF, tuning for HPO finding, testing for final validation
@@ -106,14 +106,3 @@ if (exploration == TRUE) {
     stop()
   })
 }
-
-
-
-
-
-
-
-
-
-
-

@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 
 # train and validate these specific values 
-performSingleValidation <- function(feature_data, validation_proportion,
+performSingleValidation <- function(feature_data, target_activity, validation_proportion,
                                     kernel, nu, gamma, number_trees, number_features) {
   tryCatch({
     #### Create training and validation data ####
@@ -110,7 +110,7 @@ performSingleValidation <- function(feature_data, validation_proportion,
 }
 
 # run for each hyperparameter set
-modelTuning <- function(feature_data, nu, kernel, gamma, number_trees, number_features) {
+modelTuning <- function(feature_data, target_activity, nu, kernel, gamma, number_trees, number_features) {
   tryCatch({
     # Perform a single validation three times
     outcomes_list <- list()
@@ -123,6 +123,7 @@ modelTuning <- function(feature_data, nu, kernel, gamma, number_trees, number_fe
       tryCatch({
         result <- performSingleValidation(
           feature_data, 
+          target_activity,
           validation_proportion, 
           kernel = kernel,
           nu = nu,
