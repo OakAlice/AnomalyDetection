@@ -33,6 +33,7 @@ processDataPerID <- function(id_raw_data, features_type, window_length, sample_r
         generateTsFeatures(data = window_chunk)
       }, error = function(e) {
         message("Error in tsfeatures: ", e$message)
+        return(tibble())  # Return an empty tibble on error
       })
       
       if (nrow(time_series_features) > 0) {
@@ -43,8 +44,8 @@ processDataPerID <- function(id_raw_data, features_type, window_length, sample_r
           pivot_wider(names_from = feature_name, values_from = value)
       } else {
         message("No rows in time_series_features. Returning empty tibble.")
-        single_row_features <- tibble(matrix(NA, nrow = 1, ncol = ncol(time_series_features))) # Fill with NAs
-        colnames(single_row_features) <- colnames(time_series_features)  # Match the column names
+        single_row_features <- tibble(matrix(NA, nrow = 1, ncol = length(unique(paste0(rep(c("X", "Y", "Z"), each = length(time_series_features)), "_", names(time_series_features))))))  # Fill with NAs
+        colnames(single_row_features) <- unique(paste0(rep(c("X", "Y", "Z"), each = length(time_series_features)), "_", names(time_series_features)))  # Match the column names
       }
     }
     
@@ -111,38 +112,45 @@ generateFeatures <- function(window_length, sample_rate, overlap_percent, raw_da
 
 
 # generate time series tsfeatures ####
-generateTsFeatures <- function(data){
-  # Convert each column (e.g., X, Y, Z) into a list of time series
+generateTsFeatures <- function(data) {
   ts_list <- list(
     X = data[["Accelerometer.X"]],
     Y = data[["Accelerometer.Y"]],
     Z = data[["Accelerometer.Z"]]
   )
   
-  # Generate ts features for the window
-  # had a lot of errors and failure so wrapped in try catch
-  time_series_features <- tryCatch({
-    tsfeatures(
-      tslist = ts_list,
-      features = c(
-        "acf_features", "arch_stat", "autocorr_features", "crossing_points", "dist_features",
-        "entropy", "firstzero_ac", "flat_spots", "heterogeneity", "hw_parameters", "hurst",
-        "lumpiness", "stability", "max_level_shift", "max_var_shift", "max_kl_shift", 
-        "nonlinearity", "pacf_features", "pred_features", "scal_features", "station_features", 
-        "stl_features", "unitroot_kpss", "zero_proportion"
-      ),
-      scale = FALSE,
-      multiprocess = TRUE
-    )
-  }, error = function(e) {
-    message("Error in tsfeatures: ", e$message)
-    message("Data causing the error: ", head(data))
-    return(tibble())
-  })
+  # List of features to calculate
+  features_to_calculate <- c(
+    "acf_features", "arch_stat", "autocorr_features", "crossing_points", "dist_features",
+    "entropy", "firstzero_ac", "flat_spots", "heterogeneity", "hw_parameters", "hurst",
+    "lumpiness", "stability", "max_level_shift", "max_var_shift", "max_kl_shift", 
+    "nonlinearity", "pacf_features", "pred_features", "scal_features", "station_features", 
+    "stl_features", "unitroot_kpss", "zero_proportion"
+  )
   
-  # error statement for debugging purposes
-  if (nrow(time_series_features) == 0) {
-    message("No features were generated. Returning empty tibble.")
+  # Initialise an empty list to store features
+  time_series_features <- list()
+  
+  # Loop through each feature and calculate it
+  for (feature in features_to_calculate) {
+    tryCatch({
+      feature_values <- tsfeatures(
+        tslist = ts_list,
+        features = feature,
+        scale = FALSE,
+        multiprocess = TRUE
+      )
+      time_series_features[[feature]] <- feature_values
+    }, error = function(e) {
+      message("Skipping feature ", feature, " due to error: ", e$message)
+    })
+  }
+  
+  # Combine all features into a single tibble
+  if (length(time_series_features) > 0) {
+    time_series_features <- bind_cols(time_series_features)
+  } else {
+    time_series_features <- tibble()
   }
   
   return(time_series_features)

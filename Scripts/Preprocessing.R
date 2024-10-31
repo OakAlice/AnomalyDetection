@@ -50,7 +50,7 @@ for (activity in target_activities){
     
     data <- fread(file.path(base_path, "Data", "Hold_out_test", paste0(dataset_name, "_other.csv")))
       
-      for (id in unique(data$ID))  {
+      for (id in unique(data$ID)) {
         dat <- data %>% filter(ID == id) %>% arrange(Time) %>% mutate(row_id = row_number())
         
         # extract the relevant rows to avoid over processing
@@ -67,7 +67,7 @@ for (activity in target_activities){
           )
         
         # save it 
-        fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_", id, "_", type, "_features.csv")))
+        fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_", id, "_", activity, "_features.csv")))
       }
       
       # stitch all the id feature data back together
@@ -82,4 +82,3 @@ for (activity in target_activities){
       fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_", type, "_features.csv")))
     }
   }
-}
