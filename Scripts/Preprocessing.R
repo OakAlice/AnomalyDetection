@@ -123,6 +123,46 @@ if (file.exists( file.path(base_path, "Data", "Feature_data", paste0(dataset_nam
     fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv")))
   }
 
+# Feature Generation for Test Data -----------------------------------------
+for (window_length in unique(behaviour_lengths[[dataset_name]])){
+  if (file.exists( file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_", window_length, "_features.csv")))) {
+    test_feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_", window_length, "_features.csv")))
+    
+  } else {
+    
+    test_data <- fread(file.path(base_path, "Data", "Hold_out_test", paste0(dataset_name, "_test.csv")))
+    
+    for (id in unique(test_data$ID)) {
+      dat <- test_data %>% filter(ID == id) %>% arrange(Time)
+      
+      test_feature_data <-
+        generateFeatures(
+          window_length,
+          sample_rate,
+          overlap_percent,
+          raw_data = dat,
+          features = features_type
+        )
+      
+      # save it 
+      fwrite(test_feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_", id, "_test_", window_length, "_features.csv")))
+    }
+    
+    # stitch all the id feature data back together
+    files <- list.files(file.path(base_path, "Data/Feature_data"), pattern = "*.csv", full.names = TRUE)
+    pattern <- paste0(dataset_name, ".*", activity, ".*", "test", ".*", window_length)
+    matching_files <- grep(pattern, files, value = TRUE)
+    
+    feature_data_list <- lapply(matching_files, read.csv)
+    feature_data <- do.call(rbind, feature_data_list)
+    
+    # save this as well
+    fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_", window_length, "_features.csv")))
+  }
+}
+
+
+
 
 # extract data from existing processed data --------------------------------
 # data <- fread(file.path(base_path, "Data", "Feature_data", paste0("Ladds_Seal_other_features.csv")))

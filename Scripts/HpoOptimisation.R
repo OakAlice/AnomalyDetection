@@ -58,7 +58,7 @@ feature_data <- feature_data %>% as.data.table()
 if (tuningMulti == TRUE){
   #for (behaviours in behaviour_columns){
     
-    behaviours <- "OtherActivity"
+    behaviours <- "Activity"
     
     multiclass_data <- feature_data %>%
       select(-(setdiff(behaviour_columns, behaviours))) %>%

@@ -1,106 +1,87 @@
-# Testing highest performing hyperparmeters for OCC ----------------------
-# currently have to write out the best performing hyperparameters then run
-# haven't got it automated yet
-
-
+# ---------------------------------------------------------------------------
+# One Class Classification on Animal Accelerometer Data 4                ####
+# ---------------------------------------------------------------------------
+# Testing highest performing hyperparmeters on the test set
 
 base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
-dataset_name <- "Ladds_Seal"
+source(file.path(base_path, "Scripts", "SetUp.R"))
 
-
-
-library(data.table)
-library(tidyverse)
-
-
-# define the best parameters
-target_activity <- "still"
-window_length <- 1
-number_trees <- 263
-number_features <- 12
-kernel <- "radial"
-nu <- 0.058
-gamma <- 0.048
-
-
-
-# 1. OCC models -----------------------------------------------------------
-
-# Load in data ------------------------------------------------------------
-# load in the data for the right window length
-testing_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
-training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))
-
-# remove the other columns for the OCC models
-testing_feature_data <- testing_data %>% select(-c("OtherActivity", "GeneralisedActivity"))
-training_feature_data <- training_data %>% select(-c("OtherActivity", "GeneralisedActivity"))  
-
-
-
-
-
-# make a SVM with training data
-training_feature_data <- training_feature_data %>% mutate(Activity = ifelse(Activity == target_activity, Activity, "Other"))
-selected_feature_data <- featureSelection(training_feature_data, number_trees, number_features)
-target_selected_feature_data <- selected_feature_data[Activity == as.character(target_activity),!label_columns, with = FALSE]
-
-# create the optimal SVM ####
-  optimal_single_class_SVM <-
-    do.call(
-      svm,
-      list(
-        target_selected_feature_data,
-        y = NULL,
-        type = 'one-classification',
-        nu = nu,
-        scale = TRUE,
-        kernel = kernel,
-        gamma = gamma
+# load in the best parameters (presuming you made them into a csv)
+hyperparamaters <- fread(file.path(base_path, "Output", "OptimalHyperparameters.csv"))
+OCC_hyperparameters <- hyperparamaters %>% filter(model_type == "OCC")
+Multi_hyperparameters <- hyperparamaters %>% filter(model_type == "Multi")
+  
+# OCC models ----------------------------------------------------------------
+for (row in length(OCC_hyperparameters$activity)){
+  # define the row you want to test
+  parameter_row <- OCC_hyperparameters[row,]
+  
+  # Load in data
+  training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(parameter_row$dataset_name, "_", parameter_row$activity, "_features.csv")))
+  training_feature_data <- training_data %>% select(-c("OtherActivity", "GeneralisedActivity"))  
+  
+  # make a SVM with training data
+  training_feature_data <- training_feature_data %>% mutate(Activity = ifelse(Activity == parameter_row$activity, Activity, "Other"))
+  selected_feature_data <- featureSelection(training_feature_data, parameter_row$number_trees, parameter_row$number_features)
+  target_selected_feature_data <- selected_feature_data[Activity == as.character(parameter_row$activity),!label_columns, with = FALSE]
+  
+  # create the optimal SVM 
+    optimal_single_class_SVM <-
+      do.call(
+        svm,
+        list(
+          target_selected_feature_data,
+          y = NULL,
+          type = 'one-classification',
+          nu = parameter_row$nu,
+          scale = TRUE,
+          kernel = parameter_row$kernel,
+          gamma = parameter_row$gamma
+        )
       )
-    )
+    
+  # save this model
+  model_path <- file.path(base_path, "Output", "Models", paste0(parameter_row$dataset_name, "_", parameter_row$activity, "_final_model.rda"))
+  save(optimal_single_class_SVM, file = model_path)
   
-# save this model
-model_path <- file.path(base_path, "Output", "Models", paste0(target_activity, "_", dataset_name, "_model.rda"))
-save(optimal_single_class_SVM, file = model_path)
-  
+  # load in the test data
+  testing_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(parameter_row$dataset_name, "_test_", parameter_row$window_length, "_features.csv")))
+  testing_feature_data <- testing_data %>% select(-c("OtherActivity", "GeneralisedActivity"))
 
-# I also wrote it so if you change mode to training and remove 
-# testing data it shows performance on the training set
-# also has a random mode if want to randomise target activity
-  
-testing_results <- finalModelPerformance(mode = "testing",
+  # test the performance
+  # I also wrote it to test training data and randomised test data. Check documentation.
+  testing_results <- finalModelPerformance(mode = "testing",
                                           training_data = target_selected_feature_data,
                                           optimal_model = optimal_single_class_SVM,
                                           testing_data = testing_feature_data,
-                                          target_activity = target_activity,
+                                          target_activity = parameter_row$activity,
                                           balance = TRUE)
-testing_results
+  
+  print(testing_results)
+}
 
 
-# Testing highest performing hyperparmeters for multi----------------------
-multi <- "GeneralisedActivity" # "OtherActivity", "Activity"
-number_trees <- 232
-number_features <- 100
-kernel <- "radial"
-gamma <- 0.003
-
-if (testingMulti == TRUE){
-  training_data <-fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))
-  testing_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
+# Multi-class models ------------------------------------------------------
+for (row in length(Multi_hyperparameters$activity)){
+  # define the row you want to test
+  parameter_row <- Multi_hyperparameters[row,]
+  
+  training_data <-fread(file.path(base_path, "Data", "Feature_data", paste0(parameter_row$dataset_name, "_other_features.csv")))
+  testing_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(parameter_row$dataset_name, "_test_", parameter_row$window_length ,"_features.csv")))
   
   # select the right column for the testing activity based on multi, and remove the others
-  training_feature_data <- update_feature_data(training_data, multi)
+  training_feature_data <- update_feature_data(training_data, multi) ## update this ##
   training_feature_data <- training_feature_data[!Activity == ""]
+  
   testing_feature_data <- update_feature_data(testing_data, multi)
   testing_feature_data <- testing_feature_data[!Activity == ""]
   
   baseline_results <- baselineMultiClass(training_data = training_feature_data,
                                          testing_data = testing_feature_data,
-                                         number_trees = number_trees,
-                                         number_features = number_features,
-                                         kernel = kernel,
-                                         gamma = gamma)
+                                         number_trees = parameter_row$number_trees,
+                                         number_features = parameter_row$number_features,
+                                         kernel = parameter_row$kernel,
+                                         gamma = parameter_row$gamma)
   
-  print(paste0(multi, " multi results:"))
-  baseline_results
+  print(baseline_results)
 }
