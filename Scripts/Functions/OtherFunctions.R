@@ -18,8 +18,8 @@ update_feature_data <- function(data, multi) {
     col_to_rename <- "OtherActivity"
   } else if (multi == "GeneralisedActivity") {
     col_to_rename <- "GeneralisedActivity"
-  } else if (multi == "all") {
-    col_to_rename <- NULL
+  } else if (multi == "Activity") {
+    col_to_rename <- "Activity"
   }
   
   data <- data %>% select(-(setdiff(cols_to_remove, col_to_rename))) %>%

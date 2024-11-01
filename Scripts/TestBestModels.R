@@ -12,9 +12,9 @@ OCC_hyperparameters <- hyperparamaters %>% filter(model_type == "OCC")
 Multi_hyperparameters <- hyperparamaters %>% filter(model_type == "Multi")
   
 # OCC models ----------------------------------------------------------------
-for (row in length(OCC_hyperparameters$activity)){
+for (i in length(OCC_hyperparameters$activity)){
   # define the row you want to test
-  parameter_row <- OCC_hyperparameters[row,]
+  parameter_row <- OCC_hyperparameters[i,]
   
   # Load in data
   training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(parameter_row$dataset_name, "_", parameter_row$activity, "_features.csv")))
@@ -62,20 +62,21 @@ for (row in length(OCC_hyperparameters$activity)){
 
 
 # Multi-class models ------------------------------------------------------
-for (row in length(Multi_hyperparameters$activity)){
+for (i in length(Multi_hyperparameters$activity)){
   # define the row you want to test
-  parameter_row <- Multi_hyperparameters[row,]
+  parameter_row <- Multi_hyperparameters[i,]
   
-  training_data <-fread(file.path(base_path, "Data", "Feature_data", paste0(parameter_row$dataset_name, "_other_features.csv")))
+  training_data <-fread(file.path(base_path, "Data", "Feature_data", paste0(parameter_row$dataset_name, "_other_", parameter_row$window_length, "_features.csv")))
   testing_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(parameter_row$dataset_name, "_test_", parameter_row$window_length ,"_features.csv")))
   
   # select the right column for the testing activity based on multi, and remove the others
-  training_feature_data <- update_feature_data(training_data, multi) ## update this ##
+  training_feature_data <- update_feature_data(training_data, parameter_row$activity)
   training_feature_data <- training_feature_data[!Activity == ""]
   
-  testing_feature_data <- update_feature_data(testing_data, multi)
+  testing_feature_data <- update_feature_data(testing_data, parameter_row$activity)
   testing_feature_data <- testing_feature_data[!Activity == ""]
   
+  # run this manually to get per class metrics
   baseline_results <- baselineMultiClass(training_data = training_feature_data,
                                          testing_data = testing_feature_data,
                                          number_trees = parameter_row$number_trees,

@@ -150,7 +150,7 @@ for (window_length in unique(behaviour_lengths[[dataset_name]])){
     
     # stitch all the id feature data back together
     files <- list.files(file.path(base_path, "Data/Feature_data"), pattern = "*.csv", full.names = TRUE)
-    pattern <- paste0(dataset_name, ".*", activity, ".*", "test", ".*", window_length)
+    pattern <- paste0(dataset_name, ".*", "test", ".*", window_length)
     matching_files <- grep(pattern, files, value = TRUE)
     
     feature_data_list <- lapply(matching_files, read.csv)
