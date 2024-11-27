@@ -119,7 +119,7 @@ modelTuning <- function(feature_data, target_activity, nu, kernel, gamma, number
                      ifelse(kernel > 0.5 & kernel < 1.5, "radial", "polynomial"))
     
     # Run the validation function 3 times
-    for (i in 1:3) {
+    for (i in 1) { ## change back to 1:3 ####
       tryCatch({
         result <- performSingleValidation(
           feature_data, 
@@ -186,7 +186,7 @@ multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, number_tre
   f1_scores <- list()  # List to store F1-scores
   
   # Repeat the process 3 times
-  for (i in 1:3) {
+  for (i in 1) { # change to 1:3 later ####
     message(i)
     flush.console()
     tryCatch({

@@ -21,7 +21,7 @@ bounds <- list(
 for (activity in target_activities) {
   print(activity)
   
-  feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_", activity, "_features.csv")))
+  feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv")))
   feature_data <- feature_data %>% select(-c("OtherActivity", "GeneralisedActivity")) %>% as.data.table()
   
   # Run the Bayesian Optimization
@@ -52,18 +52,18 @@ for (activity in target_activities) {
 # remmeber to account for there being multiple types of activity columns 
 behaviour_columns <- c("Activity", "OtherActivity", "GeneralisedActivity")
 
-feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))
+feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv")))
 feature_data <- feature_data %>% as.data.table()
 
 if (tuningMulti == TRUE){
   #for (behaviours in behaviour_columns){
     
-    behaviours <- "Activity"
+    behaviours <- "OtherActivity"
     
     multiclass_data <- feature_data %>%
       select(-(setdiff(behaviour_columns, behaviours))) %>%
-      rename("Activity" = !!sym(behaviours)) %>%
-      select(-"...6") # remove this random column
+      rename("Activity" = !!sym(behaviours)) #%>%
+      #select(-"...6") # remove this random column
     
     if(behaviours == "GeneralisedActivity"){
       multiclass_data <- multiclass_data %>% filter(!Activity == "")

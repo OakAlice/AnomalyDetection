@@ -7,14 +7,14 @@
 # mark TRUE what stage you want to execute
 # exploration for generating PDF, tuning for HPO finding, testing for final validation
 exploration   <- FALSE
-renamed       <- TRUE # whether I have already added in the general beh categories
+renamed       <- FALSE # whether I have already added in the general beh categories
 
 # User Defined Variables ---------------------------------------------------
 # set base path/directory from where scripts, data, and output are stored
 base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
 dataset_name <- "Ladds_Seal"
 #dataset_name <- "Vehkaoja_Dog"
-sample_rate <- 25
+sample_rate <- 100
 
 # install.packages("pacman")
 library(pacman)
@@ -58,9 +58,6 @@ source_script <- function(script) {
 walk(function_scripts, source_script)
 
 # Split Test Data ---------------------------------------------------------
-move_data <- fread(file.path(base_path, "Data", paste0(dataset_name, ".csv")))
-
-# Split Data ####
 if (file.exists(file.path(
   base_path, "Data", "Hold_out_test", paste0(dataset_name, "_test.csv")
 ))) {
@@ -71,9 +68,9 @@ if (file.exists(file.path(
     fread(file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_other.csv")))
 } else {
   # if this is the first time running code for this dataset, create hold-out test set
+  move_data <- fread(file.path(base_path, "Data", paste0(dataset_name, ".csv")))
   unique_ids <- unique(move_data$ID)
-  test_ids <-
-    sample(unique_ids, ceiling(length(unique_ids) * test_proportion))
+  test_ids <- sample(unique_ids, ceiling(length(unique_ids) * test_proportion))
   data_test <- move_data[ID %in% test_ids]
   data_other <- move_data[!ID %in% test_ids]
   # save these

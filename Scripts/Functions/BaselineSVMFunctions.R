@@ -2,10 +2,10 @@
 # Baseline performance of multi-class SVM                               ####
 #---------------------------------------------------------------------------
 
-baselineMultiClass <- function(training_data, testing_data, number_trees, number_features, kernel, gamma){
+baselineMultiClass <- function(dataset_name, condition, training_data, testing_data, number_trees, number_features, kernel, gamma){
 
   selected_feature_data <- featureSelection(training_data, number_trees, number_features)
-  #selected_feature_data <- selected_feature_data[, !c("Time", "ID"), with = FALSE]
+  selected_feature_data <- selected_feature_data[, !c("Time", "ID"), with = FALSE]
   selected_feature_data$Activity <- as.factor(selected_feature_data$Activity)
   selected_feature_data <- selected_feature_data[complete.cases(selected_feature_data), ]
  
@@ -15,6 +15,8 @@ baselineMultiClass <- function(training_data, testing_data, number_trees, number
                    kernel = kernel,           
                    gamma = gamma)
   
+  # save it
+  saveRDS(svm_model, file = file.path(base_path, "Output", "Models", paste0(dataset_name, "_", condition, "_multi_model.rds")))
   
   # validate
   top_features <- colnames(selected_feature_data)
