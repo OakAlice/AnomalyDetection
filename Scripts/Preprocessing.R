@@ -8,8 +8,8 @@ source(file.path(base_path, "Scripts", "SetUp.R"))
 
 # Specify Variables -------------------------------------------------------
 # look at the pdf file and then specify details below
-#target_activities <- c("swimming", "moving", "still", "chewing")
-target_activities <- c("Walking", "Shaking", "Eating", "Lying chest")
+target_activities <- c("swimming", "moving", "still", "chewing")
+#target_activities <- c("Walking", "Shaking", "Eating", "Lying chest")
 overlap_percent <- 0
 
 # specify the window lengths for each behaviour
@@ -25,13 +25,11 @@ window_settings <- list(Vehkaoja_Dog = list(window_length = 1, overlap_percent =
 
 # Adding activity category columns ----------------------------------------
 # specifying categories for the behaviours so we can test different combinations
-if (renamed == FALSE){
-  for (condition in c("other", "test")){
+for (condition in c("other", "test")){
     data <- fread(file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_", condition, ".csv")))
     new_column_data <- renameColumns(data, dataset_name, target_activities)
     fwrite(new_column_data, file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_", condition, ".csv")))
   }
-}
 
 # Feature Generation for a specific behaviour ------------------------------
 # only this key behaviour with other non-target behaviours to make mixed windows

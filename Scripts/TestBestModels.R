@@ -90,7 +90,31 @@ for (i in length(Multi_hyperparameters$activity)){
                                          number_trees = parameter_row$number_trees,
                                          number_features = parameter_row$number_features,
                                          kernel = parameter_row$kernel,
-                                         gamma = parameter_row$gamma)
+                                         gamma = parameter_row$gamma
+                                         )
   
   print(baseline_results)
 }
+
+
+
+
+
+
+# Retesting best models with balanced test data ---------------------------
+
+# load in the model
+dataset_name <- "Vehkaoja_Dog"
+condition <- "Activity"
+
+
+baseline_results_balanced <- baselineMultiClassBalanced(dataset_name,
+                                                       condition,
+                                                       model_path = file.path(base_path, "Output/Models", paste0(dataset_name, condition, "multi_model.rda")),
+                                                       testing_data = testing_feature_data,
+                                                       number_trees = parameter_row$number_trees,
+                                                       number_features = parameter_row$number_features,
+                                                       kernel = parameter_row$kernel,
+                                                       gamma = parameter_row$gamma,
+                                                       balanced)
+
