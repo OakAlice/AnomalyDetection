@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 # Testing highest performing hyperparmeters on the test set
 
-base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
+base_path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
 source(file.path(base_path, "Scripts", "SetUp.R"))
 
 # load in the best parameters (presuming you made them into a csv)

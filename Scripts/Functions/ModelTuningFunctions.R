@@ -172,11 +172,6 @@ modelTuning <- function(feature_data, target_activity, nu, kernel, gamma, number
 }
 
 
-# for the multiclass models 
-library(data.table)
-library(e1071)
-library(caret)
-
 multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, number_trees, number_features, validation_proportion = 0.2) {
   
   # Convert kernel from numeric to kernel type

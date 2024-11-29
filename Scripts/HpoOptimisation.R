@@ -3,7 +3,8 @@
 # ---------------------------------------------------------------------------
 # Hyperparmeter Optimisation, one-class and multi-class
 
-base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
+#base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
+base_path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
 source(file.path(base_path, "Scripts", "SetUp.R"))
 
 # Tuning OCC model hyperparameters --------------------------------------
@@ -58,7 +59,7 @@ feature_data <- feature_data %>% as.data.table()
 if (tuningMulti == TRUE){
   #for (behaviours in behaviour_columns){
     
-    behaviours <- "OtherActivity"
+    behaviours <- "GeneralisedActivity"
     
     multiclass_data <- feature_data %>%
       select(-(setdiff(behaviour_columns, behaviours))) %>%

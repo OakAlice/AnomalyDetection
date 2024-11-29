@@ -11,7 +11,8 @@ renamed       <- FALSE # whether I have already added in the general beh categor
 
 # User Defined Variables ---------------------------------------------------
 # set base path/directory from where scripts, data, and output are stored
-base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
+# base_path <- "C:/Users/oaw001/Documents/AnomalyDetection"
+base_path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
 dataset_name <- "Ladds_Seal"
 #dataset_name <- "Vehkaoja_Dog"
 sample_rate <- 100
