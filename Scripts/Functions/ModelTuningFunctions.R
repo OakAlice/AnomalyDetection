@@ -261,7 +261,8 @@ multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, number_tre
       # Calculate F1 scores
       confusion_mtx <- confusionMatrix(conf_matrix_padded)
       f1 <- confusion_mtx$byClass[, "F1"]
-      macro_f1 <- mean(f1, na.rm = TRUE)
+      f1[is.na(f1)] <- 0 # change all the NA to 0 before calculating the mean
+      macro_f1 <- mean(f1)
       
       # Store the F1 score
       f1_scores[[i]] <- macro_f1
