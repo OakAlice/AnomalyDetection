@@ -49,7 +49,7 @@ for (i in length(OCC_hyperparameters$activity)){
   save(optimal_single_class_SVM, file = model_path)
   
   # load in the test data
-  testing_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(parameter_row$data_name, "_test_features.csv")))
+  testing_data <- fread(file = file.path(base_path, "Data", "Feature_data", paste0(parameter_row$data_name, "_test_multi_features.csv")))
   testing_feature_data <- testing_data %>% select(-c("OtherActivity", "GeneralisedActivity"))
 
   # test the performance

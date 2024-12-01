@@ -10,6 +10,9 @@ dataset_name <- "Ladds_Seal"
 #dataset_name <- "Vehkaoja_Dog"
 sample_rate <- 100
 
+
+target_activities <- c("swimming", "facerub",   "still",    "chewing")
+
 # install.packages("pacman")
 library(pacman)
 p_load(
@@ -27,5 +30,4 @@ features_type <- c("timeseries", "statistical")
 
 
 # Split Test Data ---------------------------------------------------------
-
 

@@ -48,7 +48,7 @@ renameColumns <- function(data, dataset_name, target_activities){
       Activity %in% c("swimming", "sailing", "slow", "fast", "moving"), "Swimming",
       fifelse(Activity %in% c("chewing", "holdntear", "feeding", "manipulation"), "Chewing",
               fifelse(Activity %in% c("still", "lying", "sitting", "stationary"), "Still",
-                      fifelse(Activity %in% c("scratch", "rubbing", "facerub", "shake", "grooming"), "Scratch", NA_character_)
+                      fifelse(Activity %in% c("scratch", "rubbing", "facerub", "shake", "grooming"), "Facerub", NA_character_)
               )))]
     # 4 specific categories and a non-specific "other"
     data[, OtherActivity := ifelse(Activity %in% target_activities, Activity, "Other")]
