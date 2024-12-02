@@ -76,6 +76,8 @@ if (file.exists(file.path(base_path, "Output", paste0(dataset_name, "_Multi_Hype
   print("Optimal hyperparameter document has already been generated for Multi models")
 } else {
   
+  print("beginning optimisation of hyperparameters for multi models")
+  
   behaviour_columns <- c("Activity", "OtherActivity", "GeneralisedActivity")
   feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv")))
   feature_data <- feature_data %>% as.data.table()

@@ -1,19 +1,24 @@
-
-# WildOne: One Class Classification for Animal Accelerometer Behav --------
-
+# WildOne: One Class Classification for Animal Accelerometer Behaviour-----
 
 # Set Up ------------------------------------------------------------------
 
 #base_path <- "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
 base_path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
 dataset_name <- "Ladds_Seal"
-#dataset_name <- "Vehkaoja_Dog"
-sample_rate <- 25
-window_settings <- list(Vehkaoja_Dog = list(window_length = 1, overlap_percent = 50),
-                        Ladds_Seal = list(window_length = 1, overlap_percent = 50))
-
-target_activities <- c("swimming", "facerub",   "still",    "chewing")
-
+settings <- list(Vehkaoja_Dog = list(sample_rate = 100, 
+                                    window_length = 1, 
+                                    overlap_percent = 50,
+                                    target_activities = c("Walking", "Eating", "Shake", "Lying Chest")),
+                Ladds_Seal = list(sample_rate = 25,
+                                  window_length = 1, 
+                                  overlap_percent = 50,
+                                  target_activities = c("swimming", "facerub",   "still",    "chewing"))
+                        )
+sample_rate <- settings[[dataset_name]]$sample_rate
+window_length <- settings[[dataset_name]]$window_length
+overlap_percent <- settings[[dataset_name]]$overlap_percent
+target_activities <- settings[[dataset_name]]$target_activities
+                        
 # install.packages("pacman")
 library(pacman)
 p_load(
@@ -58,4 +63,7 @@ source(file.path(base_path, "Scripts", "HpoOptimisation.R"))
 
 # Test best options -------------------------------------------------------
 source(file.path(base_path, "Scripts", "TestBestModels.R"))
+
+# Compare the models ------------------------------------------------------
+source(file.path(base_path, "Scripts", "Plotting_Results.R"))
 
