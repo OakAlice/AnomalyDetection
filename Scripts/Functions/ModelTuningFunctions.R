@@ -6,7 +6,7 @@
 performSingleValidation <- function(feature_data, target_activity, validation_proportion,
                                     kernel, nu, gamma, number_trees, number_features) {
   tryCatch({
-    #### Create training and validation data ####
+    ## Create training and validation data
     unique_ids <- unique(feature_data$ID)
     test_ids <- sample(unique_ids, ceiling(length(unique_ids) * validation_proportion))
     
@@ -22,7 +22,7 @@ performSingleValidation <- function(feature_data, target_activity, validation_pr
   training_data$Activity <- ifelse(training_data$Activity == as.character(target_activity), 
                                    training_data$Activity, "Other")
   tryCatch({
-    #### Feature selection ####
+    ## Feature selection
     selected_feature_data <- featureSelection(training_data, number_trees, number_features)
   }, error = function(e) {
     message("Error during general feature selection: ", e$message)
@@ -30,7 +30,7 @@ performSingleValidation <- function(feature_data, target_activity, validation_pr
   })
   
   tryCatch({
-    #### Train model ####
+    # Train model
     target_class_feature_data <- selected_feature_data[Activity == as.character(target_activity),
                                                        !label_columns, with = FALSE]
     
@@ -261,14 +261,14 @@ multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, number_tre
       # Calculate F1 scores
       confusion_mtx <- confusionMatrix(conf_matrix_padded)
       f1 <- confusion_mtx$byClass[, "F1"]
-      f1[is.na(f1)] <- 0 # change all the NA to 0 before calculating the mean
+      f1[is.na(f1)] <- 0 # change all the NA to 0 before calculating the mean # important
       macro_f1 <- mean(f1)
       
       # Store the F1 score
       f1_scores[[i]] <- macro_f1
   }
   
-  #### Calculate average F1-score ####
+  # Calculate average F1-score
   average_macro_f1 <- mean(unlist(f1_scores), na.rm = TRUE)
   
   return(list(Score = average_macro_f1, Pred = NA))

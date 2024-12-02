@@ -28,39 +28,6 @@ update_feature_data <- function(data, multi) {
   return(data)
 }
 
-# add the columns to categroies
-renameColumns <- function(data, dataset_name, target_activities){
-  
-  if (dataset_name == "Vehkaoja_Dog"){
-    # 4 general categories, discarding difficult behaviours
-    data[, GeneralisedActivity := fifelse( # nested ifelse
-      Activity %in% c("Walking", "Trotting", "Pacing", "Tugging", "Jumping", "Galloping", "Carrying object"), "Travelling",
-      fifelse(Activity %in% c("Eating", "Drinking", "Sniffing"), "Feeding",
-              fifelse(Activity %in% c("Sitting", "Lying chest", "Standing"), "Resting",
-                      fifelse(Activity == "Shaking", "Grooming", NA_character_)
-              )))]
-    # 4 specific categories and a non-specific "other"
-    data[, OtherActivity := ifelse(Activity %in% target_activities, Activity, "Other")]
-    
-  } else if (dataset_name == "Ladds_Seal") {
-    # 4 general categories, discarding difficult behaviours
-    data[, GeneralisedActivity := fifelse( # nested ifelse
-      Activity %in% c("swimming", "sailing", "slow", "fast", "moving"), "Swimming",
-      fifelse(Activity %in% c("chewing", "holdntear", "feeding", "manipulation"), "Chewing",
-              fifelse(Activity %in% c("still", "lying", "sitting", "stationary"), "Still",
-                      fifelse(Activity %in% c("scratch", "rubbing", "facerub", "shake", "grooming"), "Facerub", NA_character_)
-              )))]
-    # 4 specific categories and a non-specific "other"
-    data[, OtherActivity := ifelse(Activity %in% target_activities, Activity, "Other")]
-    
-  } else {
-    print("Behavioural categories have not been defined for this dataset")
-  }
-  
-  return(data)
-}
-
-
 
 # check which packages are used from SibyllWang on Stack Exchange
 checkPacks <- function(path) {
