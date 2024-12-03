@@ -4,7 +4,9 @@
 
 #base_path <- "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
 base_path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
-dataset_name <- "Ladds_Seal"
+# dataset_name <- "Ladds_Seal"
+dataset_name <- "Vehkaoja_Dog"
+
 settings <- list(Vehkaoja_Dog = list(sample_rate = 100, 
                                     window_length = 1, 
                                     overlap_percent = 50,

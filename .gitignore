@@ -2,7 +2,7 @@
 */Data/
 */Output/
 */renv/
-*/Figures/
+*/Manuscript/
 
 # Ignore R history files
 *.Rhistory

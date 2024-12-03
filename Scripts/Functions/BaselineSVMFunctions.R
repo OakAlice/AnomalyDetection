@@ -16,7 +16,7 @@ baselineMultiClass <- function(dataset_name, condition, training_data, testing_d
                    gamma = gamma)
   
   # save it
-  saveRDS(svm_model, file = file.path(base_path, "Output", "Models", paste0(dataset_name, "_", condition, "_multi_model.rds")))
+  saveRDS(svm_model, file = file.path(base_path, "Output", "Models", paste0(dataset_name, "_", condition, "_multi_model2.rds")))
   
   # validate
   top_features <- colnames(selected_feature_data)

@@ -3,14 +3,9 @@
 # ---------------------------------------------------------------------------
 # Testing highest performing hyperparmeters on the test set
 
-base_path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
-source(file.path(base_path, "Scripts", "SetUp.R"))
-
 # load in the best parameters (presuming you made them into a csv)
-hyperparamaters <- fread(file.path(base_path, "Output", "OptimalHyperparameters.csv"))
-OCC_hyperparameters <- hyperparamaters %>% filter(data_name == dataset_name,  model_type == "OCC")
-Multi_hyperparameters <- hyperparamaters %>% filter(data_name == dataset_name, model_type == "Multi")
-  
+OCC_hyperparameters <- fread(file.path(base_path, "Output", paste0(dataset_name, "_OCC_Hyperparameters.csv")))
+
 # OCC models ----------------------------------------------------------------
 for (i in length(OCC_hyperparameters$activity)){
 
@@ -66,6 +61,8 @@ for (i in length(OCC_hyperparameters$activity)){
 
 
 # Multi-class models ------------------------------------------------------
+Multi_hyperparameters <- fread(file.path(base_path, "Output", paste0(dataset_name, "_Multi_Hyperparameters.csv")))
+
 for (i in length(Multi_hyperparameters$activity)){
   
   # i <- 1
