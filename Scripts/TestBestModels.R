@@ -1,13 +1,15 @@
 # Testing highest performing hyperparmeters on the test set -----------------
 
 # load in the best parameters (presuming you made them into a csv)
-OCC_hyperparameters <- fread(file.path(base_path, "Output", paste0(dataset_name, "_OCC_Hyperparameters.csv")))
-balance <- stratified_balance
+optimal_hyperparameters <- fread(file.path(base_path, "Output", "OptimalHyperparameters.csv"))
+balance <- "stratified_balance"
 
 
 
 
 # OCC models ----------------------------------------------------------------
+OCC_hyperparameters <- optimal_hyperparameters %>% filter(data_name == dataset_name,
+                                                          model_type == "OCC")
 for (i in length(OCC_hyperparameters$activity)){
 
   # define the row you want to test
@@ -56,42 +58,41 @@ for (i in length(OCC_hyperparameters$activity)){
     print("results already calculated")
   } else{
     
-  testing_feature_data <- testing_data %>% select(-c("OtherActivity", "GeneralisedActivity"))
-  
-  filtered_test_data <- testing_feature_data[, .SD, .SDcols = c("Activity", "Time", "ID", top_features)]
-  filtered_test_data <- filtered_test_data[complete.cases(filtered_test_data),]
-  
-  # Balance the testing data
-  if (balance == non_stratified_balance){
-    activity_count <- filtered_test_data[Activity == parameter_row$activity, .N]
-    filtered_test_data[Activity  != parameter_row$activity,  Activity  := "Other"]
-    filtered_test_data <- filtered_test_data[, .SD[1:activity_count], by = Activity]
-  } else if (balance == stratified_balance){
-    activity_count <- filtered_test_data[Activity == parameter_row$activity, .N] / 
-      length(unique(filtered_test_data$Activity))
-    filtered_test_data <- filtered_test_data[, .SD[sample(.N, min(.N, activity_count))], by = Activity]
-  }
-  filtered_test_data <- filtered_test_data %>% arrange(ID, Time)
-  
-  # Extract ground truth labels
-  ground_truth_labels <- ifelse(filtered_test_data$Activity == as.character(parameter_row$activity), 1, -1)
-  numeric_features <- filtered_test_data[, .SD, .SDcols = !c("Activity", "Time", "ID")]
-  
-  # Predict using the trained model
-  tryCatch({
-    decision_scores <- predict(optimal_single_class_SVM, newdata = numeric_features, decision.values = TRUE)
-    predicted_scores <- as.numeric(attr(decision_scores, "decision.values"))
-  }, error = function(e) {
-    message <- paste("Error in predicting onto numeric data: ", e$message)
-    model_features <- names(optimal_single_class_SVM$x.scale$`scaled:center`)
-    data_features <- names(numeric_features)
-    list(message = message, model_features = model_features, data_features = data_features, difference = difference)
-  })
-  
-  # Calculate performance and save
-  results <- calculatePerformance(predicted_scores, ground_truth_labels)
-  results <- as.data.frame(results) %>% cbind("data_name" =parameter_row$data_name, "activity" =  parameter_row$activity)
-  fwrite(results, file.path(base_path, "Output", paste0(parameter_row$data_name, "_", parameter_row$activity, "_OCC_results.csv")))
+    testing_feature_data <- testing_data %>% select(-c("OtherActivity", "GeneralisedActivity"))
+    
+    filtered_test_data <- testing_feature_data[, .SD, .SDcols = c("Activity", "Time", "ID", top_features)]
+    filtered_test_data <- filtered_test_data[complete.cases(filtered_test_data),]
+    
+    # Balance the testing data
+    if (balance == "non_stratified_balance"){
+      activity_count <- filtered_test_data[Activity == target, .N]
+      filtered_test_data[Activity  != parameter_row$activity,  Activity  := "Other"]
+      filtered_test_data <- filtered_test_data[, .SD[1:activity_count], by = Activity]
+    } else if (balance == "stratified_balance"){
+      activity_count <- filtered_test_data[Activity == parameter_row$activity, .N] / length(unique(filtered_test_data$Activity))
+      filtered_test_data <- filtered_test_data[, .SD[sample(.N, min(.N, activity_count))], by = Activity]
+    }
+    filtered_test_data <- filtered_test_data %>% arrange(ID, Time)
+    
+    # Extract ground truth labels
+    ground_truth_labels <- ifelse(filtered_test_data$Activity == as.character(parameter_row$activity), 1, -1)
+    numeric_features <- filtered_test_data[, .SD, .SDcols = !c("Activity", "Time", "ID")]
+    
+    # Predict using the trained model
+    tryCatch({
+      decision_scores <- predict(optimal_single_class_SVM, newdata = numeric_features, decision.values = TRUE)
+      predicted_scores <- as.numeric(attr(decision_scores, "decision.values"))
+    }, error = function(e) {
+      message <- paste("Error in predicting onto numeric data: ", e$message)
+      model_features <- names(optimal_single_class_SVM$x.scale$`scaled:center`)
+      data_features <- names(numeric_features)
+      list(message = message, model_features = model_features, data_features = data_features, difference = difference)
+    })
+    
+    # Calculate performance and save
+    results <- calculatePerformance(predicted_scores, ground_truth_labels)
+    results <- as.data.frame(results) %>% cbind("data_name" =parameter_row$data_name, "activity" =  parameter_row$activity)
+    fwrite(results, file.path(base_path, "Output", paste0(parameter_row$data_name, "_", parameter_row$activity, "_OCC_results.csv")))
   }
   
   if (file.exists(file.path(base_path, "Output", "Predictions", paste0(parameter_row$data_name, "_", parameter_row$activity, "_OCC_predictions.csv")))){

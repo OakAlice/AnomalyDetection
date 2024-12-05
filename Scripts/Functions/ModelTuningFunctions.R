@@ -76,11 +76,11 @@ performSingleValidation <- function(feature_data, target_activity, validation_pr
     
     # Balance validation data
     if (balance == "non_stratified_balance"){
-      activity_count <- selected_validation_data[Activity == parameter_row$activity, .N]
-      selected_validation_data[Activity  != parameter_row$activity,  Activity  := "Other"]
+      activity_count <- selected_validation_data[Activity == target_activity, .N]
+      selected_validation_data[Activity  != target_activity,  Activity  := "Other"]
       selected_validation_data <- selected_validation_data[, .SD[1:activity_count], by = Activity]
     } else if (balance == "stratified_balance"){
-      activity_count <- selected_validation_data[Activity == parameter_row$activity, .N] / 
+      activity_count <- selected_validation_data[Activity == target_activity, .N] / 
         length(unique(selected_validation_data$Activity))
       selected_validation_data <- selected_validation_data[, .SD[sample(.N, min(.N, activity_count))], by = Activity]
     }

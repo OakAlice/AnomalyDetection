@@ -67,7 +67,7 @@ combined_plot
 
 # 1-class ------------------------------------------------------------------
 
-i <- 3
+i <- 5
 
 test_data_labels <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_multi_features.csv")))
 test_data_labels <- test_data_labels %>%

@@ -18,6 +18,7 @@ if(file.exists(file.path(base_path, "Output", paste0(dataset_name, "_OCC_Hyperpa
   print("optimal hyperparameter doc has already been generated for OCC models")
 } else {
   
+  results_stored <- list()
   for (activity in target_activities) {
     print(activity)
     
@@ -45,9 +46,20 @@ if(file.exists(file.path(base_path, "Output", paste0(dataset_name, "_OCC_Hyperpa
       acq = "ucb",
       kappa = 2.576 
     )
+    
+    best_par_df <- as.data.frame(t(results$Best_Par))  # Transpose to make parameters a row
+    best_par_df$Best_Value <- results$Best_Value       # Add the Best_Value column
+    best_par_df$data_name <- dataset_name
+    best_par_df$behaviour <- activity
+    best_par_df$model_type <- "OCC"
+    
+    # Store the results in the list under the corresponding activity
+    results_stored[[activity]] <- best_par_df
+  
   }
   
-  fwrite(best_params_df, file.path(base_path, "Output", "OptimalOCCHyperparmeters.csv"), row.names = FALSE)
+  results_stored_df <- rbindlist(results_stored)
+  fwrite(results_stored_df, file.path(base_path, "Output", "OptimalOCCHyperparmeters.csv"), row.names = FALSE)
 }
 
 
