@@ -52,7 +52,7 @@ calculatePerformance <- function(scores, ground_truth_labels){
   if (length(levels(as.factor(ground_truth_labels))) == 2){
     # Calculate AUC-ROC
     roc_curve <- roc(as.vector(ground_truth_labels), scores)
-    auc_value <- auc(roc_curve)
+    auc_value <- as.numeric(auc(roc_curve))
     # plot(roc_curve)
     
     # Calculate PR-ROC
@@ -75,7 +75,6 @@ calculatePerformance <- function(scores, ground_truth_labels){
               F1_score = metrics_0.5_threshold$F1_score,
               Precision = metrics_0.5_threshold$Precision,
               Recall = metrics_0.5_threshold$Recall,
-              Recall_neg = metrics_0.5_threshold$Recall_neg,
               Accuracy = metrics_0.5_threshold$Accuracy,
               Balanced_Accuracy = metrics_0.5_threshold$Balanced_Accuracy
   ))

@@ -13,6 +13,9 @@ performSingleValidation <- function(feature_data, target_activity, validation_pr
     training_data <- feature_data[!feature_data$ID %in% test_ids, ]
     validation_data <- feature_data[feature_data$ID %in% test_ids, ]
     
+    message("Data split")
+    flush.console()
+    
   }, error = function(e) {
     message("Error in data splitting: ", e$message)
     flush.console()
@@ -24,6 +27,9 @@ performSingleValidation <- function(feature_data, target_activity, validation_pr
   tryCatch({
     ## Feature selection
     selected_feature_data <- featureSelection(training_data, number_trees, number_features)
+    
+    message("Features selected")
+    flush.console()
   }, error = function(e) {
     message("Error during general feature selection: ", e$message)
     flush.console()
@@ -49,6 +55,9 @@ performSingleValidation <- function(feature_data, target_activity, validation_pr
     
     single_class_SVM <- do.call(svm, svm_args)
     
+    message("model trained")
+    flush.console()
+    
   }, error = function(e) {
     message("Error during model training: ", e$message)
     flush.console()
@@ -59,12 +68,22 @@ performSingleValidation <- function(feature_data, target_activity, validation_pr
     #### Validate model ####
     top_features <- setdiff(colnames(selected_feature_data), label_columns)
     selected_validation_data <- validation_data[, .SD, .SDcols = c("Activity", top_features)]
+    selected_validation_data[Activity != target_activity, Activity := "Other"]
+    selected_validation_data <- selected_validation_data[complete.cases(selected_validation_data), ]
+    
+    message("length of data: ", length(selected_validation_data$Activity))
+    flush.console()
     
     # Balance validation data
-    counts <- selected_validation_data[Activity == target_activity, .N]
-    selected_validation_data[Activity != target_activity, Activity := "Other"]
-    selected_validation_data <- selected_validation_data[, .SD[1:counts], by = Activity]
-    selected_validation_data <- selected_validation_data[complete.cases(selected_validation_data), ]
+    if (balance == "non_stratified_balance"){
+      activity_count <- selected_validation_data[Activity == parameter_row$activity, .N]
+      selected_validation_data[Activity  != parameter_row$activity,  Activity  := "Other"]
+      selected_validation_data <- selected_validation_data[, .SD[1:activity_count], by = Activity]
+    } else if (balance == "stratified_balance"){
+      activity_count <- selected_validation_data[Activity == parameter_row$activity, .N] / 
+        length(unique(selected_validation_data$Activity))
+      selected_validation_data <- selected_validation_data[, .SD[sample(.N, min(.N, activity_count))], by = Activity]
+    }
     
     # Ground truth labels
     ground_truth_labels <- selected_validation_data[, "Activity"]
@@ -73,6 +92,9 @@ performSingleValidation <- function(feature_data, target_activity, validation_pr
     numeric_validation_data <- selected_validation_data[, !"Activity"]
     decision_scores <- predict(single_class_SVM, newdata = numeric_validation_data, decision.values = TRUE)
     scores <- as.numeric(attr(decision_scores, "decision.values"))
+    
+    message("predictions made")
+    flush.console()
     
     results <- calculatePerformance(scores, ground_truth_labels)
     
@@ -110,7 +132,7 @@ performSingleValidation <- function(feature_data, target_activity, validation_pr
 }
 
 # run for each hyperparameter set
-modelTuning <- function(feature_data, target_activity, nu, kernel, gamma, number_trees, number_features) {
+OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, number_trees, number_features) {
   tryCatch({
     # Perform a single validation three times
     outcomes_list <- list()
@@ -165,11 +187,19 @@ modelTuning <- function(feature_data, target_activity, nu, kernel, gamma, number
     ))
     
   }, error = function(e) {
-    message("Error encountered during modelTuning: ", e$message)
+    message("Error encountered during model tuning: ", e$message)
     flush.console() 
     return(list(Score = NA, Pred = NA))  # Return NA for the iteration
   })
 }
+
+
+
+
+
+
+
+
 
 
 multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, number_trees, number_features, validation_proportion = 0.2) {
@@ -272,4 +302,133 @@ multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, number_tre
   average_macro_f1 <- mean(unlist(f1_scores), na.rm = TRUE)
   
   return(list(Score = average_macro_f1, Pred = NA))
+}
+
+
+
+
+
+# binary model tuning
+binaryModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, number_trees, number_features, validation_proportion = 0.33) {
+  tryCatch({
+    # Initialize the outcomes list
+    outcomes_list <- list()
+    
+    # Determine kernel type
+    kernel <- ifelse(kernel < 0.5, "linear", 
+                     ifelse(kernel > 0.5 & kernel < 1.5, "radial", "polynomial"))
+    
+    # Perform 3-fold cross-validation
+    for (i in 1:3) {
+      tryCatch({
+        
+        message(i)
+        flush.console()
+        
+        # Create training and validation data for the current fold
+        unique_ids <- unique(feature_data$ID)
+        set.seed(i)  # Ensure reproducibility for each fold
+        test_ids <- sample(unique_ids, ceiling(length(unique_ids) * validation_proportion))
+        
+        training_data <- feature_data[!feature_data$ID %in% test_ids, ]
+        validation_data <- feature_data[feature_data$ID %in% test_ids, ]
+        
+        # Convert activity labels to binary (target vs. other)
+        training_data$Activity <- ifelse(training_data$Activity == as.character(target_activity), 
+                                         target_activity, "Other")
+        message("data split")
+        flush.console()
+        
+        # Feature selection
+        selected_feature_data <- featureSelection(training_data, number_trees, number_features)
+        
+        message("features selected")
+        flush.console()
+        
+        # Train SVM model
+        numeric_feature_data <- selected_feature_data[complete.cases(selected_feature_data), ]
+        
+        svm_args <- list(
+          x = as.matrix(numeric_feature_data[, !("Activity"), with = FALSE]),  # Features
+          y = as.factor(numeric_feature_data$Activity),
+          type = "C-classification",
+          nu = nu,
+          scale = TRUE,
+          kernel = kernel,
+          gamma = gamma
+        )
+        single_class_SVM <- do.call(svm, svm_args)
+        
+        message("model trained")
+        flush.console()
+        
+        # Validate the model
+        top_features <- setdiff(colnames(selected_feature_data), label_columns)
+        selected_validation_data <- validation_data[, .SD, .SDcols = c("Activity", top_features)]
+        
+        # Balance validation data
+        counts <- selected_validation_data[Activity == target_activity, .N]
+        selected_validation_data[Activity != target_activity, Activity := "Other"]
+        selected_validation_data <- selected_validation_data[, .SD[1:counts], by = Activity]
+        selected_validation_data <- selected_validation_data[complete.cases(selected_validation_data), ]
+        
+        ground_truth_labels <- selected_validation_data[, "Activity"]
+        ground_truth_labels <- ifelse(ground_truth_labels == as.character(target_activity), 1, -1)
+        
+        numeric_validation_data <- selected_validation_data[, !"Activity"]
+        decision_scores <- predict(single_class_SVM, newdata = numeric_validation_data, decision.values = TRUE)
+        scores <- as.numeric(attr(decision_scores, "decision.values"))
+        
+        results <- calculatePerformance(scores, ground_truth_labels)
+        
+        message("performance calculated")
+        flush.console()
+        
+        # Compile results for the current fold
+        result <- tibble(
+          Activity = as.character(target_activity),
+          nu = as.character(nu),
+          gamma = as.character(gamma),
+          kernel = as.character(kernel),
+          number_features = as.character(number_features),
+          number_trees = as.character(number_trees),
+          AUC_Value = as.numeric(results$auc_value),
+          PR_AUC = as.numeric(results$pr_auc_value),
+          Accuracy = as.numeric(results$Accuracy),
+          Balanced_Accuracy = as.numeric(results$Balanced_Accuracy),
+          Precision = as.numeric(results$Precision),
+          Recall = as.numeric(results$Recall),
+          F1_Score = as.numeric(results$F1_score)
+        )
+        
+        outcomes_list[[i]] <- result  # Store results for the current fold
+        
+      }, error = function(e) {
+        message("Error in fold ", i, ": ", e$message)
+        flush.console()
+        return(NULL)
+      })
+    }
+    
+    # Combine the outcomes from all folds
+    model_outcomes <- rbindlist(outcomes_list, use.names = TRUE, fill = TRUE)
+    
+    # Calculate average and standard deviation of PR_AUC across folds
+    average_model_outcomes <- model_outcomes[, .(
+      mean_PR_AUC = mean(PR_AUC, na.rm = TRUE),
+      sd_PR_AUC = sd(PR_AUC, na.rm = TRUE)
+    ), by = .(Activity, nu, gamma, kernel, number_features)]
+    
+    # Return the mean PR_AUC for optimization
+    PR_AUC <- as.numeric(average_model_outcomes$mean_PR_AUC)
+    return(list(
+      Score = PR_AUC,  # Metric to be maximized
+      Pred = NA        # Placeholder for predictions
+    ))
+    
+  }, error = function(e) {
+    message("Error encountered during model tuning: ", e$message)
+    flush.console()
+    return(list(Score = NA, Pred = NA))  # Return NA if an error occurs
+  })
 }

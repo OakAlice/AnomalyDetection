@@ -18,8 +18,6 @@ if(file.exists(file.path(base_path, "Output", paste0(dataset_name, "_OCC_Hyperpa
   print("optimal hyperparameter doc has already been generated for OCC models")
 } else {
   
-  best_params_list <- list()
-  
   for (activity in target_activities) {
     print(activity)
     
@@ -28,6 +26,7 @@ if(file.exists(file.path(base_path, "Output", paste0(dataset_name, "_OCC_Hyperpa
     feature_data <- feature_data %>% select(-c("OtherActivity", "GeneralisedActivity")) %>% as.data.table()
     
     # Run the Bayesian Optimization
+    balance <- "stratified_balance" # change this to change the way the validation data is balanced
     results <- BayesianOptimization(
       FUN = function(nu, gamma, kernel, number_trees, number_features) {
         OCCModelTuning(
@@ -46,27 +45,28 @@ if(file.exists(file.path(base_path, "Output", paste0(dataset_name, "_OCC_Hyperpa
       acq = "ucb",
       kappa = 2.576 
     )
-    
-    # Extract the best parameter set and add to the list
-    best_params <- data.frame(
-      data_name <- dataset_name,
-      model_type = "OCC",
-      activity = activity,
-      nu = results$Best_Par["nu"],
-      gamma = results$Best_Par["gamma"],
-      kernel = results$Best_Par["kernel"],
-      number_trees = results$Best_Par["number_trees"],
-      number_features = results$Best_Par["number_features"],
-      value = results$Best_Value
-    )
-    
-    best_params_list[[activity]] <- best_params
   }
-  
-  best_params_df <- do.call(rbind, best_params_list)
   
   fwrite(best_params_df, file.path(base_path, "Output", "OptimalOCCHyperparmeters.csv"), row.names = FALSE)
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # Tuning binary models ----------------------------------------------------
@@ -104,7 +104,7 @@ if(file.exists(file.path(base_path, "Output", paste0(dataset_name, "_Binary_Hype
       kappa = 2.576 
     )
     
-    # Extract the best parameter set and add to the list
+     # Extract the best parameter set and add to the list
     best_params <- data.frame(
       data_name <- dataset_name,
       model_type = "OCC",

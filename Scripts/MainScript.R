@@ -26,7 +26,7 @@ library(pacman)
 p_load(
   bench, caret, data.table, e1071, future, future.apply, parallelly,
   plotly, PRROC, purrr, pROC, rBayesianOptimization,
-  randomForest, tsfeatures, tidyverse, umap, zoo, tinytex
+  randomForest, tsfeatures, tidyverse, umap, zoo, tinytex, patchwork
 )
 
 # global variables
