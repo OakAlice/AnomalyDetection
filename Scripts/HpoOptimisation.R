@@ -1,9 +1,12 @@
-# ---------------------------------------------------------------------------
-# One Class Classification on Animal Accelerometer Data 3                ####
-# ---------------------------------------------------------------------------
-# Hyperparmeter Optimisation, one-class and multi-class
 
-# Define your bounds for Bayesian Optimization
+# Hyperparameter Optimisation ---------------------------------------------
+
+# define the save paths
+occ_hyperparam_file <- file.path(base_path, "Output", paste0(dataset_name, "_OCC_hyperparmaters.csv"))
+binary_hyperparam_file <- file.path(base_path, "Output", paste0(dataset_name, "_Binary_hyperparmaters.csv"))
+multi_hyperparam_file <- file.path(base_path, "Output", paste0(dataset_name, "_Multi_hyperparmaters.csv"))
+
+# Define bounds for Bayesian Optimization of SVMs
 bounds <- list(
   nu = c(0.001, 0.1),
   gamma = c(0.001, 0.1),
@@ -11,167 +14,91 @@ bounds <- list(
   number_trees = c(100, 500),
   number_features = c(10, 75)
 )
+# save the output 
+save_best_params <- function(dataset_name, model_type, activity_or_behaviour, results, bench_result) {
+  data.frame(
+    data_name = dataset_name,
+    model_type = model_type,
+    behaviour_or_activity = activity_or_behaviour,
+    nu = results$Best_Par["nu"],
+    gamma = results$Best_Par["gamma"],
+    kernel = results$Best_Par["kernel"],
+    number_trees = results$Best_Par["number_trees"],
+    number_features = results$Best_Par["number_features"],
+    Best_Value = results$Best_Value,
+    Time_seconds = as.numeric(bench_result$time) / 1e9,
+    Memory_bytes = as.numeric(bench_result$memory),
+    Cpu_seconds = as.numeric(bench_result$cpu) / 1e9,
+    GC_seconds = as.numeric(bench_result$gc) / 1e9 
+  )
+}
 
-# Tuning OCC model hyperparameters --------------------------------------
-# PR-AUC for the target class is optimised
-if(file.exists(file.path(base_path, "Output", paste0(dataset_name, "_OCC_Hyperparameters.csv")))){
-  print("optimal hyperparameter doc has already been generated for OCC models")
-} else {
-  
+save_results <- function(results_list, file_path) {
+  results_df <- rbindlist(results_list, use.names = TRUE, fill = TRUE)
+  fwrite(results_df, file_path, row.names = FALSE)
+}
+
+# OCC model tuning --------------------------------------------------------
+if (!file.exists(occ_hyperparam_file)) {
   results_stored <- list()
-  for (activity in target_activities) {
-    print(activity)
-    
-    # Load and preprocess feature data
-    feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv")))
-    feature_data <- feature_data %>% select(-c("OtherActivity", "GeneralisedActivity")) %>% as.data.table()
-    
-    # Run the Bayesian Optimization
-    balance <- "stratified_balance" # change this to change the way the validation data is balanced
-    results <- BayesianOptimization(
-      FUN = function(nu, gamma, kernel, number_trees, number_features) {
-        OCCModelTuning(
-          feature_data = feature_data,
-          target_activity = activity, 
-          nu = nu,
-          kernel = kernel,
-          gamma = gamma,
-          number_trees = number_trees,
-          number_features = number_features
-        )
-      },
-      bounds = bounds,
-      init_points = 5,
-      n_iter = 10,
-      acq = "ucb",
-      kappa = 2.576 
-    )
-    
-    best_par_df <- as.data.frame(t(results$Best_Par))  # Transpose to make parameters a row
-    best_par_df$Best_Value <- results$Best_Value       # Add the Best_Value column
-    best_par_df$data_name <- dataset_name
-    best_par_df$behaviour <- activity
-    best_par_df$model_type <- "OCC"
-    
-    # Store the results in the list under the corresponding activity
-    results_stored[[activity]] <- best_par_df
   
-  }
-  
-  results_stored_df <- rbindlist(results_stored)
-  fwrite(results_stored_df, file.path(base_path, "Output", "OptimalOCCHyperparmeters.csv"), row.names = FALSE)
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Tuning binary models ----------------------------------------------------
-# EWWWWW before I'm told I should do this, I will just do it
-if(file.exists(file.path(base_path, "Output", paste0(dataset_name, "_Binary_Hyperparameters.csv")))){
-  print("optimal hyperparameter doc has already been generated for binary models")
-} else {
-  
-  best_params_list <- list()
+  # load in the training data
+  feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv"))) %>%
+    select(-c("OtherActivity", "GeneralisedActivity")) %>%
+    as.data.table()
   
   for (activity in target_activities) {
-    print(activity)
+    print(paste("Tuning OCC model for activity:", activity))
     
-    # Load and preprocess feature data
-    feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv")))
-    feature_data <- feature_data %>% select(-c("OtherActivity", "GeneralisedActivity")) %>% as.data.table()
-    
-    # Run the Bayesian Optimization
-    results <- BayesianOptimization(
-      FUN = function(nu, gamma, kernel, number_trees, number_features) {
-        binaryModelTuning(
-          feature_data = feature_data,
-          target_activity = activity, 
-          nu = nu,
-          kernel = kernel,
-          gamma = gamma,
-          number_trees = number_trees,
-          number_features = number_features
-        )
-      },
-      bounds = bounds,
-      init_points = 5,
-      n_iter = 10,
-      acq = "ucb",
-      kappa = 2.576 
-    )
-    
-     # Extract the best parameter set and add to the list
-    best_params <- data.frame(
-      data_name <- dataset_name,
-      model_type = "OCC",
-      activity = activity,
-      nu = results$Best_Par["nu"],
-      gamma = results$Best_Par["gamma"],
-      kernel = results$Best_Par["kernel"],
-      number_trees = results$Best_Par["number_trees"],
-      number_features = results$Best_Par["number_features"],
-      value = results$Best_Value
-    )
-    
-    best_params_list[[activity]] <- best_params
-  }
-  
-  best_params_df <- do.call(rbind, best_params_list)
-  
-  fwrite(best_params_df, file.path(base_path, "Output", "OptimalOCCHyperparmeters.csv"), row.names = FALSE)
-}
-
-
-
-
-# Tuning multiclass model hyperparameters ---------------------------------
-# this section of the code tunes the multiclass model, optimising macro average F1
-# the same bounds as in the above section are used for comparison sake
-# remmeber to account for there being multiple types of activity columns 
-if (file.exists(file.path(base_path, "Output", paste0(dataset_name, "_Multi_Hyperparameters.csv")))) {
-  print("Optimal hyperparameter document has already been generated for Multi models")
-} else {
-  
-  print("beginning optimisation of hyperparameters for multi models")
-  
-  behaviour_columns <- c("Activity", "OtherActivity", "GeneralisedActivity")
-  feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv")))
-  feature_data <- feature_data %>% as.data.table()
-  
-  best_params_list <- list()
-  
-    for (behaviours in behaviour_columns) {
-      print(behaviours)
-      
-      multiclass_data <- feature_data %>%
-        select(-(setdiff(behaviour_columns, behaviours))) %>%
-        rename("Activity" = !!sym(behaviours))
-      
-      if (behaviours == "GeneralisedActivity") {
-        multiclass_data <- multiclass_data %>% filter(!Activity == "")
-      }
-      
-      # Run the Bayesian Optimization
+    # Benchmark the time for each model's Bayesian optimization using bench_time()
+    bench_result <- bench::mark(
       results <- BayesianOptimization(
         FUN = function(nu, gamma, kernel, number_trees, number_features) {
-          multiclassModelTuning(
-            multiclass_data = multiclass_data,
+          OCCModelTuning(
+            feature_data = feature_data,
+            target_activity = activity, 
+            nu = nu,
+            kernel = kernel,
+            gamma = gamma,
+            number_trees = number_trees,
+            number_features = number_features
+          )
+        },
+        bounds = bounds,
+        init_points = 2,
+        n_iter = 5,
+        acq = "ucb",
+        kappa = 2.576 
+       ),
+      check = FALSE
+    )
+  
+    # Save best parameters
+    results_stored[[activity]] <- save_best_params(
+      dataset_name, "OCC", activity, bench_result
+    )
+  }
+  
+  # Save the results and benchmark times and resources
+  save_results(results_stored, occ_hyperparam_file)
+} else {
+  print("One-class parameters have already been tuned and saved")
+}
+
+# Binary model tuning ------------------------------------------------------
+if (!file.exists(binary_hyperparam_file)) {
+  best_params_list <- list()
+  
+  for (activity in target_activities) {
+    print(paste("Tuning binary model for activity:", activity))
+    
+    # Benchmark the time for each model's Bayesian optimization using bench_time()
+    bench_result <- bench::mark(
+      results <- BayesianOptimization(
+        FUN = function(nu, gamma, kernel, number_trees, number_features) {
+          binaryModelTuning(
+            feature_data = feature_data,
+            target_activity = activity, 
             nu = nu,
             kernel = kernel,
             gamma = gamma,
@@ -184,26 +111,78 @@ if (file.exists(file.path(base_path, "Output", paste0(dataset_name, "_Multi_Hype
         n_iter = 10,
         acq = "ucb",
         kappa = 2.576 
-      )
-      
-      # Extract the best parameters and add to the list
-      best_params <- data.frame(
-        data_name <- dataset_name,
-        model_type = "Multi",
-        behaviour = behaviours,
-        nu = results$Best_Par["nu"],
-        gamma = results$Best_Par["gamma"],
-        kernel = results$Best_Par["kernel"],
-        number_trees = results$Best_Par["number_trees"],
-        number_features = results$Best_Par["number_features"],
-        value = results$Best_Value
-      )
-      best_params_list[[behaviours]] <- best_params
-
+      ),
+      check = FALSE
+    )
+    
+    # Save best parameters
+    best_params_list[[activity]] <- save_best_params(
+      dataset_name, "Binary", activity, bench_result
+    )
   }
   
-  best_params_df <- do.call(rbind, best_params_list)
-  
-  # Save the dataframe as a CSV file
-  fwrite(best_params_df, file.path(base_path, "Output", paste0(dataset_name, "_Multi_Hyperparameters.csv")), row.names = FALSE)
+  # Save the results and benchmark times and resources
+  save_results(best_params_list, binary_hyperparam_file)
+} else {
+  print("Binary parameters have already been tuned and saved")
 }
+
+
+# Multiclass model tuning -------------------------------------------------
+if (!file.exists(multi_hyperparam_file)) {
+  print("Beginning optimization for multiclass models.")
+  best_params_list <- list()
+  
+  behaviour_columns <- c("Activity", "OtherActivity", "GeneralisedActivity")
+  feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv"))) %>%
+    as.data.table()
+  
+  for (behaviours in behaviour_columns) {
+    print(paste("Tuning multiclass model for behaviour column:", behaviours))
+    
+    # Prepare the multiclass data
+    multiclass_data <- feature_data %>%
+      select(-(setdiff(behaviour_columns, behaviours))) %>%
+      rename("Activity" = !!sym(behaviours))
+    
+    if (behaviours == "GeneralisedActivity") {
+      multiclass_data <- multiclass_data %>% filter(!Activity == "")
+    }
+    
+    # Benchmark the time for each model's Bayesian optimization using bench::mark
+    # run the search inside of a parallised loop
+    plan(multisession, workers = detectCores() - 1)
+    bench_result <- bench::mark(
+      BayesianOptimization(
+        FUN = function(nu, gamma, kernel, number_trees, number_features) {
+          multiclassModelTuning(
+            multiclass_data = multiclass_data,
+            nu = nu,
+            kernel = kernel,
+            gamma = gamma,
+            number_trees = number_trees,
+            number_features = number_features
+          )
+        },
+        bounds = bounds,
+        init_points = 3,
+        n_iter = 7,
+        acq = "ucb",
+        kappa = 2.576
+      ),
+      check = FALSE
+    )
+    
+    # Save best parameters for this behaviour
+    best_params_list[[behaviours]] <- save_best_params(
+      dataset_name, "Multi", behaviours, bench_result
+    )
+  }
+  
+  plan(sequential)
+  # Save the results and benchmarking times and resources
+  save_results(best_params_list, multi_hyperparam_file)
+} else {
+  print("Multi-class parameters have already been tuned and saved")
+}
+

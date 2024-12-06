@@ -1,6 +1,6 @@
 # Data Exploration --------------------------------------------------------
 # need to check whether this works yet
-if (exploration == TRUE) {
+if (exists("exploration")) {
   tryCatch({
     # Knit the ExploreData.Rmd file as a PDF and save it to the output folder in base dir
     rmarkdown::render(
@@ -19,4 +19,6 @@ if (exploration == TRUE) {
     message("Error in making the data exploration pdf: ", e$message)
     stop()
   })
+} else {
+  print("this script hasn't been set up yet")
 }

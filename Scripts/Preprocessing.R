@@ -1,9 +1,9 @@
 # Feature Generation  ----------------------------------------------
 # does all of the data
-if (file.exists( file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_other_features.csv")))) {
-  feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_other_features.csv")))
-    
-  } else {
+if (file.exists( file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv")))) {
+  print("feature data already generated.") 
+
+} else {
     
     # extract the appropriate window_length from the dictionary above
     window_length <- window_settings[[dataset_name]][["window_length"]]
@@ -40,10 +40,8 @@ if (file.exists( file.path(base_path, "Data", "Feature_data", paste0(dataset_nam
   }
 
 # Feature Generation for Test Data -----------------------------------------
-for (window_length in unique(window_settings[[dataset_name]]$window_length)){
-  if (file.exists( file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_", window_length, "_features.csv")))) {
-    test_feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_", window_length, "_features.csv")))
-    
+if (file.exists( file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_multi_features.csv")))) {
+    print("test features also already generated")
   } else {
     
     test_data <- fread(file.path(base_path, "Data", "Hold_out_test", paste0(dataset_name, "_test.csv")))
@@ -76,6 +74,5 @@ for (window_length in unique(window_settings[[dataset_name]]$window_length)){
     feature_data <- do.call(rbind, feature_data_list)
     
     # save this as well
-    fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_", window_length, "_features.csv")))
+    fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_multi_features.csv")))
   }
-}
