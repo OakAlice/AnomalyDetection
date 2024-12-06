@@ -2,9 +2,9 @@
 # Hyperparameter Optimisation ---------------------------------------------
 
 # define the save paths
-occ_hyperparam_file <- file.path(base_path, "Output", paste0(dataset_name, "_OCC_hyperparmaters.csv"))
-binary_hyperparam_file <- file.path(base_path, "Output", paste0(dataset_name, "_Binary_hyperparmaters.csv"))
-multi_hyperparam_file <- file.path(base_path, "Output", paste0(dataset_name, "_Multi_hyperparmaters.csv"))
+occ_hyperparam_file <- file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_OCC_hyperparmaters.csv"))
+binary_hyperparam_file <- file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_Binary_hyperparmaters.csv"))
+multi_hyperparam_file <- file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_Multi_hyperparmaters.csv"))
 
 # Define bounds for Bayesian Optimization of SVMs
 bounds <- list(

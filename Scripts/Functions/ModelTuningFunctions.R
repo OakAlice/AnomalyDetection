@@ -69,7 +69,7 @@ OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, num
         decision_scores <- predict(single_class_SVM, newdata = numeric_validation_data, decision.values = TRUE)
         scores <- as.numeric(attr(decision_scores, "decision.values"))
         
-        results <- calculateThresholdMetrics(scores, ground_truth_labels)
+        results <- calculateThresholdMetrics(scores, ground_truth)
         
         # Compile results for this run
         list(
