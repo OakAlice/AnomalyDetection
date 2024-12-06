@@ -14,6 +14,7 @@ bounds <- list(
   number_trees = c(100, 500),
   number_features = c(10, 75)
 )
+
 # save the output 
 save_best_params <- function(dataset_name, model_type, activity_or_behaviour, results, bench_result) {
   data.frame(
@@ -26,10 +27,10 @@ save_best_params <- function(dataset_name, model_type, activity_or_behaviour, re
     number_trees = results$Best_Par["number_trees"],
     number_features = results$Best_Par["number_features"],
     Best_Value = results$Best_Value,
-    Time_seconds = as.numeric(bench_result$time) / 1e9,
-    Memory_bytes = as.numeric(bench_result$memory),
-    Cpu_seconds = as.numeric(bench_result$cpu) / 1e9,
-    GC_seconds = as.numeric(bench_result$gc) / 1e9 
+    Selected_Features <- results$Pred[which(results$History$Value == results$Best_Value), ],
+    Time_minutes = as.numeric(bench_result$total_time),
+    Memory_bytes = as.numeric(bench_result$mem_alloc),
+    n_gc = as.numeric(bench_result$N_gc)
   )
 }
 
@@ -50,32 +51,42 @@ if (!file.exists(occ_hyperparam_file)) {
   for (activity in target_activities) {
     print(paste("Tuning OCC model for activity:", activity))
     
-    # Benchmark the time for each model's Bayesian optimization using bench_time()
+    plan(multisession, workers = availableCores() - 1)
+    
+    # Benchmark with a single iteration
     bench_result <- bench::mark(
-      results <- BayesianOptimization(
-        FUN = function(nu, gamma, kernel, number_trees, number_features) {
-          OCCModelTuning(
-            feature_data = feature_data,
-            target_activity = activity, 
-            nu = nu,
-            kernel = kernel,
-            gamma = gamma,
-            number_trees = number_trees,
-            number_features = number_features
-          )
-        },
-        bounds = bounds,
-        init_points = 2,
-        n_iter = 5,
-        acq = "ucb",
-        kappa = 2.576 
-       ),
+      {
+        results <- BayesianOptimization(
+          FUN = function(nu, gamma, kernel, number_trees, number_features) {
+            OCCModelTuning(
+              feature_data = feature_data,
+              target_activity = activity, 
+              nu = nu,
+              kernel = kernel,
+              gamma = gamma,
+              number_trees = number_trees,
+              number_features = number_features
+            )
+          },
+          bounds = bounds,
+          init_points = 2,
+          n_iter = 5,
+          acq = "ucb",
+          kappa = 2.576 
+        )
+        NULL  # Avoid unnecessary post-processing in bench::mark
+      },
+      iterations = 1,  # Run only once
       check = FALSE
     )
-  
+    
+    # clean up memory
+    gc()
+    plan(sequential)
+    
     # Save best parameters
     results_stored[[activity]] <- save_best_params(
-      dataset_name, "OCC", activity, bench_result
+      dataset_name, "OCC", activity, results, bench_result
     )
   }
   
@@ -92,28 +103,37 @@ if (!file.exists(binary_hyperparam_file)) {
   for (activity in target_activities) {
     print(paste("Tuning binary model for activity:", activity))
     
-    # Benchmark the time for each model's Bayesian optimization using bench_time()
+    # Benchmark with only a single iteration
+    plan(multisession, workers = detectCores() - 1)
+    
     bench_result <- bench::mark(
-      results <- BayesianOptimization(
-        FUN = function(nu, gamma, kernel, number_trees, number_features) {
-          binaryModelTuning(
-            feature_data = feature_data,
-            target_activity = activity, 
-            nu = nu,
-            kernel = kernel,
-            gamma = gamma,
-            number_trees = number_trees,
-            number_features = number_features
-          )
-        },
-        bounds = bounds,
-        init_points = 5,
-        n_iter = 10,
-        acq = "ucb",
-        kappa = 2.576 
-      ),
+      {
+        results <- BayesianOptimization(
+          FUN = function(nu, gamma, kernel, number_trees, number_features) {
+            binaryModelTuning(
+              feature_data = feature_data,
+              target_activity = activity, 
+              nu = nu,
+              kernel = kernel,
+              gamma = gamma,
+              number_trees = number_trees,
+              number_features = number_features
+            )
+          },
+          bounds = bounds,
+          init_points = 5,
+          n_iter = 10,
+          acq = "ucb",
+          kappa = 2.576 
+        )
+        NULL  # Avoid unnecessary post-processing in bench::mark
+      },
+      iterations = 1,  # Run only once
       check = FALSE
     )
+    gc()
+    
+    plan(sequential)
     
     # Save best parameters
     best_params_list[[activity]] <- save_best_params(
@@ -152,26 +172,33 @@ if (!file.exists(multi_hyperparam_file)) {
     # Benchmark the time for each model's Bayesian optimization using bench::mark
     # run the search inside of a parallised loop
     plan(multisession, workers = detectCores() - 1)
+    
     bench_result <- bench::mark(
-      BayesianOptimization(
-        FUN = function(nu, gamma, kernel, number_trees, number_features) {
-          multiclassModelTuning(
-            multiclass_data = multiclass_data,
-            nu = nu,
-            kernel = kernel,
-            gamma = gamma,
-            number_trees = number_trees,
-            number_features = number_features
-          )
-        },
-        bounds = bounds,
-        init_points = 3,
-        n_iter = 7,
-        acq = "ucb",
-        kappa = 2.576
-      ),
+      {
+        BayesianOptimization(
+          FUN = function(nu, gamma, kernel, number_trees, number_features) {
+            multiclassModelTuning(
+              multiclass_data = multiclass_data,
+              nu = nu,
+              kernel = kernel,
+              gamma = gamma,
+              number_trees = number_trees,
+              number_features = number_features
+            )
+          },
+          bounds = bounds,
+          init_points = 3,
+          n_iter = 7,
+          acq = "ucb",
+          kappa = 2.576
+        )
+        NULL  # Avoid unnecessary storage in bench::mark
+      },
+      iterations = 1,  # Run only once
       check = FALSE
     )
+    
+    gc()
     
     # Save best parameters for this behaviour
     best_params_list[[behaviours]] <- save_best_params(

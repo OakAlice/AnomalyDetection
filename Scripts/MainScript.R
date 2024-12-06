@@ -18,16 +18,16 @@ window_settings <- list(Vehkaoja_Dog = list(sample_rate = 100,
                                   overlap_percent = 50,
                                   target_activities = c("swimming", "facerub",   "still",    "chewing"))
                         )
-sample_rate <- settings[[dataset_name]]$sample_rate
-window_length <- settings[[dataset_name]]$window_length
-overlap_percent <- settings[[dataset_name]]$overlap_percent
-target_activities <- settings[[dataset_name]]$target_activities
+sample_rate <- window_settings[[dataset_name]]$sample_rate
+window_length <- window_settings[[dataset_name]]$window_length
+overlap_percent <- window_settings[[dataset_name]]$overlap_percent
+target_activities <- window_settings[[dataset_name]]$target_activities
                         
 # install.packages("pacman")
 library(pacman)
 p_load(
   bench, caret, data.table, e1071, future, future.apply, parallelly,
-  plotly, PRROC, purrr, pROC, rBayesianOptimization,
+  plotly, PRROC, purrr, pROC, rBayesianOptimization, 
   randomForest, tsfeatures, tidyverse, umap, zoo, tinytex, patchwork
 )
 

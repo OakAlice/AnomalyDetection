@@ -21,8 +21,6 @@ OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, num
     iterations <- 1:3
     future_outcomes <- future_lapply(iterations, function(i) {
       tryCatch({
-        message(sprintf("Processing run %d", i))
-        flush.console() 
         
         set.seed(i)
         # Split data into training and validation sets
@@ -30,16 +28,11 @@ OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, num
         training_data <- as.data.table(data_split$training_data)
         validation_data <- as.data.table(data_split$validation_data)
         
-        message("Data split")
-        flush.console() 
-        
         # Feature selection
         # select only instances from the training condition, no access to outside information
         target_feature_data <- training_data[Activity == target_activity, ]
         selected_feature_data <- featureSelection(target_feature_data, number_trees, number_features)
         selected_feature_data <- selected_feature_data[complete.cases(selected_feature_data), ]
-        message("Features selected")
-        flush.console() 
         
         # Train SVM model
         selected_numeric_data <- selected_feature_data[, !"Activity", with = FALSE]
@@ -52,9 +45,6 @@ OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, num
                          kernel = kernel, 
                          gamma = gamma)
         single_class_SVM <- do.call(svm, svm_args)
-        
-        message("Model trained")
-        flush.console() 
         
         # Validate model
         # select the validation data, clean and format it
@@ -78,8 +68,6 @@ OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, num
         numeric_validation_data <- selected_validation_data[, !"Activity"]
         decision_scores <- predict(single_class_SVM, newdata = numeric_validation_data, decision.values = TRUE)
         scores <- as.numeric(attr(decision_scores, "decision.values"))
-        message("Predictions made")
-        flush.console() 
         
         results <- calculatePerformance(scores, ground_truth)
         
@@ -91,7 +79,8 @@ OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, num
           kernel = as.character(kernel),
           number_features = as.character(number_features),
           number_trees = as.character(number_trees),
-          F1_Score = as.numeric(results$F1_score)
+          F1_Score = as.numeric(results$F1_score),
+          top_features = as.character(top_features)
         )
       }, error = function(e) {
         message(sprintf("Error during run %d: %s", i, e$message))
@@ -103,7 +92,8 @@ OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, num
     model_outcomes <- rbindlist(future_outcomes, use.names = TRUE, fill = TRUE)
     avg_outcomes <- model_outcomes[, .(mean_F1 = mean(F1_Score, na.rm = TRUE)), 
                                    by = .(Activity, nu, gamma, kernel, number_features)]
-    
+    top_features <- future_outcomes$top_features[1]
+      
     list(Score = as.numeric(avg_outcomes$mean_F1), Pred = top_features)
   }, error = function(e) {
     message("Error during model tuning: ", e$message)
@@ -123,8 +113,6 @@ binaryModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, 
     folds <- 1:3
     future_outcomes <- future_lapply(folds, function(i) {
       tryCatch({
-        message(sprintf("Processing fold %d", i))
-        flush.console() 
         
         set.seed(i)
         # Split data into training and validation sets
@@ -209,8 +197,6 @@ multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, number_tre
   # Parallelise loop over iterations
   num_loops <- 1:loops
   f1_scores <- future_lapply(num_loops, function(i) {
-    message("Iteration: ", i)
-    flush.console() 
     
     tryCatch({
       set.seed(i)
@@ -222,8 +208,6 @@ multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, number_tre
       # Feature selection
       selected_feature_data <- featureSelection(training_data, number_trees, number_features)
       selected_feature_data <- na.omit(selected_feature_data)  # Clean the data
-      message("Features selected")
-      flush.console() 
       
       # Train SVM model with class balancing
       class_weights <- table(selected_feature_data$Activity)
@@ -240,8 +224,6 @@ multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, number_tre
         class.weights = class_weights
       )
       multiclass_SVM <- do.call(svm, svm_args)
-      message("Model trained")
-      flush.console() 
       
       # Validate the model
       top_features <- colnames(selected_feature_data)
@@ -252,8 +234,6 @@ multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, number_tre
       
       # Predictions
       predictions <- predict(multiclass_SVM, newdata = numeric_validation_data)
-      message("Predictions made")
-      flush.console() 
       
       # Compute confusion matrix and F1-scores
       confusion_matrix <- table(predictions, ground_truth_labels)
@@ -270,7 +250,7 @@ multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, number_tre
       
     }, error = function(e) {
       message("Error during iteration ", i, ": ", e$message)
-      return(NA)  # Return NA in case of an error
+      return(NA)  # Return NA when error
     })
   }, future.seed = TRUE)
   

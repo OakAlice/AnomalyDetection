@@ -2,7 +2,7 @@
 
 featureSelection <- function(training_data, number_trees, number_features) {
   tryCatch({
-    # Step 1: Eliminate features with no variance and high correlation
+    # Eliminate features with no variance and high correlation
     potential_features <- tryCatch({
       removeBadFeatures(training_data, threshold = 0.9)  # Remove features with no variance or high correlation
     }, error = function(e) {
@@ -10,12 +10,14 @@ featureSelection <- function(training_data, number_trees, number_features) {
       return(NULL)
     })
     
+    # If no potential features are found, return NULL
     if (is.null(potential_features)) {
-      return(NULL)  # Return NULL if potential features could not be determined
+      message("No potential features found after cleaning.")
+      return(NULL)
     }
     
     # Select relevant columns and clean up
-    selected_columns <- c(potential_features, "Activity", "Time", "ID")
+    selected_columns <- c(potential_features, "Activity")
     training_data_clean <- training_data[, ..selected_columns]
     training_data_clean <- na.omit(training_data_clean)  # Remove rows with NA values
     
@@ -26,7 +28,7 @@ featureSelection <- function(training_data, number_trees, number_features) {
       return(training_data_clean)
     }
     
-    # Step 3: Perform Random Forest feature selection if more than one class exists
+    # Perform Random Forest feature selection if more than one class exists
     if (length(potential_features) <= number_features) {
       # If there are fewer potential features than the requested number, select all
       top_features <- c(potential_features, "Activity")
@@ -50,11 +52,10 @@ featureSelection <- function(training_data, number_trees, number_features) {
       })
       
       if (is.null(feature_importance)) {
-        message("Feature selection failed, returning all features.")
+        message("Random Forest feature selection failed, returning all features.")
         return(training_data_clean)
       }
       
-      # Step 4: Select top features based on Random Forest results
       top_features <- tryCatch({
         feature_importance$Feature[1:number_features]
       }, error = function(e) {
@@ -64,15 +65,16 @@ featureSelection <- function(training_data, number_trees, number_features) {
       
       if (is.null(top_features)) {
         message("Top feature selection failed.")
-        return(NULL)
+        return(training_data_clean)  # Return the data without RF features
       }
       
       top_features <- c(top_features, "Activity")  # Add Activity to the selected features
     }
     
-    # Step 5: Select final features from the data
     selected_feature_data <- tryCatch({
       training_data_clean[, ..top_features]
+      
+      
     }, error = function(e) {
       message("Error in selecting final features: ", e$message)
       return(NULL)
