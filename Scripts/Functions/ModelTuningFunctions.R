@@ -69,7 +69,7 @@ OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, num
         decision_scores <- predict(single_class_SVM, newdata = numeric_validation_data, decision.values = TRUE)
         scores <- as.numeric(attr(decision_scores, "decision.values"))
         
-        results <- calculatePerformance(scores, ground_truth)
+        results <- calculateThresholdMetrics(scores, ground_truth_labels)
         
         # Compile results for this run
         list(
@@ -92,7 +92,8 @@ OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, num
     model_outcomes <- rbindlist(future_outcomes, use.names = TRUE, fill = TRUE)
     avg_outcomes <- model_outcomes[, .(mean_F1 = mean(F1_Score, na.rm = TRUE)), 
                                    by = .(Activity, nu, gamma, kernel, number_features)]
-    top_features <- future_outcomes$top_features[1]
+    best_index <- which.max(sapply(future_outcomes, function(x) x$F1_Score))
+    top_features <- future_outcomes[[best_index]]$top_features
       
     list(Score = as.numeric(avg_outcomes$mean_F1), Pred = top_features)
   }, error = function(e) {

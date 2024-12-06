@@ -16,21 +16,23 @@ bounds <- list(
 )
 
 # save the output 
-save_best_params <- function(dataset_name, model_type, activity_or_behaviour, results, bench_result) {
+save_best_params <- function(data_name, model_type, activity, elapsed_time, results) {
   data.frame(
-    data_name = dataset_name,
+    data_name = data_name,
     model_type = model_type,
-    behaviour_or_activity = activity_or_behaviour,
+    behaviour_or_activity = activity,
+    elapsed = as.numeric(elapsed_time[3]),
+    system = as.numeric(elapsed_time[2]),
+    user = as.numeric(elapsed_time[1]),
     nu = results$Best_Par["nu"],
     gamma = results$Best_Par["gamma"],
     kernel = results$Best_Par["kernel"],
     number_trees = results$Best_Par["number_trees"],
     number_features = results$Best_Par["number_features"],
     Best_Value = results$Best_Value,
-    Selected_Features <- results$Pred[which(results$History$Value == results$Best_Value), ],
-    Time_minutes = as.numeric(bench_result$total_time),
-    Memory_bytes = as.numeric(bench_result$mem_alloc),
-    n_gc = as.numeric(bench_result$N_gc)
+    Selected_Features = paste(
+      unlist(results$Pred[[which(results$History$Value == results$Best_Value)]]), 
+      collapse = ", ")
   )
 }
 
@@ -54,8 +56,7 @@ if (!file.exists(occ_hyperparam_file)) {
     plan(multisession, workers = availableCores() - 1)
     
     # Benchmark with a single iteration
-    bench_result <- bench::mark(
-      {
+    elapsed_time <- system.time({
         results <- BayesianOptimization(
           FUN = function(nu, gamma, kernel, number_trees, number_features) {
             OCCModelTuning(
@@ -69,24 +70,24 @@ if (!file.exists(occ_hyperparam_file)) {
             )
           },
           bounds = bounds,
-          init_points = 2,
-          n_iter = 5,
+          init_points = 5,
+          n_iter = 10,
           acq = "ucb",
           kappa = 2.576 
         )
-        NULL  # Avoid unnecessary post-processing in bench::mark
-      },
-      iterations = 1,  # Run only once
-      check = FALSE
-    )
+    })
     
-    # clean up memory
+    # clean up memory and return to normal processing
     gc()
     plan(sequential)
     
     # Save best parameters
     results_stored[[activity]] <- save_best_params(
-      dataset_name, "OCC", activity, results, bench_result
+      data_name = dataset_name, 
+      model_type = "OCC", 
+      activity = activity, 
+      elapsed_time = elapsed_time, 
+      results = results
     )
   }
   
@@ -95,6 +96,8 @@ if (!file.exists(occ_hyperparam_file)) {
 } else {
   print("One-class parameters have already been tuned and saved")
 }
+
+
 
 # Binary model tuning ------------------------------------------------------
 if (!file.exists(binary_hyperparam_file)) {
@@ -106,8 +109,7 @@ if (!file.exists(binary_hyperparam_file)) {
     # Benchmark with only a single iteration
     plan(multisession, workers = detectCores() - 1)
     
-    bench_result <- bench::mark(
-      {
+    elapsed_time <- system.time({
         results <- BayesianOptimization(
           FUN = function(nu, gamma, kernel, number_trees, number_features) {
             binaryModelTuning(
@@ -126,18 +128,20 @@ if (!file.exists(binary_hyperparam_file)) {
           acq = "ucb",
           kappa = 2.576 
         )
-        NULL  # Avoid unnecessary post-processing in bench::mark
-      },
-      iterations = 1,  # Run only once
-      check = FALSE
-    )
+    })
+    
     gc()
     
     plan(sequential)
     
     # Save best parameters
-    best_params_list[[activity]] <- save_best_params(
-      dataset_name, "Binary", activity, bench_result
+    # Save best parameters
+    results_stored[[activity]] <- save_best_params(
+      data_name = dataset_name, 
+      model_type = "Binary", 
+      activity = activity, 
+      elapsed_time = elapsed_time, 
+      results = results
     )
   }
   
@@ -173,9 +177,8 @@ if (!file.exists(multi_hyperparam_file)) {
     # run the search inside of a parallised loop
     plan(multisession, workers = detectCores() - 1)
     
-    bench_result <- bench::mark(
-      {
-        BayesianOptimization(
+    elapsed_time <- system.time({
+        results <- BayesianOptimization(
           FUN = function(nu, gamma, kernel, number_trees, number_features) {
             multiclassModelTuning(
               multiclass_data = multiclass_data,
@@ -187,22 +190,22 @@ if (!file.exists(multi_hyperparam_file)) {
             )
           },
           bounds = bounds,
-          init_points = 3,
-          n_iter = 7,
+          init_points = 5,
+          n_iter = 10,
           acq = "ucb",
           kappa = 2.576
         )
-        NULL  # Avoid unnecessary storage in bench::mark
-      },
-      iterations = 1,  # Run only once
-      check = FALSE
-    )
+    })
     
     gc()
     
     # Save best parameters for this behaviour
-    best_params_list[[behaviours]] <- save_best_params(
-      dataset_name, "Multi", behaviours, bench_result
+    results_stored[[activity]] <- save_best_params(
+      data_name = dataset_name, 
+      model_type = "Multi", 
+      activity = behaviours, 
+      elapsed_time = elapsed_time, 
+      results = results
     )
   }
   
