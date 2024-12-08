@@ -12,7 +12,7 @@ dataset_name <- "Vehkaoja_Dog"
 window_settings <- list(Vehkaoja_Dog = list(sample_rate = 100, 
                                     window_length = 1, 
                                     overlap_percent = 50,
-                                    target_activities = c("Walking", "Eating", "Shaking", "Lying Chest")),
+                                    target_activities = c("Walking", "Eating", "Shaking", "Lying chest")),
                 Ladds_Seal = list(sample_rate = 25,
                                   window_length = 1, 
                                   overlap_percent = 50,

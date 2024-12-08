@@ -2,85 +2,90 @@
 
 featureSelection <- function(training_data, number_trees, number_features) {
   tryCatch({
-    # Eliminate features with no variance and high correlation
-    potential_features <- tryCatch({
-      removeBadFeatures(training_data, threshold = 0.9)  # Remove features with no variance or high correlation
-    }, error = function(e) {
-      message("Error in removeBadFeatures: ", e$message)
-      return(NULL)
-    })
     
-    # If no potential features are found, return NULL
-    if (is.null(potential_features)) {
-      message("No potential features found after cleaning.")
-      return(NULL)
+    # Step 1: Filter numeric features
+    numeric_columns <- training_data[, .SD, .SDcols = !c("Activity", "Time", "ID")] %>% as.data.table()
+    
+    # Remove columns with >50% NA
+    na_threshold <- 0.5
+    na_fraction <- colMeans(is.na(numeric_columns))
+    valid_cols <- names(na_fraction[na_fraction <= na_threshold])
+    
+    if (length(valid_cols) == 0) {
+      stop("All numeric columns exceed the NA threshold.")
     }
+    selected_numeric_columns <- numeric_columns[, ..valid_cols]
     
-    # Select relevant columns and clean up
-    selected_columns <- c(potential_features, "Activity")
-    training_data_clean <- training_data[, ..selected_columns]
-    training_data_clean <- na.omit(training_data_clean)  # Remove rows with NA values
+    message("removed NA columns")
     
-    # Step 2: Check if there are multiple classes in the Activity column
-    if (length(unique(training_data_clean$Activity)) <= 1) {
-      message("Only one class, skipping Random Forest feature selection.")
-      # Return all features if only one class exists
-      return(training_data_clean)
+    # Remove zero-variance columns
+    zero_variance <- sapply(selected_numeric_columns, function(col) sd(col, na.rm = TRUE) == 0)
+    valid_cols <- names(zero_variance[!zero_variance])
+    if (length(valid_cols) == 0) {
+      stop("All numeric columns have zero variance.")
     }
+    numeric_columns <- numeric_columns[, ..valid_cols]
+    message("removed 0 variance columns")
     
-    # Perform Random Forest feature selection if more than one class exists
-    if (length(potential_features) <= number_features) {
-      # If there are fewer potential features than the requested number, select all
-      top_features <- c(potential_features, "Activity")
+    # Remove highly correlated features
+    if (ncol(numeric_columns) > 1) {
+      corr_matrix <- cor(numeric_columns, use = "pairwise.complete.obs")
+      high_corr <- findCorrelation(corr_matrix, cutoff = 0.9, names = TRUE)
+      remaining_features <- setdiff(names(numeric_columns), high_corr)
     } else {
-      # Subsampling to reduce size of training data
-      training_data_sampled <- training_data_clean %>%
-        group_by(Activity, ID) %>%
-        slice_sample(prop = 0.25) %>%
-        ungroup()
-      
-      # Perform Random Forest feature selection
-      feature_importance <- tryCatch({
-        featureSelectionRF(
-          data = training_data_sampled,
-          n_trees = as.numeric(number_trees),
-          number_features = as.numeric(number_features)
-        )
-      }, error = function(e) {
-        message("Error in featureSelectionRF: ", e$message)
-        return(NULL)
-      })
-      
-      if (is.null(feature_importance)) {
-        message("Random Forest feature selection failed, returning all features.")
-        return(training_data_clean)
-      }
-      
-      top_features <- tryCatch({
-        feature_importance$Feature[1:number_features]
-      }, error = function(e) {
-        message("Error in selecting top features: ", e$message)
-        return(NULL)
-      })
-      
-      if (is.null(top_features)) {
-        message("Top feature selection failed.")
-        return(training_data_clean)  # Return the data without RF features
-      }
-      
-      top_features <- c(top_features, "Activity")  # Add Activity to the selected features
+      remaining_features <- names(numeric_columns)
     }
     
-    selected_feature_data <- tryCatch({
-      training_data_clean[, ..top_features]
-      
-      
-    }, error = function(e) {
-      message("Error in selecting final features: ", e$message)
-      return(NULL)
-    })
+    if (length(remaining_features) == 0) {
+      stop("No features remain after removing highly correlated columns.")
+    }
+    message("removed highly correlated features")
     
-    return(selected_feature_data)
+    # Step 2: Clean training data
+    training_data_clean <- training_data[, .SD, .SDcols = c(remaining_features, "Activity")]
+    training_data_clean <- na.omit(training_data_clean)
+    
+    # Define top_features as a fallback
+    top_features <- remaining_features
+    
+    # Step 3: Check for multiple classes in Activity column
+    if (length(unique(training_data_clean$Activity)) <= 1) {
+      message("Only one class detected; skipping Random Forest feature selection.")
+    } else {
+      # Step 4: Random Forest feature selection
+      if (length(remaining_features) > number_features) {
+        message("Starting Random Forest feature selection.")
+        sampled_data <- training_data_clean %>%
+          group_by(Activity) %>%
+          slice_sample(prop = 0.25) %>%
+          ungroup() %>%
+          as.data.frame()
+        
+        feature_importance <- tryCatch({
+          featureSelectionRF(
+            data = sampled_data,
+            n_trees = as.numeric(number_trees),
+            number_features = as.numeric(number_features)
+          )
+        }, error = function(e) {
+          message("Error in featureSelectionRF: ", e$message)
+          return(NULL)
+        })
+        
+        if (!is.null(feature_importance)) {
+          top_features <- feature_importance$Feature[1:number_features]
+        } else {
+          message("Random Forest feature selection failed; returning all features.")
+        }
+      }
+    }
+    
+    # Include "Activity" in the final feature set
+    top_features <- c(top_features, "Activity")
+    message("selected top features")
+    
+    # Return the final dataset with selected features
+    return(training_data_clean[, ..top_features])
     
   }, error = function(e) {
     message("Error in featureSelection: ", e$message)
@@ -88,13 +93,12 @@ featureSelection <- function(training_data, number_trees, number_features) {
   })
 }
 
-
 # Random Forest Feature Selection with tryCatch ####
 featureSelectionRF <- function(data, n_trees, number_features) {
   
   data <- data[complete.cases(data), ]
   target <- as.factor(data$Activity)
-  numeric_features <- data[, .SD, .SDcols = setdiff(names(data), c("Time", "ID", "Activity"))]
+  numeric_features <- data[, !(names(data) %in% "Activity")]
   
   # Fit Random Forest model
   rf_model <- tryCatch({
@@ -135,22 +139,4 @@ featureSelectionRF <- function(data, n_trees, number_features) {
   
   # Return selected features
   return(top_features)
-}
-
-
-# Select Potential Features (Variance and Correlation Threshold) ####
-removeBadFeatures <- function(feature_data, threshold) {
-  
-  # Step 1: Calculate variance for numeric columns
-  numeric_columns <- feature_data[, .SD, .SDcols = !c("Activity", "Time", "ID")]
-  variances <- numeric_columns[, lapply(.SD, var, na.rm = TRUE)]
-  selected_columns <- names(variances)[!is.na(variances) & variances > threshold]
-  
-  # Step 2: Remove highly correlated features
-  numeric_columns <- numeric_columns[, ..selected_columns]
-  corr_matrix <- cor(numeric_columns, use = "pairwise.complete.obs")
-  high_corr <- findCorrelation(corr_matrix, cutoff = 0.9)
-  remaining_features <- setdiff(names(numeric_columns), names(numeric_columns)[high_corr])
-  
-  return(remaining_features)
 }

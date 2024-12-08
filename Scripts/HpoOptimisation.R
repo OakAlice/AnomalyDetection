@@ -15,6 +15,13 @@ bounds <- list(
   number_features = c(10, 75)
 )
 
+# and just for OCC, which doesn't have trees and features
+OCCbounds <- list(
+  nu = c(0.001, 0.1),
+  gamma = c(0.001, 0.1),
+  kernel = c(1, 2, 3)
+)
+
 # save the output 
 save_best_params <- function(data_name, model_type, activity, elapsed_time, results) {
   data.frame(
@@ -50,6 +57,8 @@ if (!file.exists(occ_hyperparam_file)) {
     select(-c("OtherActivity", "GeneralisedActivity")) %>%
     as.data.table()
   
+  # feature_data <- feature_data %>% group_by(Activity, ID) %>% slice(1:10) %>% ungroup()
+  
   for (activity in target_activities) {
     print(paste("Tuning OCC model for activity:", activity))
     
@@ -58,18 +67,18 @@ if (!file.exists(occ_hyperparam_file)) {
     # Benchmark with a single iteration
     elapsed_time <- system.time({
         results <- BayesianOptimization(
-          FUN = function(nu, gamma, kernel, number_trees, number_features) {
+          FUN = function(nu, gamma, kernel, number_trees, number_features) { # dont need to tune the tree parameters
             OCCModelTuning(
               feature_data = feature_data,
               target_activity = activity, 
               nu = nu,
               kernel = kernel,
               gamma = gamma,
-              number_trees = number_trees,
-              number_features = number_features
+              validation_proportion = validation_proportion, 
+              balance = "non_stratified_balance"
             )
           },
-          bounds = bounds,
+          bounds = OCCbounds,
           init_points = 5,
           n_iter = 10,
           acq = "ucb",
@@ -103,11 +112,17 @@ if (!file.exists(occ_hyperparam_file)) {
 if (!file.exists(binary_hyperparam_file)) {
   best_params_list <- list()
   
+  feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv"))) %>%
+    select(-c("OtherActivity", "GeneralisedActivity")) %>%
+    as.data.table()
+  
+  feature_data <- feature_data %>% group_by(ID, Activity) %>% slice(1:20) %>% ungroup() %>% as.data.table()
+  
   for (activity in target_activities) {
     print(paste("Tuning binary model for activity:", activity))
     
     # Benchmark with only a single iteration
-    plan(multisession, workers = detectCores() - 1)
+    plan(multisession, workers = availableCores() - 1)
     
     elapsed_time <- system.time({
         results <- BayesianOptimization(
@@ -129,8 +144,6 @@ if (!file.exists(binary_hyperparam_file)) {
           kappa = 2.576 
         )
     })
-    
-    gc()
     
     plan(sequential)
     
