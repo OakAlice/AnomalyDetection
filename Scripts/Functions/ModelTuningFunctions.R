@@ -10,37 +10,36 @@ split_data <- function(feature_data, validation_proportion) {
   return(list(training_data = training_data, validation_data = validation_data))
 }
 
+
 # 1-Class Model Tuning ----------------------------------------------------
 OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, validation_proportion, balance) {
   tryCatch({
     # Adjust kernel value
     kernel <- ifelse(kernel < 0.5, "linear", ifelse(kernel < 1.5, "radial", "polynomial"))
     
-    outcomes <- list()  # List to store outcomes from multiple runs
-    
     # Parallelize the loop for 3 iterations
     iterations <- 1:3
     future_outcomes <- future_lapply(iterations, function(i) {
       tryCatch({
-        
         set.seed(i)
         # Split data into training and validation sets
         data_split <- split_data(feature_data, validation_proportion)
         training_data <- as.data.table(data_split$training_data)
         validation_data <- as.data.table(data_split$validation_data)
-        message("data split")
+        
+        # Check that the target activity has appeared in the validation data
+        if (sum(validation_data$Activity == target_activity) == 0) {
+          message(target_activity, " was not represented in this validation fold - skipping fold")
+          return(NULL) # Skip this iteration
+        }
         
         # Feature selection
-        # select only instances from the training condition, no access to outside information
         target_training_data <- training_data[Activity == target_activity, ]
-        
         selected_feature_data <- featureSelection(training_data = target_training_data, number_trees = NULL, number_features = NULL)
         selected_feature_data <- selected_feature_data[complete.cases(selected_feature_data), ]
-        message("features found")
         
         # Train SVM model
         selected_numeric_data <- selected_feature_data[, !"Activity", with = FALSE]
-        
         svm_args <- list(x = selected_numeric_data, 
                          y = NULL, 
                          type = "one-classification", 
@@ -49,10 +48,8 @@ OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, val
                          kernel = kernel, 
                          gamma = gamma)
         single_class_SVM <- do.call(svm, svm_args)
-        message("model trained")
         
         # Validate model
-        # select the validation data, clean and format it
         top_features <- colnames(selected_feature_data)
         selected_validation_data <- validation_data[, .SD, .SDcols = top_features]
         
@@ -65,18 +62,33 @@ OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, val
           selected_validation_data <- selected_validation_data[, .SD[sample(.N, min(.N, activity_count))], by = Activity]
         }
         
-        selected_validation_data[Activity != target_activity, Activity := "Other"]
+        selected_validation_data[selected_validation_data$Activity != target_activity, Activity := "Other"]
         selected_validation_data <- selected_validation_data[complete.cases(selected_validation_data), ]
-        message("validation data prepared")
         
         # Generate predictions and calculate performance
-        ground_truth <- ifelse(selected_validation_data$Activity == as.character(target_activity), 1, -1)
-        numeric_validation_data <- selected_validation_data[, !"Activity"]
-        decision_scores <- predict(single_class_SVM, newdata = numeric_validation_data, decision.values = TRUE)
-        scores <- as.numeric(attr(decision_scores, "decision.values"))
+        ground_truth <- selected_validation_data$Activity
+        predictions <- predict(single_class_SVM, newdata = as.matrix(selected_validation_data[, !("Activity"), with = FALSE]))
+        predictions <- ifelse(predictions == FALSE, "Other", target_activity)
         
-        results <- calculateThresholdMetrics(scores, ground_truth)
-        message("results calculated")
+        if (length(predictions) != length(ground_truth)) {
+          stop("Length of predictions and ground_truth must be the same.")
+        }
+        
+        # Ensure predictions and ground_truth are factors with the same levels
+        unique_classes <- sort(union(predictions, ground_truth))
+        predictions <- factor(predictions, levels = unique_classes)
+        ground_truth <- factor(ground_truth, levels = unique_classes)
+        
+        # Compute confusion matrix
+        confusion_matrix <- table(predictions, ground_truth)
+        
+        # Calculate F1 scores
+        metrics <- confusionMatrix(confusion_matrix)
+        f1_scores <- metrics$F1
+        
+        # Replace NAs with 0
+        f1_scores[is.na(f1_scores)] <- 0
+        F1_score <- mean(f1_scores, na.rm = TRUE)
         
         # Compile results for this run
         list(
@@ -84,7 +96,7 @@ OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, val
           nu = as.character(nu),
           gamma = as.character(gamma),
           kernel = as.character(kernel),
-          F1_Score = as.numeric(results$F1_score),
+          F1_Score = as.numeric(F1_score),
           top_features = as.character(top_features)
         )
       }, error = function(e) {
@@ -93,13 +105,22 @@ OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, val
       })
     }, future.seed = TRUE)
     
+    # Filter out NULL results
+    future_outcomes <- Filter(Negate(is.null), future_outcomes)
+    
+    # Check if any valid results exist
+    if (length(future_outcomes) == 0) {
+      message("No valid outcomes from the runs")
+      return(list(Score = NA, Pred = NA))
+    }
+    
     # Combine the outcomes from the parallelized runs
     model_outcomes <- rbindlist(future_outcomes, use.names = TRUE, fill = TRUE)
     avg_outcomes <- model_outcomes[, .(mean_F1 = mean(F1_Score, na.rm = TRUE)), 
                                    by = .(Activity, nu, gamma, kernel)]
     best_index <- which.max(sapply(future_outcomes, function(x) x$F1_Score))
     top_features <- future_outcomes[[best_index]]$top_features
-      
+    
     list(Score = as.numeric(avg_outcomes$mean_F1), Pred = top_features)
   }, error = function(e) {
     message("Error during model tuning: ", e$message)
@@ -108,25 +129,22 @@ OCCModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, val
 }
 
 
+
 # Binary Model Tuning -----------------------------------------------------
 binaryModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, number_trees, number_features, validation_proportion = 0.33) {
   tryCatch({
     # Map kernel value to type
     kernel <- ifelse(kernel < 0.5, "linear", ifelse(kernel < 1.5, "radial", "polynomial"))
-    outcomes_list <- list()  # Store results for each fold
     
     # Parallelize the loop for 3 folds
     folds <- 1:3
     future_outcomes <- future_lapply(folds, function(i) {
       tryCatch({
-        
         set.seed(i)
         # Split data into training and validation sets
         data_split <- split_data(feature_data, validation_proportion)
         training_data <- data_split$training_data
         validation_data <- data_split$validation_data
-        
-        message("data split")
         
         # Binary encoding of activity
         training_data[training_data$Activity != target_activity, Activity := "Other"]
@@ -135,14 +153,10 @@ binaryModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, 
         selected_features <- featureSelection(training_data, number_trees, number_features)
         selected_features <- selected_features[complete.cases(selected_features), ]
         
-        message("features selected")
-        
-        # Train SVM model # this time with Activity as the binary
-        # account for the imbalance in the data by setting class weights
+        # Train SVM model
         class_weights <- table(selected_features$Activity)
         class_weights <- max(class_weights) / class_weights
         
-        # Fit the SVM model with parameters for this round
         svm_model <- svm(
           x = as.matrix(selected_features[, !("Activity"), with = FALSE]),
           y = as.factor(selected_features$Activity),
@@ -151,9 +165,8 @@ binaryModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, 
           kernel = kernel,
           gamma = gamma,
           scale = TRUE,
-          class.weights = class_weights 
+          class.weights = class_weights
         )
-        message("model tuned")
         
         # Validation
         top_features <- colnames(selected_features)
@@ -163,45 +176,52 @@ binaryModelTuning <- function(feature_data, target_activity, nu, kernel, gamma, 
         
         predictions <- predict(svm_model, newdata = as.matrix(selected_validation_data[, !("Activity"), with = FALSE]))
         
-        message("predictions made")
-        
-        # Compute F1 score and then average
+        # Compute F1 score
         metrics <- confusionMatrix(predictions, as.factor(selected_validation_data$Activity), positive = target_activity)
         f1_scores <- metrics$byClass["F1"]
-        f1_scores[is.na(f1_scores)] <- 0 # in case of NA, set to 0 before taking macro
+        f1_scores[is.na(f1_scores)] <- 0
         macro_f1 <- mean(f1_scores, na.rm = TRUE)
         
-        # Store fold results
+        # Return results for the fold
         data.frame(
-          Activity = as.character(target_activity),
-          nu = as.character(nu),
-          gamma = as.character(gamma),
-          kernel = as.character(kernel),
-          number_features = as.numeric(number_features),
-          number_trees = as.numeric(number_trees),
-          F1_Score = as.numeric(macro_f1),
-          top_features = unlist(paste(top_features, collapse= ", "))
+          Activity = target_activity,
+          nu = nu,
+          gamma = gamma,
+          kernel = kernel,
+          number_features = number_features,
+          number_trees = number_trees,
+          F1_Score = macro_f1,
+          top_features = paste(top_features, collapse = ", ")
         )
-        
-        message("results calculated")
-        
       }, error = function(e) {
         message(sprintf("Error in fold %d: %s", i, e$message))
         NULL
       })
     }, future.seed = TRUE)
     
-    # Combine the outcomes from the parallelized folds
-    model_outcomes <- rbind(future_outcomes) %>% as.data.table()
-    avg_outcomes <- model_outcomes[, .(mean_F1 = mean(F1_Score, na.rm = TRUE)), 
-                                   by = .(Activity, nu, gamma, kernel, number_features, number_trees)]
-    best_index <- which.max(future_outcomes$F1_Score)
-    top_features <- future_outcomes$top_features[[best_index]]
+    # Remove NULL outcomes and combine results
+    future_outcomes <- do.call(rbind, Filter(Negate(is.null), future_outcomes))
     
-    list(Score = mean_F1, Pred = top_features)  # Return average F1 score
+    # Ensure outcomes exist
+    if (nrow(future_outcomes) == 0) {
+      stop("No valid outcomes generated from folds.")
+    }
+    
+    # Calculate average F1 Score
+    avg_outcomes <- aggregate(F1_Score ~ Activity + nu + gamma + kernel + number_features + number_trees, 
+                              data = future_outcomes, 
+                              FUN = mean, na.rm = TRUE)
+    
+    # Find the best result
+    best_index <- which.max(future_outcomes$F1_Score)
+    top_features <- future_outcomes$top_features[best_index]
+    
+    # Return results
+    list(Score = avg_outcomes$F1_Score, Pred = top_features)
+    
   }, error = function(e) {
     message("Error in binary model tuning: ", e$message)
-    return(list(Score = NA, Pred = NA))  # Return NA on error
+    return(list(Score = NA, Pred = NA))
   })
 }
 
