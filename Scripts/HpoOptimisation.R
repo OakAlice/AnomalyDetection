@@ -43,6 +43,8 @@ save_results <- function(results_list, file_path) {
 
 model_type <- c("OCC", "Binary")
 
+### TO DO: Add in binary logic for predictions ####
+
 # Model tuning master call --------------------------------------------------
 for (model in model_type){
   if(exists(file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_", model, "_hyperparmaters.csv")))){
@@ -100,10 +102,8 @@ for (model in model_type){
   }
   
   # Save the results and benchmark times and resources
-  save_results(results_stored, hyperparam_file)
-} else {
-  print("OCC and Binary parameters have already been tuned and saved")
-}
+  save_results(results_stored, file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_", model, "_hyperparmaters.csv")))
+  }
 }
 
 # Multiclass model tuning -------------------------------------------------

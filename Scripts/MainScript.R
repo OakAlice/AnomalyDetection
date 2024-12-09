@@ -27,10 +27,9 @@ target_activities <- window_settings[[dataset_name]]$target_activities
 library(pacman)
 p_load(
   bench, caret, data.table, e1071, future, future.apply, parallelly,
-  plotly, PRROC, purrr, pROC, rBayesianOptimization, 
+  plotly, PRROC, purrr, pROC, rBayesianOptimization, MLmetrics,
   randomForest, tsfeatures, tidyverse, umap, zoo, tinytex, patchwork
 )
-library(MLmetrics)
 
 # global variables
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")

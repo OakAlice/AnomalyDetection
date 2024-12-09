@@ -41,6 +41,7 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number
     future_outcomes <- future_lapply(iterations, function(i) {
       tryCatch({
         set.seed(i)
+        print(i)
         # Split data into training and validation sets and formats them appropriate for OCC and binary respectively
         data_split <- split_data(model, activity, balance, feature_data, validation_proportion)
         training_data <- as.data.table(data_split$training_data)
@@ -58,6 +59,10 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number
         
         # Train SVM model
         numeric_training_data <- selected_training_data[, !"Activity", with = FALSE]
+        if (anyNA(numeric_training_data) || any(!is.finite(as.matrix(numeric_training_data)))) {
+          stop("Training data contains invalid values (NA, NaN, or Inf).")
+        }
+        
         svm_args <- list(
           x = numeric_training_data,
           type = ifelse(model == "OCC", "one-classification", "C-classification"),
@@ -80,13 +85,24 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number
         
         # Select features from the validation data
         top_features <- colnames(selected_training_data)
+        
         selected_validation_data <- validation_data[, .SD, .SDcols = top_features]
         selected_validation_data <- na.omit(selected_validation_data)
+        selected_validation_data <- as.data.table(selected_validation_data)
         
         # Generate predictions and calculate performance
         ground_truth_labels <- selected_validation_data$Activity
         numeric_validation_data <- selected_validation_data[, !("Activity"), with = FALSE]
-      
+        
+        
+        invalid_row_indices <- which(!complete.cases(numeric_validation_data) | 
+                                       !apply(numeric_validation_data, 1, function(row) all(is.finite(row))))
+        
+        if (length(invalid_row_indices) > 0) {
+          numeric_validation_data <- numeric_validation_data[-invalid_row_indices, , drop = FALSE]
+          ground_truth_labels <- ground_truth_labels[-invalid_row_indices]
+        }
+        
         predictions <- predict(trained_SVM, newdata = numeric_validation_data)
         
         if (model == "OCC"){
