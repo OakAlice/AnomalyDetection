@@ -4,7 +4,7 @@
 
 # Set Up ------------------------------------------------------------------
 
-#base_path <- "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
+# base_path <- "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
 base_path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
 # dataset_name <- "Ladds_Seal"
 dataset_name <- "Vehkaoja_Dog"

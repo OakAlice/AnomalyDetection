@@ -63,11 +63,13 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number
     kernel <- ifelse(kernel < 0.5, "linear", ifelse(kernel < 1.5, "radial", "polynomial"))
     
     # Parallelize loop for 3 iterations
-    iterations <- 1:3
+    iterations <- 1:1
     future_outcomes <- future_lapply(iterations, function(i) {
       tryCatch({
         set.seed(i)
-        print(i)
+        message(i)
+        flush.console()
+        
         # Split data into training and validation sets and formats them appropriate for OCC and binary respectively
         data_split <- split_data(model, activity, balance, feature_data, validation_proportion)
         training_data <- as.data.table(data_split$training_data)

@@ -89,8 +89,8 @@ for (model in model_type){
           )
         },
         bounds = bounds,
-        init_points = 5,
-        n_iter = 10,
+        init_points = 2,
+        n_iter = 3,
         acq = "ucb",
         kappa = 2.576 
       )

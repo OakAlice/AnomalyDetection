@@ -2,6 +2,8 @@
 
 featureSelection <- function(training_data, number_features, corr_threshold = 0.9) {
   tryCatch({
+    # ensure this is a whole number
+    number_features <- round(number_features, 0)
     # Step 1: Filter numeric features
     numeric_columns <- training_data %>%
       select(-Activity, -Time, -ID) %>%
@@ -85,7 +87,7 @@ featureSelectionRF <- function(data, n_trees, number_features) {
     rf_model <- ranger(
       dependent.variable.name = "Activity",
       data = data,
-      num.trees = round(n_trees, 0),
+      num.trees = n_trees,
       importance = "impurity",  # Equivalent to MeanDecreaseAccuracy
       classification = TRUE,
       probability = FALSE
@@ -105,4 +107,3 @@ featureSelectionRF <- function(data, n_trees, number_features) {
     return(NULL)
   })
 }
-
