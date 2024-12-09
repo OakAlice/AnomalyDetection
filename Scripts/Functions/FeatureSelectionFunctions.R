@@ -16,8 +16,6 @@ featureSelection <- function(training_data, number_trees, number_features) {
     }
     selected_numeric_columns <- numeric_columns[, ..valid_cols]
     
-    message("removed NA columns")
-    
     # Remove zero-variance columns
     zero_variance <- sapply(selected_numeric_columns, function(col) sd(col, na.rm = TRUE) == 0)
     valid_cols <- names(zero_variance[!zero_variance])
@@ -25,7 +23,6 @@ featureSelection <- function(training_data, number_trees, number_features) {
       stop("All numeric columns have zero variance.")
     }
     numeric_columns <- numeric_columns[, ..valid_cols]
-    message("removed 0 variance columns")
     
     # Remove highly correlated features
     if (ncol(numeric_columns) > 1) {
@@ -39,18 +36,17 @@ featureSelection <- function(training_data, number_trees, number_features) {
     if (length(remaining_features) == 0) {
       stop("No features remain after removing highly correlated columns.")
     }
-    message("removed highly correlated features")
     
     # Step 2: Clean training data
     training_data_clean <- training_data[, .SD, .SDcols = c(remaining_features, "Activity")]
     training_data_clean <- na.omit(training_data_clean)
     
-    # Define top_features as a fallback
-    top_features <- remaining_features
+    # message("features cleaned")
     
     # Step 3: Check for multiple classes in Activity column
     if (length(unique(training_data_clean$Activity)) <= 1) {
       message("Only one class detected; skipping Random Forest feature selection.")
+      top_features <- remaining_features
     } else {
       # Step 4: Random Forest feature selection
       if (length(remaining_features) > number_features) {
@@ -82,7 +78,6 @@ featureSelection <- function(training_data, number_trees, number_features) {
     
     # Include "Activity" in the final feature set
     top_features <- c(top_features, "Activity")
-    message("selected top features")
     
     # Return the final dataset with selected features
     return(training_data_clean[, ..top_features])

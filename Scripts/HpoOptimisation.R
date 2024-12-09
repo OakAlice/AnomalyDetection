@@ -2,8 +2,7 @@
 # Hyperparameter Optimisation ---------------------------------------------
 
 # define the save paths
-occ_hyperparam_file <- file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_OCC_hyperparmaters.csv"))
-binary_hyperparam_file <- file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_Binary_hyperparmaters.csv"))
+hyperparam_file <- file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_OCCandBinary_hyperparmaters.csv"))
 multi_hyperparam_file <- file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_Multi_hyperparmaters.csv"))
 
 # Define bounds for Bayesian Optimization of SVMs
@@ -41,8 +40,14 @@ save_results <- function(results_list, file_path) {
   fwrite(results_df, file_path, row.names = FALSE)
 }
 
-# OCC model tuning --------------------------------------------------------
-if (!file.exists(occ_hyperparam_file)) {
+
+model_type <- c("OCC", "Binary")
+
+# Model tuning master call --------------------------------------------------
+for (model in model_type){
+  if(exists(file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_", model, "_hyperparmaters.csv")))){
+    message("Hyperparmeters already tuned for ", dataset_name," ", model, " models")
+  } else {
   results_stored <- list()
   
   # load in the training data
@@ -51,20 +56,23 @@ if (!file.exists(occ_hyperparam_file)) {
     as.data.table()
   
   for (activity in target_activities) {
-    print(paste("Tuning OCC model for activity:", activity))
+    print(paste("Tuning", model , "model for activity:", activity))
     
     plan(multisession, workers = availableCores() - 1)
-    
+
     # Benchmark with a single iteration
     elapsed_time <- system.time({
         results <- BayesianOptimization(
           FUN = function(nu, gamma, kernel, number_trees, number_features) {
-            OCCModelTuning(
-              feature_data = feature_data,
-              target_activity = activity, 
+            modelTuning(
+              model = model,
+              activity = activity,
+              feature_data = feature_data, 
               nu = nu,
               kernel = kernel,
               gamma = gamma,
+              number_trees,
+              number_features,
               validation_proportion = validation_proportion,
               balance = balance
             )
@@ -92,68 +100,11 @@ if (!file.exists(occ_hyperparam_file)) {
   }
   
   # Save the results and benchmark times and resources
-  save_results(results_stored, occ_hyperparam_file)
+  save_results(results_stored, hyperparam_file)
 } else {
-  print("One-class parameters have already been tuned and saved")
+  print("OCC and Binary parameters have already been tuned and saved")
 }
-
-
-
-# Binary model tuning ------------------------------------------------------
-
-if (!file.exists(binary_hyperparam_file)) {
-  best_params_list <- list()
-  
-  feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv"))) %>%
-    select(-c("OtherActivity", "GeneralisedActivity")) %>%
-    as.data.table()
-  
-  for (activity in target_activities) {
-    print(paste("Tuning binary model for activity:", activity))
-    
-    # Benchmark with only a single iteration
-    plan(multisession, workers = availableCores() - 1)
-    
-    elapsed_time <- system.time({
-        results <- BayesianOptimization(
-          FUN = function(nu, gamma, kernel, number_trees, number_features) {
-            binaryModelTuning(
-              feature_data = feature_data,
-              target_activity = activity, 
-              nu = nu,
-              kernel = kernel,
-              gamma = gamma,
-              number_trees = number_trees,
-              number_features = number_features
-            )
-          },
-          bounds = bounds,
-          init_points = 5,
-          n_iter = 10,
-          acq = "ucb",
-          kappa = 2.576 
-        )
-    })
-    
-    plan(sequential)
-    
-    # Save best parameters
-    # Save best parameters
-    results_stored[[activity]] <- save_best_params(
-      data_name = dataset_name, 
-      model_type = "Binary", 
-      activity = activity, 
-      elapsed_time = elapsed_time, 
-      results = results
-    )
-  }
-  
-  # Save the results and benchmark times and resources
-  save_results(results_stored, binary_hyperparam_file)
-} else {
-  print("Binary parameters have already been tuned and saved")
 }
-
 
 # Multiclass model tuning -------------------------------------------------
 if (!file.exists(multi_hyperparam_file)) {

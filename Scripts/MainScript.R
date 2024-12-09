@@ -30,6 +30,7 @@ p_load(
   plotly, PRROC, purrr, pROC, rBayesianOptimization, 
   randomForest, tsfeatures, tidyverse, umap, zoo, tinytex, patchwork
 )
+library(MLmetrics)
 
 # global variables
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
