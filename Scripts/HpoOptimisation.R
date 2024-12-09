@@ -5,15 +5,6 @@
 hyperparam_file <- file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_OCCandBinary_hyperparmaters.csv"))
 multi_hyperparam_file <- file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_Multi_hyperparmaters.csv"))
 
-# Define bounds for Bayesian Optimization of SVMs
-bounds <- list(
-  nu = c(0.001, 0.1),
-  gamma = c(0.001, 0.1),
-  kernel = c(1, 2, 3),
-  number_trees = c(100, 500),
-  number_features = c(10, 75)
-)
-
 # save the output 
 save_best_params <- function(data_name, model_type, activity, elapsed_time, results) {
   data.frame(
@@ -40,10 +31,16 @@ save_results <- function(results_list, file_path) {
   fwrite(results_df, file_path, row.names = FALSE)
 }
 
-
 model_type <- c("OCC", "Binary")
 
-### TO DO: Add in binary logic for predictions ####
+# Define bounds for Bayesian Optimization of SVMs
+bounds <- list(
+  nu = c(0.001, 0.1),
+  gamma = c(0.001, 0.1),
+  kernel = c(1, 2, 3),
+  number_features = c(5, 100)
+)
+
 
 # Model tuning master call --------------------------------------------------
 for (model in model_type){
@@ -57,34 +54,46 @@ for (model in model_type){
     select(-c("OtherActivity", "GeneralisedActivity")) %>%
     as.data.table()
   
+  # feature_data <- feature_data %>% group_by(ID, Activity) %>% slice(1:100) %>% ungroup() %>% as.data.table()
+
   for (activity in target_activities) {
     print(paste("Tuning", model , "model for activity:", activity))
     
     plan(multisession, workers = availableCores() - 1)
-
-    # Benchmark with a single iteration
+    
+      test <- modelTuning(
+      model = "Binary",
+      activity = "Lying chest",
+      feature_data = feature_data, 
+      nu = 0.1,
+      kernel = 1.1,
+      gamma = 0.01,
+      number_features = 40,
+      validation_proportion = validation_proportion,
+      balance = balance
+    )
+  
     elapsed_time <- system.time({
-        results <- BayesianOptimization(
-          FUN = function(nu, gamma, kernel, number_trees, number_features) {
-            modelTuning(
-              model = model,
-              activity = activity,
-              feature_data = feature_data, 
-              nu = nu,
-              kernel = kernel,
-              gamma = gamma,
-              number_trees,
-              number_features,
-              validation_proportion = validation_proportion,
-              balance = balance
-            )
-          },
-          bounds = bounds,
-          init_points = 5,
-          n_iter = 10,
-          acq = "ucb",
-          kappa = 2.576 
-        )
+      results <- BayesianOptimization(
+        FUN = function(nu, gamma, kernel, number_features) {
+          modelTuning(
+            model = model,
+            activity = activity,
+            feature_data = feature_data,
+            nu = nu,
+            kernel = kernel,
+            gamma = gamma,
+            number_features = number_features,
+            validation_proportion = validation_proportion,
+            balance = balance
+          )
+        },
+        bounds = bounds,
+        init_points = 5,
+        n_iter = 10,
+        acq = "ucb",
+        kappa = 2.576 
+      )
     })
     
     # clean up memory and return to normal processing

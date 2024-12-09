@@ -1,37 +1,63 @@
 
 #  Functions for tuning the model hyperparameters across k_fold loops --------
 
-split_data <- function(model, activity, baalnce, feature_data, validation_proportion) {
+
+# Getting the data in the right format to start with ----------------------
+adjust_activity <- function(data, model, activity) {
+  if (model == "OCC") {
+    data[Activity != activity, Activity := "Other"]
+    data <- data[Activity == activity | Activity == "Other"]
+  } else if (model == "Binary") {
+    data[Activity != activity, Activity := "Other"]
+  }
+  return(data)
+}
+
+ensure_activity_representation <- function(validation_data, model, retries = 10) {
+  retry_count <- 0
+  while (sum(validation_data$Activity == activity) == 0 && retry_count < retries) {
+    retry_count <- retry_count + 1
+    message(activity, " not represented in validation fold. Retrying... (Attempt ", retry_count, ")")
+    test_ids <- sample(unique_ids, ceiling(length(unique_ids) * validation_proportion))
+    validation_data <- feature_data[ID %in% test_ids]
+    validation_data <- adjust_activity(validation_data, model, activity)
+  }
+  if (retry_count == retries) stop("Unable to find a valid validation split after ", retries, " attempts.")
+  return(validation_data)
+}
+
+split_data <- function(model, activity, balance, feature_data, validation_proportion) {
+  # Ensure feature_data is a data.table
+  setDT(feature_data)
+  
   unique_ids <- unique(feature_data$ID)
   test_ids <- sample(unique_ids, ceiling(length(unique_ids) * validation_proportion))
   
-  training_data <- feature_data[!feature_data$ID %in% test_ids, ]
-  validation_data <- feature_data[feature_data$ID %in% test_ids, ]
+  training_data <- feature_data[!ID %in% test_ids]
+  validation_data <- feature_data[ID %in% test_ids]
   
-  # Balance validation data depennding on specified rules
-  if (balance == "non_stratified_balance") {
-    activity_count <- selected_validation_data[Activity == activity, .N]
-    selected_validation_data <- selected_validation_data[, .SD[1:activity_count], by = Activity]
-  } else if (balance == "stratified_balance") {
-    # ensures that the validation data is drawn equally from each of the possible classes
-    activity_count <- validation_data[Activity == activity, .N] / length(unique(validation_data$Activity))
-    validation_data <- validation_data[, .SD[sample(.N, min(.N, activity_count))], by = Activity]
+  # Balance validation and training data
+  if (balance == "stratified_balance") {
+    balance_data <- function(data) {
+      activity_count <- data[Activity == activity, .N] / length(unique(data$Activity))
+      data[, .SD[sample(.N, min(.N, activity_count))], by = Activity]
+    }
+    validation_data <- balance_data(validation_data)
+    training_data <- balance_data(training_data)
   }
   
-  if (model == "OCC"){
-    training_data <- training_data[Activity == activity, ]
-    validation_data[validation_data$Activity != activity, Activity := "Other"]
-  } else if (model == "Binary"){
-    training_data[training_data$Activity != activity, Activity := "Other"]
-    validation_data[validation_data$Activity != activity, Activity := "Other"]
-  }
+  # Adjust training and validation data based on the model type
+  training_data <- adjust_activity(training_data, model, activity)
+  validation_data <- adjust_activity(validation_data, model, activity)
+  
+  # Retry logic if the target activity is not represented
+  validation_data <- ensure_activity_representation(validation_data, model)
   
   return(list(training_data = training_data, validation_data = validation_data))
 }
 
-
 # Binary and 1-class model tuning function --------------------------------
-modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number_trees, number_features, validation_proportion, balance) {
+modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number_features, validation_proportion, balance) {
   tryCatch({
     # Adjust kernel value 
     kernel <- ifelse(kernel < 0.5, "linear", ifelse(kernel < 1.5, "radial", "polynomial"))
@@ -47,15 +73,15 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number
         training_data <- as.data.table(data_split$training_data)
         validation_data <- as.data.table(data_split$validation_data)
         
-        # Check that the target activity has appeared in the validation data
-        if (sum(validation_data$Activity == activity) == 0) {
-          message(target_activity, " was not represented in this validation fold - skipping fold")
-          return(NULL) # Skip this iteration
-        }
+        message("split data")
+        flush.console()
         
         # Feature selection
-        selected_training_data <- featureSelection(training_data, number_trees, number_features)
+        selected_training_data <- featureSelection(training_data, number_features, corr_threshold = 0.8)
         selected_training_data <- na.omit(selected_training_data)
+        
+        message("features selected")
+        flush.console()
         
         # Train SVM model
         numeric_training_data <- selected_training_data[, !"Activity", with = FALSE]
@@ -83,6 +109,9 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number
         
         trained_SVM <- do.call(svm, svm_args)
         
+        message("trained models")
+        flush.console()
+        
         # Select features from the validation data
         top_features <- colnames(selected_training_data)
         
@@ -94,7 +123,6 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number
         ground_truth_labels <- selected_validation_data$Activity
         numeric_validation_data <- selected_validation_data[, !("Activity"), with = FALSE]
         
-        
         invalid_row_indices <- which(!complete.cases(numeric_validation_data) | 
                                        !apply(numeric_validation_data, 1, function(row) all(is.finite(row))))
         
@@ -105,10 +133,10 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number
         
         predictions <- predict(trained_SVM, newdata = numeric_validation_data)
         
+        message("predictions")
+        
         if (model == "OCC"){
           predictions <- ifelse(predictions == FALSE, "Other", activity)
-        } else if (model == "Binary"){
-          message("add the right renaming logic here")
         }
         
         # Ensure predictions and ground_truth are factors with the same levels
@@ -132,7 +160,6 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number
           nu = as.character(nu),
           gamma = as.character(gamma),
           kernel = as.character(kernel),
-          number_trees = ifelse(exists("number_trees"), as.numeric(number_trees), NA),
           number_features = ifelse(exists("number_features"), as.numeric(number_features), NA),
           F1_Score = as.numeric(f1_score),
           top_features = as.character(top_features)
@@ -157,7 +184,7 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number
     
     # Calculate the average F1 score per configuration
     avg_outcomes <- model_outcomes[, .(mean_F1 = mean(F1_Score, na.rm = TRUE)), 
-                                   by = .(Activity, nu, gamma, kernel, number_trees, number_features)]
+                                   by = .(Activity, nu, gamma, kernel, number_features)]
     
     # find all of the unique features that appeared in those 3 runs
     # selecting just one set might be overfit.
