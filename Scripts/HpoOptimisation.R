@@ -100,7 +100,6 @@ for (model in model_type) {
 
 
 
-
 # Multiclass model tuning -------------------------------------------------
 if (!file.exists(multi_hyperparam_file)) {
   print("Beginning optimization for multiclass models.")

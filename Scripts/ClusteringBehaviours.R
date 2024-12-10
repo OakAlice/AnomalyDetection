@@ -1,5 +1,5 @@
 # Adding activity category columns ----------------------------------------
-# specifying categories for the behaviours so we can test different combinations
+
 for (condition in c("other", "test")) {
   data <- fread(file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_", condition, ".csv")))
   new_column_data <- renameColumns(data, dataset_name, target_activities)

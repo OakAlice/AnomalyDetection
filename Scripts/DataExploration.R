@@ -1,5 +1,4 @@
 # Data Exploration --------------------------------------------------------
-# need to check whether this works yet
 if (exists("exploration")) {
   tryCatch(
     {

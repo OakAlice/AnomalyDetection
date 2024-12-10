@@ -3,7 +3,7 @@
 
 adjust_activity <- function(data, model, activity) {
   # Ensure the input is a data.table
-  data <- as.data.table(data)
+  data <- data.table::as.data.table(data)
 
   # Adjust the Activity column based on the model type
   data[, Activity := ifelse(Activity == activity, activity, "Other")]

@@ -1,6 +1,3 @@
-# Modifying dog data to manage the multiple behavioural labels
-
-
 # load in the data and select the relevant columns ####
 dog_data <- fread(file.path(base_path, "Data", "Vehkaoja_Dog.csv"))
 dog_data2 <- dog_data %>%

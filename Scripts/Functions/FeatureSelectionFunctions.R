@@ -99,8 +99,8 @@ featureSelectionRF <- function(data, n_trees, number_features) {
       # Extract and rank feature importance
       importance_df <- as.data.frame(rf_model$variable.importance) %>%
         tibble::rownames_to_column("Feature") %>%
-        arrange(desc(rf_model$variable.importance)) %>%
-        slice_head(n = min(number_features, nrow(.)))
+        dplyr::arrange(desc(rf_model$variable.importance)) %>%
+        dplyr::slice_head(n = min(number_features, nrow(.)))
 
       top_features <- importance_df$Feature
 

@@ -1,7 +1,3 @@
-# ---------------------------------------------------------------------------
-# Generating statistical and time series features
-# ---------------------------------------------------------------------------
-
 # Function to process data for each ID
 processDataPerID <- function(id_raw_data, features_type, window_length, sample_rate, overlap_percent) {
   # Calculate window length and overlap
