@@ -360,7 +360,10 @@ split_data <- function(model, activity, balance, feature_data, validation_propor
 
 
 save_best_params <- function(data_name, model_type, activity, elapsed_time, results) {
-  data.frame(
+
+  features <- paste(unique(unlist(results$Pred[[which(results$History$Value == results$Best_Value)[1]]])), collapse = ", ")
+  
+  results <- data.frame(
     data_name = data_name,
     model_type = model_type,
     behaviour_or_activity = activity,
@@ -370,11 +373,12 @@ save_best_params <- function(data_name, model_type, activity, elapsed_time, resu
     nu = results$Best_Par["nu"],
     gamma = results$Best_Par["gamma"],
     kernel = results$Best_Par["kernel"],
-    number_trees = results$Best_Par["number_trees"],
-    number_features = results$Best_Par["number_features"],
+    number_trees = ifelse(!is.na(results$Best_Par["number_trees"]), results$Best_Par["number_trees"], NA),
+    number_features = ifelse(!is.na(results$Best_Par["number_features"]), results$Best_Par["number_features"], NA),
     Best_Value = results$Best_Value,
-    Selected_Features = paste(unlist(results$Pred[[which(results$History$Value == results$Best_Value)]]), collapse = ", ")
+    Selected_Features = features
   )
+  return(results) 
 }
 
 save_results <- function(results_list, file_path) {
