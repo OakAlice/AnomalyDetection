@@ -6,11 +6,16 @@
 #| - Binary Classification
 #| - Multi-class Classification
 
+
+dataset_name <- "Vehkaoja_Dog"
+base_path <- "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
+
 # Set Up ------------------------------------------------------------------
-#' @param sample_rate Sampling frequency in Hz
-#' @param window_length Window size in seconds
-#' @param overlap_percent Overlap between windows
-#' @param target_activities Behaviors to classify
+# User defined variables for each dataset
+# @param sample_rate Sampling frequency in Hz
+# @param window_length Window size in seconds
+# @param overlap_percent Overlap between windows
+# @param target_activities Behaviours to classify
 window_settings <- list(
   Vehkaoja_Dog = list(
     sample_rate = 100,
@@ -64,9 +69,8 @@ balance <- "stratified_balance"
 function_files <- c(
   "FeatureGenerationFunctions.R",   # Feature extraction
   "FeatureSelectionFunctions.R",    # Feature selection methods
-  "ModelTuningFunctions.R",         # Model optimization
-  "OtherFunctions.R",              # Utility functions
-  "CalculatePerformanceFunctions.R" # Performance metrics
+  "ModelTuningFunctions.R",         # Model optimisation
+  "OtherFunctions.R"                # Utility functions
 )
 
 invisible(lapply(function_files, function(file) {
