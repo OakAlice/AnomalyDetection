@@ -1,14 +1,16 @@
-# One-Class Classification for Animal Accelerometer Behaviour -------------
-#| An R script developed for the second chapter of my PhD
-#| Intended for comparing the performance of One-class, Binary, and Multi-class ML models
+#| Animal Behaviour Classification using Machine Learning
+#| 
+#| This script implements a comparative analysis of machine learning approaches
+#| for classifying animal behaviors from accelerometer data. It compares:
+#| - One-Class Classification (OCC)
+#| - Binary Classification
+#| - Multi-class Classification
 
 # Set Up ------------------------------------------------------------------
-
-base_path <- "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
-# base_path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
-dataset_name <- "Ladds_Seal"
-# dataset_name <- "Vehkaoja_Dog"
-
+#' @param sample_rate Sampling frequency in Hz
+#' @param window_length Window size in seconds
+#' @param overlap_percent Overlap between windows
+#' @param target_activities Behaviors to classify
 window_settings <- list(
   Vehkaoja_Dog = list(
     sample_rate = 100,
@@ -29,14 +31,28 @@ window_length <- window_settings[[dataset_name]]$window_length
 overlap_percent <- window_settings[[dataset_name]]$overlap_percent
 target_activities <- window_settings[[dataset_name]]$target_activities
 
+# Load Required Packages --------------------------------------------------
 library(pacman)
 p_load(
-  bench, caret, data.table, e1071, future, future.apply, parallelly,
-  plotly, PRROC, purrr, pROC, rBayesianOptimization, MLmetrics, ranger,
-  randomForest, tsfeatures, tidyverse, umap, zoo, tinytex, patchwork
+  caret,           # Classification and regression training
+  data.table,      # Fast data manipulation
+  e1071,           # SVM implementation
+  future,          # Parallel processing
+  future.apply,    # Parallel apply functions
+  parallelly,      # Parallel processing utilities
+  plotly,          # Interactive plotting
+  purrr,           # Functional programming tools
+  pROC,            # ROC curve analysis
+  rBayesianOptimization,  # Bayesian optimization
+  MLmetrics,       # Machine learning metrics
+  ranger,          # Fast random forests
+  tsfeatures,      # Time series feature extraction
+  tidyverse,       # Data manipulation and visualization
+  zoo,             # Time series functions
+  patchwork        # Combine plots
 )
 
-# global variables
+# Global Variables -------------------------------------------------------
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
 label_columns <- c("Activity", "Time", "ID")
 test_proportion <- 0.2
@@ -44,35 +60,37 @@ validation_proportion <- 0.2
 features_type <- c("timeseries", "statistical")
 balance <- "stratified_balance"
 
-# Load in the functions ---------------------------------------------------
+# Custom Functions -------------------------------------------------------
 function_files <- c(
-  "FeatureGenerationFunctions.R",
-  "FeatureSelectionFunctions.R",
-  "ModelTuningFunctions.R",
-  "OtherFunctions.R",
-  "CalculatePerformanceFunctions.R"
+  "FeatureGenerationFunctions.R",   # Feature extraction
+  "FeatureSelectionFunctions.R",    # Feature selection methods
+  "ModelTuningFunctions.R",         # Model optimization
+  "OtherFunctions.R",              # Utility functions
+  "CalculatePerformanceFunctions.R" # Performance metrics
 )
 
-invisible(lapply(function_files, function(file) source(file.path(base_path, "Scripts", "Functions", file))))
+invisible(lapply(function_files, function(file) {
+  source(file.path(base_path, "Scripts", "Functions", file))
+}))
 
-# Source the scripts that execute stages of the model building ------------
+# Analysis Pipeline ----------------------------------------------------
 
-# Split Test Data ---------------------------------------------------------
+# 1. Split Data into Training and Test Sets
 source(file.path(base_path, "Scripts", "SplitTestData.R"))
 
-# Visualise and Recluster Data --------------------------------------------
+# 2. Data Exploration and Clustering
 source(file.path(base_path, "Scripts", "DataExploration.R"))
 source(file.path(base_path, "Scripts", "ClusteringBehaviours.R"))
 
-# Preprocessing and making features ---------------------------------------
+# 3. Data Preprocessing and Feature Engineering
 source(file.path(base_path, "Scripts", "Preprocessing.R"))
 
-# HPO  --------------------------------------------------------------------
+# 4. Hyperparameter Optimization
 source(file.path(base_path, "Scripts", "HpoOptimisation.R"))
 
-# Test best options -------------------------------------------------------
+# 5. Model Evaluation
 source(file.path(base_path, "Scripts", "TestBestModels.R"))
 
-# Compare the models ------------------------------------------------------
+# 6. Results Visualization and Comparison
 source(file.path(base_path, "Scripts", "PlottingPerformance.R"))
 source(file.path(base_path, "Scripts", "PlotPredictions.R"))

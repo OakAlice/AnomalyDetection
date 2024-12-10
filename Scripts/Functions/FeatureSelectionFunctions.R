@@ -1,5 +1,26 @@
 # Feature selection and dimensionality reduction
 
+
+#' Feature Selection for Activity Classification
+#' 
+#' This function performs feature selection on training data for activity classification.
+#' It applies several preprocessing steps and uses Random Forest for feature importance ranking.
+#'
+#' @param training_data A data frame containing the training data with features and activity labels
+#' @param number_features Integer specifying the desired number of features to select
+#' @param corr_threshold Numeric threshold (0-1) for removing highly correlated features (default: 0.9)
+#'
+#' @return A data.table containing the selected features and Activity column, or NULL if an error occurs
+#'
+#' @details
+#' The function performs the following steps:
+#' 1. Removes non-numeric columns (Activity, Time, ID)
+#' 2. Filters out columns with >50% NA values
+#' 3. Removes zero-variance features
+#' 4. Removes highly correlated features based on correlation threshold
+#' 5. Uses Random Forest to select top features if needed
+
+
 featureSelection <- function(training_data, number_features, corr_threshold = 0.9) {
   tryCatch(
     {
@@ -79,6 +100,23 @@ featureSelection <- function(training_data, number_features, corr_threshold = 0.
     }
   )
 }
+
+#' Random Forest Feature Selection
+#' 
+#' Performs feature selection using Random Forest importance scores.
+#' 
+#' @param data A data frame containing the features and Activity column
+#' @param n_trees Number of trees to grow in the Random Forest model
+#' @param number_features Maximum number of top features to select
+#' 
+#' @return A character vector containing the names of the selected top features
+#' @details
+#' This function fits a Random Forest model using the ranger package and ranks features
+#' based on their impurity importance scores. It returns the top N most important features,
+#' where N is specified by number_features.
+#' 
+#' The function includes error handling and will return NULL if the Random Forest model fails.
+#' The Activity column is automatically converted to a factor.
 
 featureSelectionRF <- function(data, n_trees, number_features) {
   tryCatch(

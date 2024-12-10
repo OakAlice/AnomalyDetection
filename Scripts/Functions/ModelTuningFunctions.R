@@ -1,6 +1,10 @@
-#  Functions for tuning the model hyperparameters across k_fold loops --------
-
-
+#| Model Tuning Functions
+#|
+#' Adjust activity labels based on model type
+#' @param data Data.table containing feature data
+#' @param model Model type ("OCC" or "Binary")
+#' @param activity Target activity to classify
+#' @return Data.table with adjusted activity labels
 adjust_activity <- function(data, model, activity) {
   # Ensure the input is a data.table
   data <- data.table::as.data.table(data)
@@ -16,6 +20,11 @@ adjust_activity <- function(data, model, activity) {
   return(data)
 }
 
+#' Ensure target activity is represented in validation data
+#' @param validation_data Data.table containing validation set
+#' @param model Model type
+#' @param retries Number of attempts to create valid split
+#' @return Data.table with validated split
 ensure_activity_representation <- function(validation_data, model, retries = 10) {
   retry_count <- 0
   while (sum(validation_data$Activity == activity) == 0 && retry_count < retries) {
@@ -29,11 +38,21 @@ ensure_activity_representation <- function(validation_data, model, retries = 10)
   return(validation_data)
 }
 
+#' Balance dataset by undersampling majority classes
+#' @param data Data.table to balance
+#' @return Balanced data.table
 balance_data <- function(data) {
   activity_count <- data[data$Activity == activity, .N] / length(unique(data$Activity))
   data[, .SD[sample(.N, min(.N, activity_count))], by = Activity]
 }
 
+#' Split data into training and validation sets
+#' @param model Model type ("OCC", "Binary", or "Multi")
+#' @param activity Target activity
+#' @param balance Balancing strategy
+#' @param feature_data Input feature data
+#' @param validation_proportion Proportion for validation set
+#' @return List containing training and validation datasets
 split_data <- function(model, activity, balance, feature_data, validation_proportion) {
   # Ensure feature_data is a data.table
   setDT(feature_data)
@@ -64,10 +83,23 @@ split_data <- function(model, activity, balance, feature_data, validation_propor
   return(list(training_data = training_data, validation_data = validation_data))
 }
 
-
-
-# Binary and 1-class model tuning function --------------------------------
-modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number_features, validation_proportion, balance) {
+#' Tune Binary and One-Class Classification models
+#' 
+#' This function performs model tuning using cross-validation and returns
+#' performance metrics for the given hyperparameter configuration.
+#' 
+#' @param model Model type ("OCC" or "Binary")
+#' @param activity Target activity to classify
+#' @param feature_data Input feature data
+#' @param nu SVM nu parameter
+#' @param kernel Kernel type (linear, radial, polynomial)
+#' @param gamma Kernel coefficient
+#' @param number_features Number of features to select
+#' @param validation_proportion Proportion for validation set
+#' @param balance Data balancing strategy
+#' @return List containing Score (F1) and selected features
+modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, 
+                       number_features, validation_proportion, balance) {
   tryCatch(
     {
       # Adjust kernel value
@@ -224,9 +256,23 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number
   )
 }
 
-
-# Multiclass Model Tuning -------------------------------------------------
-multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, number_trees, number_features, validation_proportion, loops) {
+#' Tune Multi-class Classification models
+#' 
+#' Performs tuning for multi-class SVM models using cross-validation
+#' and feature selection.
+#' 
+#' @param multiclass_data Input feature data
+#' @param nu SVM nu parameter
+#' @param kernel Kernel type
+#' @param gamma Kernel coefficient
+#' @param number_trees Number of trees for feature selection
+#' @param number_features Number of features to select
+#' @param validation_proportion Proportion for validation set
+#' @param loops Number of cross-validation iterations
+#' @return List containing Score (macro F1) and selected features
+multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, 
+                                number_trees, number_features, 
+                                validation_proportion, loops) {
   # Convert kernel from numeric to kernel type
   kernel_type <- ifelse(kernel < 0.5, "linear",
     ifelse(kernel < 1.5, "radial", "polynomial")
