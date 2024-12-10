@@ -54,6 +54,8 @@ for (model in model_type){
     select(-c("OtherActivity", "GeneralisedActivity")) %>%
     as.data.table()
   
+  # feature_data$Activity <- sample(feature_data$Activity)
+  
   # feature_data <- feature_data %>% group_by(ID, Activity) %>% slice(1:100) %>% ungroup() %>% as.data.table()
 
   for (activity in target_activities) {
@@ -61,17 +63,17 @@ for (model in model_type){
     
     plan(multisession, workers = availableCores() - 1)
     
-      test <- modelTuning(
-      model = "Binary",
-      activity = "Lying chest",
-      feature_data = feature_data, 
-      nu = 0.1,
-      kernel = 1.1,
-      gamma = 0.01,
-      number_features = 40,
-      validation_proportion = validation_proportion,
-      balance = balance
-    )
+    # test <- modelTuning(
+    #    model = "Binary",
+    #    activity = "Lying chest",
+    #    feature_data = feature_data,
+    #    nu = 0.003846868,
+    #    kernel = 1.273853,
+    #    gamma = 0.0718559,
+    #    number_features = 53.9461,
+    #    validation_proportion = validation_proportion,
+    #    balance = balance
+    #  )
   
     elapsed_time <- system.time({
       results <- BayesianOptimization(

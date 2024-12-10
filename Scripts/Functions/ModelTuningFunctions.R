@@ -63,7 +63,7 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number
     kernel <- ifelse(kernel < 0.5, "linear", ifelse(kernel < 1.5, "radial", "polynomial"))
     
     # Parallelize loop for 3 iterations
-    iterations <- 1:1
+    iterations <- 1:3
     future_outcomes <- future_lapply(iterations, function(i) {
       tryCatch({
         set.seed(i)
@@ -152,6 +152,11 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number
 
         # Compute confusion matrix
         f1_score <- MLmetrics::F1_Score(y_true = ground_truth_labels, y_pred = predictions, positive = activity)
+        precision_metric <- MLmetrics::Precision(y_true = ground_truth_labels, y_pred = predictions, positive = activity)
+        recall_metric <- MLmetrics::Recall(y_true = ground_truth_labels, y_pred = predictions, positive = activity)
+        
+        message("precision: ", precision_metric)
+        message("recall: ", recall_metric)
         
         # Replace NAs with 0
         f1_score[is.na(f1_score)] <- 0
@@ -181,6 +186,8 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, number
       message("No valid outcomes from the runs")
       return(list(Score = NA, Pred = NA))
     }
+    
+    message("about to stitch the loops together")
     
     model_outcomes <- rbindlist(future_outcomes, use.names = TRUE, fill = TRUE)
     
