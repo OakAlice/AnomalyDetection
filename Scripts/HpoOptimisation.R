@@ -1,11 +1,10 @@
-
 # Hyperparameter Optimisation ---------------------------------------------
 
 # define the save paths
 hyperparam_file <- file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_OCCandBinary_hyperparmaters.csv"))
 multi_hyperparam_file <- file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_Multi_hyperparmaters.csv"))
 
-# save the output 
+# save the output
 save_best_params <- function(data_name, model_type, activity, elapsed_time, results) {
   data.frame(
     data_name = data_name,
@@ -20,9 +19,7 @@ save_best_params <- function(data_name, model_type, activity, elapsed_time, resu
     number_trees = results$Best_Par["number_trees"],
     number_features = results$Best_Par["number_features"],
     Best_Value = results$Best_Value,
-    Selected_Features = paste(
-      unlist(results$Pred[[which(results$History$Value == results$Best_Value)]]), 
-      collapse = ", ")
+    Selected_Features = paste(unlist(results$Pred[[which(results$History$Value == results$Best_Value)]]), collapse = ", ")
   )
 }
 
@@ -43,141 +40,127 @@ bounds <- list(
 
 
 # Model tuning master call --------------------------------------------------
-for (model in model_type){
-  if(exists(file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_", model, "_hyperparmaters.csv")))){
-    message("Hyperparmeters already tuned for ", dataset_name," ", model, " models")
+for (model in model_type) {
+  if (exists(file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_", model, "_hyperparmaters.csv")))) {
+    message("Hyperparmeters already tuned for ", dataset_name, " ", model, " models")
   } else {
-  results_stored <- list()
-  
-  # load in the training data
-  feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv"))) %>%
-    select(-c("OtherActivity", "GeneralisedActivity")) %>%
-    as.data.table()
-  
-  # feature_data$Activity <- sample(feature_data$Activity)
-  
-  # feature_data <- feature_data %>% group_by(ID, Activity) %>% slice(1:100) %>% ungroup() %>% as.data.table()
+    results_stored <- list()
 
-  for (activity in target_activities) {
-    print(paste("Tuning", model , "model for activity:", activity))
-    
-    plan(multisession, workers = availableCores() - 1)
-    
-    # test <- modelTuning(
-    #    model = "Binary",
-    #    activity = "Lying chest",
-    #    feature_data = feature_data,
-    #    nu = 0.003846868,
-    #    kernel = 1.273853,
-    #    gamma = 0.0718559,
-    #    number_features = 53.9461,
-    #    validation_proportion = validation_proportion,
-    #    balance = balance
-    #  )
-  
-    elapsed_time <- system.time({
-      results <- BayesianOptimization(
-        FUN = function(nu, gamma, kernel, number_features) {
-          modelTuning(
-            model = model,
-            activity = activity,
-            feature_data = feature_data,
-            nu = nu,
-            kernel = kernel,
-            gamma = gamma,
-            number_features = number_features,
-            validation_proportion = validation_proportion,
-            balance = balance
-          )
-        },
-        bounds = bounds,
-        init_points = 2,
-        n_iter = 3,
-        acq = "ucb",
-        kappa = 2.576 
+    # load in the training data
+    feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv"))) %>%
+      select(-c("OtherActivity", "GeneralisedActivity")) %>%
+      as.data.table()
+
+    for (activity in target_activities) {
+      print(paste("Tuning", model, "model for activity:", activity))
+
+      plan(multisession, workers = availableCores() - 1)
+
+      elapsed_time <- system.time({
+        results <- BayesianOptimization(
+          FUN = function(nu, gamma, kernel, number_features) {
+            modelTuning(
+              model = model,
+              activity = activity,
+              feature_data = feature_data,
+              nu = nu,
+              kernel = kernel,
+              gamma = gamma,
+              number_features = number_features,
+              validation_proportion = validation_proportion,
+              balance = balance
+            )
+          },
+          bounds = bounds,
+          init_points = 2,
+          n_iter = 3,
+          acq = "ucb",
+          kappa = 2.576
+        )
+      })
+
+      # clean up memory and return to normal processing
+      gc()
+      plan(sequential)
+
+      # Save best parameters
+      results_stored[[activity]] <- save_best_params(
+        data_name = dataset_name,
+        model_type = "OCC",
+        activity = activity,
+        elapsed_time = elapsed_time,
+        results = results
       )
-    })
-    
-    # clean up memory and return to normal processing
-    gc()
-    plan(sequential)
-    
-    # Save best parameters
-    results_stored[[activity]] <- save_best_params(
-      data_name = dataset_name, 
-      model_type = "OCC", 
-      activity = activity, 
-      elapsed_time = elapsed_time, 
-      results = results
-    )
-  }
-  
-  # Save the results and benchmark times and resources
-  save_results(results_stored, file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_", model, "_hyperparmaters.csv")))
+    }
+
+    # Save the results and benchmark times and resources
+    save_results(results_stored, file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_", model, "_hyperparmaters.csv")))
   }
 }
+
+
+
 
 # Multiclass model tuning -------------------------------------------------
 if (!file.exists(multi_hyperparam_file)) {
   print("Beginning optimization for multiclass models.")
   best_params_list <- list()
-  
+
   behaviour_columns <- c("Activity", "OtherActivity", "GeneralisedActivity")
   feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv"))) %>%
     as.data.table()
-  
+
   for (behaviours in behaviour_columns) {
     print(paste("Tuning multiclass model for behaviour column:", behaviours))
-    
+
     # Prepare the multiclass data
     multiclass_data <- feature_data %>%
       select(-(setdiff(behaviour_columns, behaviours))) %>%
       rename("Activity" = !!sym(behaviours))
-    
+
     if (behaviours == "GeneralisedActivity") {
       multiclass_data <- multiclass_data %>% filter(!Activity == "")
     }
-    
-    # Benchmark the time for each model's Bayesian optimization using bench::mark
+
+    # Benchmark the time for each model's Bayesian optimization
     # run the search inside of a parallised loop
     plan(multisession, workers = detectCores() - 1)
-    
+
     elapsed_time <- system.time({
-        results <- BayesianOptimization(
-          FUN = function(nu, gamma, kernel, number_trees, number_features) {
-            multiclassModelTuning(
-              multiclass_data = multiclass_data,
-              nu = nu,
-              kernel = kernel,
-              gamma = gamma,
-              number_trees = number_trees,
-              number_features = number_features
-            )
-          },
-          bounds = bounds,
-          init_points = 5,
-          n_iter = 10,
-          acq = "ucb",
-          kappa = 2.576
-        )
+      results <- BayesianOptimization(
+        FUN = function(nu, gamma, kernel, number_trees, number_features) {
+          multiclassModelTuning(
+            multiclass_data = multiclass_data,
+            nu = nu,
+            kernel = kernel,
+            gamma = gamma,
+            number_trees = number_trees,
+            number_features = number_features
+          )
+        },
+        bounds = bounds,
+        init_points = 5,
+        n_iter = 10,
+        acq = "ucb",
+        kappa = 2.576
+      )
     })
-    
+
     gc()
-    
+
     # Save best parameters for this behaviour
     results_stored[[activity]] <- save_best_params(
-      data_name = dataset_name, 
-      model_type = "Multi", 
-      activity = behaviours, 
-      elapsed_time = elapsed_time, 
+      data_name = dataset_name,
+      model_type = "Multi",
+      activity = behaviours,
+      elapsed_time = elapsed_time,
       results = results
     )
   }
-  
+
   plan(sequential)
   # Save the results and benchmarking times and resources
   save_results(best_params_list, multi_hyperparam_file)
 } else {
   print("Multi-class parameters have already been tuned and saved")
 }
-

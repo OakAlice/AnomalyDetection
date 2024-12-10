@@ -1,4 +1,3 @@
-
 # Plot overlap ------------------------------------------------------------
 library(patchwork)
 
@@ -17,7 +16,10 @@ data_files <- lapply(files, function(file) {
 })
 data <- rbindlist(data_files)
 
-data <- as.data.table(data) %>% group_by(ID) %>% arrange(Time) %>% mutate(rowcount = row_number())
+data <- as.data.table(data) %>%
+  group_by(ID) %>%
+  arrange(Time) %>%
+  mutate(rowcount = row_number())
 
 # Define palette for Activities and predicted classes
 full_activity_colors <- c(
@@ -26,7 +28,7 @@ full_activity_colors <- c(
   "#6A0572", "#CC444B", "#80A1C1", "#B4A7D6"
 )
 
-specific_activity_colors <-  c("#A63A50", "#FFCF56", "#D4B2D8", "#3891A6", "#3BB273", "#031D44")
+specific_activity_colors <- c("#A63A50", "#FFCF56", "#D4B2D8", "#3891A6", "#3BB273", "#031D44")
 class_colors <- c("-1" = "grey", "1" = "#FFCF56")
 
 # Top graph: Ground truth activity tile plot
@@ -35,10 +37,12 @@ activity_plot <- ggplot(test_data_labels, aes(x = Time, y = 1, fill = Activity))
   scale_fill_manual(values = full_activity_colors, name = "Activity") +
   labs(x = "Time", y = NULL) +
   theme_minimal() +
-  theme(axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        panel.grid = element_blank(),
-        legend.position = "right")
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "right"
+  )
 
 # Bottom graph: Predictions by individual classification models
 prediction_plot <- ggplot(data, aes(x = Time, y = extracted_word, fill = as.factor(predicted_classes))) +
@@ -46,9 +50,11 @@ prediction_plot <- ggplot(data, aes(x = Time, y = extracted_word, fill = as.fact
   scale_fill_manual(values = class_colors, name = "Predicted Class") +
   labs(x = "Time", y = "Predicted Model") +
   theme_minimal() +
-  theme(panel.grid = element_blank(),
-        legend.position = "bottom",
-        strip.text = element_text(size = 10))
+  theme(
+    panel.grid = element_blank(),
+    legend.position = "bottom",
+    strip.text = element_text(size = 10)
+  )
 
 # Combine the plots: Top for ground truth, bottom faceted for predictions
 combined_plot <- activity_plot / prediction_plot +
@@ -81,7 +87,7 @@ files <- list.files(file.path(base_path, "Output", "Predictions"), "*?_OCC_predi
 data_files <- lapply(files, function(file) {
   df <- fread(file)
   df[, extracted_word := str_extract(basename(file), paste0("(?<=^", dataset_name, "_)[^_]+(?=_OCC_predictions)"))]
-  df <- df[, -3, with = FALSE]  # Duplicate activity
+  df <- df[, -3, with = FALSE] # Duplicate activity
   return(df)
 })
 data <- rbindlist(data_files)
@@ -104,7 +110,7 @@ full_activity_colors <- c(
   "#6A0572", "#CC444B", "#80A1C1", "#B4A7D6"
 )
 
-specific_activity_colors <-  c("#A63A50", "#FFCF56", "#D4B2D8", "#3891A6", "#3BB273", "#031D44")
+specific_activity_colors <- c("#A63A50", "#FFCF56", "#D4B2D8", "#3891A6", "#3BB273", "#031D44")
 condition_colours <- c("True Positive" = "darkgreen", "True Negative" = "lightgreen", "False Positive" = "orange", "False Negative" = "red", "grey")
 
 # Top graph: Ground truth activity tile plot
@@ -113,10 +119,12 @@ activity_plot <- ggplot(test_data_labels, aes(x = Time, y = 1, fill = Activity))
   scale_fill_manual(values = full_activity_colors, name = "Activity") +
   labs(x = "Time", y = NULL) +
   theme_minimal() +
-  theme(axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        panel.grid = element_blank(),
-        legend.position = "right")
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "right"
+  )
 
 # Bottom graph: Predictions by individual classification models
 prediction_plot <- ggplot(data, aes(x = Time, y = extracted_word, fill = as.factor(condition))) +
@@ -124,11 +132,12 @@ prediction_plot <- ggplot(data, aes(x = Time, y = extracted_word, fill = as.fact
   scale_fill_manual(values = condition_colours, name = "Predicted Class") +
   labs(x = "Time", y = "Predicted Model") +
   theme_minimal() +
-  theme(panel.grid = element_blank(),
-        legend.position = "bottom",
-        strip.text = element_text(size = 10))
+  theme(
+    panel.grid = element_blank(),
+    legend.position = "bottom",
+    strip.text = element_text(size = 10)
+  )
 
 # Combine the plots: Top for ground truth, bottom faceted for predictions
 combined_plot <- activity_plot / prediction_plot
 combined_plot
-

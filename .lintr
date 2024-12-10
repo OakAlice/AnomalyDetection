@@ -1,0 +1,32 @@
+linters: with_defaults(
+  # Code structure
+  assignment_linter(),                # Discourages the use of `=` for assignment; prefers `<-`
+  object_name_linter(styles = "snake_case"),  # Enforces snake_case for object names
+  line_length_linter(100),             # Limits lines to 80 characters for readability
+  single_quotes_linter(),             # Enforces the use of single quotes for strings
+  
+  # Whitespace and formatting
+  trailing_whitespace_linter(),       # Flags trailing whitespace
+  spaces_left_parentheses_linter(),   # Checks for spacing between a function name and parentheses
+  spaces_inside_parentheses_linter(), # Checks for unnecessary spaces inside parentheses
+  commas_linter(),                    # Ensures proper spacing after commas
+  
+  # Braces and semicolons
+  brace_linter(),                     # Ensures proper use of braces
+  semicolon_terminator_linter(),      # Discourages the use of semicolons
+  
+  # Code complexity
+  cyclomatic_complexity_linter(complexity_limit = 25), # Warns about overly complex functions
+  function_length_linter(length = 50),                # Warns if a function is too long
+  line_length_linter(80),                              # Checks line length
+  
+  # Error-prone constructs
+  infix_spaces_linter(),              # Ensures proper spacing around infix operators (e.g., +, -, =)
+  missing_argument_linter(),          # Warns about missing arguments in function calls
+  open_curly_linter(),                # Flags incorrect usage of `{` (e.g., not on the same line)
+
+  # File formatting
+  commented_code_linter(),            # Flags commented-out code
+  equals_na_linter(),                 # Flags `x == NA`; prefers `is.na(x)`
+  unneeded_concatenation_linter()     # Flags unnecessary use of `c()`
+)

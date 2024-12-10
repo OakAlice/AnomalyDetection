@@ -1,4 +1,3 @@
-
 # Split Test Data ---------------------------------------------------------
 if (file.exists(file.path(
   base_path, "Data", "Hold_out_test", paste0(dataset_name, "_test.csv")
@@ -13,9 +12,12 @@ if (file.exists(file.path(
   data_test <- move_data[ID %in% test_ids]
   data_other <- move_data[!ID %in% test_ids]
   # save these
-  fwrite(data_test,
-         file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_test.csv")))
-  fwrite(data_other,
-         file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_other.csv")
-         ))
+  fwrite(
+    data_test,
+    file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_test.csv"))
+  )
+  fwrite(
+    data_other,
+    file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_other.csv"))
+  )
 }

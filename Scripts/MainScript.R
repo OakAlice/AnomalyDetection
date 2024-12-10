@@ -4,27 +4,31 @@
 
 # Set Up ------------------------------------------------------------------
 
-# base_path <- "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
-base_path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
-# dataset_name <- "Ladds_Seal"
-dataset_name <- "Vehkaoja_Dog"
+base_path <- "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
+# base_path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
+dataset_name <- "Ladds_Seal"
+# dataset_name <- "Vehkaoja_Dog"
 
-window_settings <- list(Vehkaoja_Dog = list(sample_rate = 100, 
-                                    window_length = 1, 
-                                    overlap_percent = 50,
-                                    target_activities = c("Walking", "Eating", "Shaking", "Lying chest")),
-                Ladds_Seal = list(sample_rate = 25,
-                                  window_length = 1, 
-                                  overlap_percent = 50,
-                                  target_activities = c("swimming", "facerub",   "still",    "chewing"))
-                        )
+window_settings <- list(
+  Vehkaoja_Dog = list(
+    sample_rate = 100,
+    window_length = 1,
+    overlap_percent = 50,
+    target_activities = c("Walking", "Eating", "Shaking", "Lying chest")
+  ),
+  Ladds_Seal = list(
+    sample_rate = 25,
+    window_length = 1,
+    overlap_percent = 50,
+    target_activities = c("swimming", "facerub", "still", "chewing")
+  )
+)
 
 sample_rate <- window_settings[[dataset_name]]$sample_rate
 window_length <- window_settings[[dataset_name]]$window_length
 overlap_percent <- window_settings[[dataset_name]]$overlap_percent
 target_activities <- window_settings[[dataset_name]]$target_activities
-                        
-# install.packages("pacman")
+
 library(pacman)
 p_load(
   bench, caret, data.table, e1071, future, future.apply, parallelly,
