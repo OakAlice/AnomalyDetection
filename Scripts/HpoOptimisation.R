@@ -28,7 +28,10 @@ feature_data <- fread(
   file.path(base_path, "Data", "Feature_data", 
             paste0(dataset_name, "_multi_features.csv"))
 ) %>%
+  select(-GeneralisedActivity, -OtherActivity) %>%
   as.data.table()
+
+results_stored <- list()
 
 for (activity in target_activities) {
   print(paste("Tuning", model, "model for activity:", activity))

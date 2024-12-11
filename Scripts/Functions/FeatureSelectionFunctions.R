@@ -18,40 +18,16 @@
 # 3. Removes zero-variance features
 # 4. Removes highly correlated features based on correlation threshold
 # 5. Uses Random Forest or PCA to select top features
-featureSelection <- function(model_type, training_data, number_features, corr_threshold = 0.9) {
+featureSelection <- function(model, training_data, number_features, corr_threshold = 0.9) {
   tryCatch(
     {
-      # ensure this is a whole number
+      # Ensure this is a whole number
       number_features <- round(number_features, 0)
-      # Step 1: Filter numeric features
-      numeric_columns <- training_data %>%
-        select(-Activity, -Time, -ID) %>%
-        as.data.table()
-
-      # Remove columns with >50% NA
-      valid_cols <- names(numeric_columns)[colMeans(is.na(numeric_columns)) <= 0.5]
-      numeric_columns <- numeric_columns[, ..valid_cols]
-
-      # Remove zero-variance columns
-      zero_variance <- numeric_columns[, sapply(.SD, function(col) sd(col, na.rm = TRUE) > 0)]
-      zero_variance <- na.omit(zero_variance)
-      numeric_columns <- numeric_columns[, names(zero_variance)[zero_variance], with = FALSE]
-
-      # Remove highly correlated features
-      if (ncol(numeric_columns) > 1) {
-        corr_matrix <- cor(numeric_columns, use = "pairwise.complete.obs")
-        high_corr <- findCorrelation(corr_matrix, cutoff = corr_threshold, names = TRUE)
-        numeric_columns <- numeric_columns[, setdiff(names(numeric_columns), high_corr), with = FALSE]
-      }
-
-      # Check if any features remain
-      if (ncol(numeric_columns) == 0) stop("No valid features remaining after preprocessing.") # nolint: line_length_linter.
-
-      # Step 2: Clean training data
-      training_data_clean <- cbind(numeric_columns, Activity = training_data$Activity) %>%
-        na.omit() %>%
-        as.data.table()
-
+      
+      clean_columns <- cleanTrainingData(training_data, corr_threshold)
+      training_data_clean <- training_data[, ..clean_columns]
+      training_data_clean <- training_data_clean[complete.cases(training_data_clean), ]
+      
       # Check for multiple classes in Activity column
       if (length(unique(training_data_clean$Activity)) <= 1) {
         message("Only one class detected; implementing PCA feature selection.")
@@ -61,12 +37,12 @@ featureSelection <- function(model_type, training_data, number_features, corr_th
         top_features <- pca_feature_selection(
           data = training_data_clean,
           number_features = number_features,
-          model_type = "OCC"
+          model = "OCC"
         )
 
       } else {
         # Random Forest feature selection
-        if (ncol(numeric_columns) > number_features) {
+        if (ncol(training_data_clean) > number_features) {
           message("Starting Random Forest feature selection.")
           flush.console()
 
@@ -85,10 +61,10 @@ featureSelection <- function(model_type, training_data, number_features, corr_th
           if (is.null(top_features)) {
             message("Random Forest feature selection failed; returning all features.")
             flush.console()
-            top_features <- names(numeric_columns)
+            top_features <- names(training_data_clean)
           }
         } else {
-          top_features <- names(numeric_columns)
+          top_features <- names(training_data_clean)
         }
       }
 
@@ -159,10 +135,10 @@ featureSelectionRF <- function(data, n_trees, number_features) {
 # Advanced feature selection using PCA
 # @param data Data.table containing feature data
 # @param number_features Number of features to select
-# @param model_type Type of model ("OCC", "Binary", or "Multi")
+# @param model Type of model ("OCC", "Binary", or "Multi")
 # @param variance_explained Minimum cumulative variance to explain (default 0.95)
 # @return Data.table with selected features
-pca_feature_selection <- function(data, number_features, model_type, variance_explained = 0.95) {
+pca_feature_selection <- function(data, number_features, model, variance_explained = 0.95) {
   # Remove non-numeric columns but keep Activity for later
   activity_col <- data$Activity
   numeric_data <- data[, !c("Activity"), with = FALSE]
@@ -184,7 +160,7 @@ pca_feature_selection <- function(data, number_features, model_type, variance_ex
   loadings <- abs(pca_result$rotation[, 1:n_components])
   
   # Calculate feature importance differently based on model type
-  feature_importance <- if(model_type == "OCC") {
+  feature_importance <- if(model == "OCC") {
     # For OCC: Focus on magnitude of contribution to main components
     rowSums(loadings)
   } else {
@@ -199,3 +175,42 @@ pca_feature_selection <- function(data, number_features, model_type, variance_ex
   return(top_features)
 }
 
+
+cleanTrainingData <- function(training_data, corr_threshold) {
+  # Step 1: Filter numeric features
+  numeric_columns <- training_data %>%
+    select(-Activity, -Time, -ID) %>%
+    mutate(across(everything(), as.numeric))
+  
+  # Step 2: Remove columns with >50% NA
+  valid_cols <- names(numeric_columns)[colMeans(is.na(numeric_columns)) <= 0.5]
+  numeric_columns <- numeric_columns[, ..valid_cols]
+  
+  # Step 3: Remove zero-variance columns
+  numeric_columns <- numeric_columns %>% 
+    select(where(~ {
+      sd_val <- sd(., na.rm = TRUE)
+      !is.na(sd_val) && sd_val > 0
+    }))
+  
+  numeric_columns <- numeric_columns[complete.cases(numeric_columns), ]
+  
+  # Step 5: Remove highly correlated features
+  if (ncol(numeric_columns) > 1) {
+    # Use Pearson correlation with pairwise complete observations to handle NaNs
+    corr_matrix <- cor(numeric_columns, use = "pairwise.complete.obs", method = "pearson")
+    
+    # Replace NaN with 0 to avoid errors in findCorrelation
+    corr_matrix[is.na(corr_matrix)] <- 0
+    
+    high_corr <- findCorrelation(corr_matrix, cutoff = corr_threshold, names = TRUE)
+    numeric_columns <- numeric_columns[, setdiff(names(numeric_columns), high_corr), with = FALSE]
+  }
+  
+  # Check if any features remain
+  if (ncol(numeric_columns) == 0) stop("No valid features remaining after preprocessing.")
+  
+  clean_columns <- c(colnames(numeric_columns), "Activity")
+  
+  return(clean_columns)
+}
