@@ -86,10 +86,10 @@ source(file.path(base_path, "Scripts", "SplitTestData.R"))
 
 # 2. Data Exploration and Clustering
 source(file.path(base_path, "Scripts", "DataExploration.R"))
-source(file.path(base_path, "Scripts", "ClusteringBehaviours.R"))
 
-# 3. Data Preprocessing and Feature Engineering
+# 3. Data Preprocessing, Feature Engineering, and re-clustering
 source(file.path(base_path, "Scripts", "Preprocessing.R"))
+source(file.path(base_path, "Scripts", "ClusteringBehaviours.R"))
 
 # 4. Hyperparameter Optimization
 source(file.path(base_path, "Scripts", "HpoOptimisation.R"))

@@ -67,7 +67,7 @@ if (file.exists(file.path(base_path, "Data", "Feature_data", paste0(dataset_name
     fwrite(test_feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_", id, "_test_", window_length, "_features.csv")))
   }
 
-  # stitch all the id feature data back together
+  # stitch all the id feature data back together 
   files <- list.files(file.path(base_path, "Data/Feature_data"), pattern = "*.csv", full.names = TRUE)
   pattern <- paste0(dataset_name, ".*", "test", ".*", window_length)
   matching_files <- grep(pattern, files, value = TRUE)

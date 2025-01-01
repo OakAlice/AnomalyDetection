@@ -1,9 +1,9 @@
 # Adding activity category columns ----------------------------------------
 
 for (condition in c("other", "test")) {
-  data <- fread(file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_", condition, ".csv")))
+  data <- fread(file.path(base_path, "Data/Feature_data", paste0(dataset_name, "_", condition, "_features.csv")))
   new_column_data <- renameColumns(data, dataset_name, target_activities)
-  fwrite(new_column_data, file.path(base_path, "Data/Hold_out_test", paste0(dataset_name, "_", condition, ".csv")))
+  fwrite(new_column_data, file.path(base_path, "Data/Feature_data", paste0(dataset_name, "_", condition, "_features.csv")))
 }
 
 # add the columns to categroies

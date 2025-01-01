@@ -26,7 +26,7 @@ model <- model_types[2]
 
 feature_data <- fread(
   file.path(base_path, "Data", "Feature_data", 
-            paste0(dataset_name, "_multi_features.csv"))
+            paste0(dataset_name, "_other_features.csv"))
 ) %>%
   select(-GeneralisedActivity, -OtherActivity) %>%
   as.data.table()
@@ -104,7 +104,7 @@ save_results(
   # Load feature data for multiclass optimization
   feature_data <- fread(
     file.path(base_path, "Data", "Feature_data", 
-              paste0(dataset_name, "_multi_features.csv"))
+              paste0(dataset_name, "_other_features.csv"))
   ) %>%
     as.data.table()
   

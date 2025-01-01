@@ -2,7 +2,7 @@
 
 # Training the final models -----------------------------------------------
 
-training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv"))) %>%
+training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv"))) %>%
   as.data.table()
 
 for (model in c("OCC", "Binary", "Multi")) {

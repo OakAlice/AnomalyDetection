@@ -3,7 +3,7 @@ library(patchwork)
 
 # Binary ------------------------------------------------------------------
 
-test_data_labels <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_multi_features.csv"))) %>%
+test_data_labels <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv"))) %>%
   select(Activity, Time, ID) %>%
   filter(ID == ID[1])
 

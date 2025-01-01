@@ -1,6 +1,6 @@
 # Testing the best models -------------------------------------------------
 # load in the test data
-test_feature_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_multi_features.csv")))
+test_feature_data <- fread(file = file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
 
 # Dichotomous models ------------------------------------------------------
 test_results <- data.frame()
@@ -20,7 +20,8 @@ for(model in c("OCC", "Binary")){
     selected_test_feature_data$Activity <- ifelse(selected_test_feature_data$Activity == behaviour, behaviour, "Other")
     ground_truth_labels <- selected_test_feature_data$Activity
     time_values <- selected_test_feature_data$Time
-    numeric_test_data <- selected_test_feature_data[, !c("Activity", "Time"), with = FALSE]
+    ID_values <- selected_multiclass_test_data$ID
+    numeric_test_data <- selected_test_feature_data[, !c("Activity", "Time", "ID"), with = FALSE]
     
     # this bit was important for the seal data, don't remove
     invalid_row_indices <- which(!complete.cases(numeric_test_data) |
@@ -30,6 +31,7 @@ for(model in c("OCC", "Binary")){
       numeric_test_data <- numeric_test_data[-invalid_row_indices, , drop = FALSE]
       ground_truth_labels <- ground_truth_labels[-invalid_row_indices]
       time_values <- time_values[-invalid_row_indices]
+      ID_values <- ID_values[-invalid_row_indices]
     }
     
     message("testing data prepared")
@@ -81,6 +83,7 @@ for(model in c("OCC", "Binary")){
     # write out the predictions for later plotting
     output <- data.table(
       "Time" = time_values,
+      "ID" = ID_values,
       "Ground_truth" = ground_truth_labels, 
       "Predictions" = predictions
     )
@@ -118,7 +121,8 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
     
     ground_truth_labels <- selected_multiclass_test_data$Activity
     time_values <- selected_multiclass_test_data$Time
-    numeric_test_data <- selected_multiclass_test_data[, !c("Activity", "Time"), with = FALSE]
+    ID_values <- selected_multiclass_test_data$ID
+    numeric_test_data <- selected_multiclass_test_data[, !c("Activity", "Time", "ID"), with = FALSE]
     
     # this bit was important for the seal data, don't remove
     invalid_row_indices <- which(!complete.cases(numeric_test_data) |
@@ -128,6 +132,7 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
       numeric_test_data <- numeric_test_data[-invalid_row_indices, , drop = FALSE]
       ground_truth_labels <- ground_truth_labels[-invalid_row_indices]
       time_values <- time_values[-invalid_row_indices]
+      ID_values <- ID_values[-invalid_row_indices]
     }
     
     message("testing data prepared")
@@ -136,10 +141,6 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
     predictions <- predict(trained_SVM, newdata = numeric_test_data)
     
     message("predictions made")
-    
-    if (model == "OCC") {
-      predictions <- ifelse(predictions == FALSE, "Other", behaviour)
-    }
     
     # Ensure predictions and ground_truth are factors with the same levels
     unique_classes <- sort(union(predictions, ground_truth_labels))
@@ -151,67 +152,64 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
     }
     
     # Calculate per-class metrics and macro average
+    # Calculate per-class metrics and macro average
     class_metrics <- lapply(unique_classes, function(class) {
       # Convert to binary problem for this class
-      binary_true <- ground_truth_labels == class
-      binary_pred <- predictions == class
+      binary_true <- factor(ground_truth_labels == class, levels = c(FALSE, TRUE))
+      binary_pred <- factor(predictions == class, levels = c(FALSE, TRUE))
       
       # Calculate metrics for this class
-      f1 <- MLmetrics::F1_Score(y_true = binary_true, y_pred = binary_pred)
-      precision <- MLmetrics::Precision(y_true = binary_true, y_pred = binary_pred)
-      recall <- MLmetrics::Recall(y_true = binary_true, y_pred = binary_pred)
-      specificity <- MLmetrics::Specificity(y_true = binary_true, y_pred = binary_pred)
+      f1 <- MLmetrics::F1_Score(y_true = binary_true, y_pred = binary_pred, positive = TRUE)
+      precision <- MLmetrics::Precision(y_true = binary_true, y_pred = binary_pred, positive = TRUE)
+      recall <- MLmetrics::Recall(y_true = binary_true, y_pred = binary_pred, positive = TRUE)
+      accuracy <- MLmetrics::Accuracy(y_true = binary_true, y_pred = binary_pred)
       
       # Return as named vector
       c(
+        Class = as.character(class),
         F1_Score = f1,
         Precision = precision,
         Recall = recall,
-        Specificity = specificity
+        Accuracy = accuracy
       )
     })
-
-    # Convert to data frame with class names
-    class_results <- do.call(rbind, class_metrics)
-    class_results <- as.data.frame(class_results)
-    class_results$Class <- unique_classes
-
+    
+    # Combine per-class metrics into a data frame - first turn each class into a row
+    class_metrics_df <- do.call(rbind, lapply(class_metrics, function(x) {
+      # Convert the named vector to a one-row data frame
+      as.data.frame(t(x), stringsAsFactors = FALSE)
+    }))
+    # convert all to numeric
+    class_metrics_df$F1_Score <- as.numeric(class_metrics_df$F1_Score)
+    class_metrics_df$Precision <- as.numeric(class_metrics_df$Precision)
+    class_metrics_df$Recall <- as.numeric(class_metrics_df$Recall)
+    class_metrics_df$Accuracy <- as.numeric(class_metrics_df$Accuracy)
+  
     # Calculate macro averages (replacing NA with 0)
-    macro_metrics <- colMeans(replace(class_results[, c("F1_Score", "Precision", "Recall", "Specificity")], 
-                                    is.na(class_results[, c("F1_Score", "Precision", "Recall", "Specificity")]), 
+    macro_metrics <- colMeans(replace(class_metrics_df[, c("F1_Score", "Precision", "Recall", "Accuracy")], 
+                                    is.na(class_metrics_df[, c("F1_Score", "Precision", "Recall", "Accuracy")]), 
                                     0))
-
-    # Calculate overall accuracy metrics (these are already multi-class metrics)
-    accuracy_metric <- MLmetrics::Accuracy(y_true = ground_truth_labels, y_pred = predictions)
-    balanced_accuracy_metric <- calculateBalancedAccuracy(y_true = ground_truth_labels, y_pred = predictions)
-    MCC_metric <- calculateMCC(y_true = ground_truth_labels, y_pred = predictions)
-
+   
     # Compile results for macro averages
     macro_results <- data.frame(
       Dataset = as.character(dataset_name),
-      Model = "Multi",
+      Model = behaviour_set,
       Activity = "MacroAverage",
       F1_Score = as.numeric(macro_metrics["F1_Score"]),
       Precision = as.numeric(macro_metrics["Precision"]),
       Recall = as.numeric(macro_metrics["Recall"]),
-      Specificity = as.numeric(macro_metrics["Specificity"]),
-      Accuracy = as.numeric(accuracy_metric),
-      BalancedAccuracy = as.numeric(balanced_accuracy_metric),
-      MCC = as.numeric(MCC_metric)
+      Accuracy = as.numeric(macro_metrics["Accuracy"])
     )
 
     # Add per-class results
     class_level_results <- data.frame(
       Dataset = rep(as.character(dataset_name), length(unique_classes)),
-      Model = rep("Multi", length(unique_classes)),
-      Activity = class_results$Class,
-      F1_Score = class_results$F1_Score,
-      Precision = class_results$Precision,
-      Recall = class_results$Recall,
-      Specificity = class_results$Specificity,
-      Accuracy = rep(accuracy_metric, length(unique_classes)),
-      BalancedAccuracy = rep(balanced_accuracy_metric, length(unique_classes)),
-      MCC = rep(MCC_metric, length(unique_classes))
+      Model = rep(behaviour_set, length(unique_classes)),
+      Activity = class_metrics_df$Class,
+      F1_Score = class_metrics_df$F1_Score,
+      Precision = class_metrics_df$Precision,
+      Recall = class_metrics_df$Recall,
+      Accuracy = class_metrics_df$Accuracy
     )
 
     # Combine macro-average and per-class results
@@ -221,10 +219,19 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
     # write out the predictions for later plotting
     output <- data.table(
       "Time" = time_values,
+      "ID" = ID_values,
       "Ground_truth" = ground_truth_labels, 
       "Predictions" = predictions
     )
-    fwrite(output, file.path(base_path, "Output", "Testing", "Predictions", paste(dataset_name, behaviour_set, "predictions.csv", sep = "_")))
-    message("predictions saved")
     
+    if (nrow(output) > 0) {
+      fwrite(output, file.path(base_path, "Output", "Testing", "Predictions", paste(dataset_name, behaviour_set, "predictions.csv", sep = "_")))
+      message("predictions saved")
+    } else {
+      message("No predictions to save.")
+    }
 }
+
+# save the results
+fwrite(test_results, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_multi_test_performance.csv")))
+
