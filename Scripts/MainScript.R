@@ -10,13 +10,14 @@
 # dataset_name <- "Vehkaoja_Dog"
 dataset_name <- "Ladds_Seal"
 base_path <- "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
+# base_path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
 
 # Set Up ------------------------------------------------------------------
 # User defined variables for each dataset
-# @param sample_rate Sampling frequency in Hz
-# @param window_length Window size in seconds
-# @param overlap_percent Overlap between windows
-# @param target_activities Behaviours to classify
+#' @param sample_rate Sampling frequency in Hz
+#' @param window_length Window size in seconds
+#' @param overlap_percent Overlap between windows as a whole number
+#' @param target_activities Behaviours to classify in the OCC and Binary models
 window_settings <- list(
   Vehkaoja_Dog = list(
     sample_rate = 100,
@@ -28,7 +29,7 @@ window_settings <- list(
     sample_rate = 25,
     window_length = 1,
     overlap_percent = 50,
-    target_activities = c("swimming", "facerub", "still", "chewing")
+    target_activities = c("swimming", "still", "chewing", "facerub")
   )
 )
 

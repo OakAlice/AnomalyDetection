@@ -15,8 +15,9 @@
 #' @param validation_proportion Proportion for validation set
 #' @param balance Data balancing strategy
 #' @return List containing Score (F1) and selected features
-modelTuning <- function(model, activity, feature_data, nu, kernel, gamma, 
-                       number_features, validation_proportion, balance) {
+modelTuning <- function(model, activity, feature_data, 
+                        nu, kernel, gamma, number_features, 
+                        validation_proportion, balance) {
   tryCatch(
     {
       # Adjust kernel value
@@ -116,10 +117,6 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma,
             precision_metric <- MLmetrics::Precision(y_true = ground_truth_labels, y_pred = predictions, positive = activity)
             recall_metric <- MLmetrics::Recall(y_true = ground_truth_labels, y_pred = predictions, positive = activity)
 
-            message("f1 score: ", f1_score)
-            message("precision: ", precision_metric)
-            message("recall: ", recall_metric)
-
             # Replace NAs with 0
             f1_score[is.na(f1_score)] <- 0
 
@@ -149,8 +146,6 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma,
         message("No valid outcomes from the runs")
         return(list(Score = NA, Pred = NA))
       }
-
-      message("about to stitch the loops together")
 
       model_outcomes <- rbindlist(future_outcomes, use.names = TRUE, fill = TRUE)
 
@@ -187,201 +182,217 @@ modelTuning <- function(model, activity, feature_data, nu, kernel, gamma,
 #' @param validation_proportion Proportion for validation set
 #' @param loops Number of cross-validation iterations
 #' @return List containing Score (macro F1) and selected features
-multiclassModelTuning <- function(multiclass_data, nu, kernel, gamma, 
-                                number_trees, number_features, 
-                                validation_proportion, loops) {
-  # Convert kernel from numeric to kernel type
-  kernel_type <- ifelse(kernel < 0.5, "linear",
-    ifelse(kernel < 1.5, "radial", "polynomial")
-  )
+multiclassModelTuning <- function(model, multiclass_data, nu, kernel, gamma, 
+                                number_features, 
+                                validation_proportion, balance, loops) {
+  tryCatch({
+    model_outcomes <- list()
 
-  # Parallelise loop over iterations
-  num_loops <- 1:loops
-  f1_scores <- future_lapply(num_loops, function(i) {
-    tryCatch(
-      {
+    # Convert kernel from numeric to kernel type
+    kernel_type <- 
+      ifelse(kernel < 0.5, "linear",
+        ifelse(kernel < 1.5, "radial", "polynomial")
+      )
+
+    # Parallelise loop over iterations
+    num_loops <- 1:loops
+    # Parallel version (commented out)
+    # future_outcomes <- future_lapply(num_loops, function(i) {
+
+    # Sequential version so I dont have the issue when parallelising
+    future_outcomes <- lapply(num_loops, function(i) {
+      tryCatch({
         set.seed(i)
+
         # Split data into training and validation sets
-        data_split <- split_data(multiclass_data, validation_proportion)
+        data_split <- tryCatch({
+          split_data(
+            model = "Multi", 
+            activity = "not_needed", 
+            balance = balance, 
+            feature_data = multiclass_data, 
+            validation_proportion = validation_proportion
+          )
+        }, error = function(e) {
+          message("Error in data splitting: ", e$message)
+          return(NULL)
+        })
+
+        if (is.null(data_split)) {
+          stop("Data splitting failed")
+        }
+
         training_data <- data_split$training_data
         validation_data <- data_split$validation_data
 
+        message("data split")
+        flush.console()
+
         # Feature selection
-        selected_feature_data <- featureSelection(training_data, number_trees, number_features)
-        selected_feature_data <- na.omit(selected_feature_data) # Clean the data
+        top_features <- tryCatch({
+          featureSelection(
+            model = "Multi", 
+            training_data, 
+            number_features, 
+            corr_threshold = 0.8
+          )
+        }, error = function(e) {
+          message("Error in feature selection: ", e$message)
+          return(NULL)
+        })
+
+        if (is.null(top_features)) {
+          stop("Feature selection failed")
+        }
+
+        selected_training_data <- tryCatch({
+          training_data[, ..top_features]
+        }, error = function(e) {
+          message("Error selecting features from training data: ", e$message)
+          return(NULL)
+        })
+
+        if (is.null(selected_training_data)) {
+          stop("Failed to select features from training data")
+        }
+
+        selected_training_data <- na.omit(selected_training_data)
+
+        message("features selected")
+        flush.console()
 
         # Train SVM model with class balancing
-        class_weights <- table(selected_feature_data$Activity)
-        class_weights <- max(class_weights) / (class_weights + 1e-6) # Prevent division by zero
+        class_weights <- tryCatch({
+          weights <- table(selected_training_data$Activity)
+          max(weights) / (weights + 1e-6)  # Prevent division by zero
+        }, error = function(e) {
+          message("Error calculating class weights: ", e$message)
+          return(NULL)
+        })
 
-        svm_args <- list(
-          x = as.matrix(selected_feature_data[, !("Activity"), with = FALSE]),
-          y = as.factor(selected_feature_data$Activity),
-          type = "C-classification",
-          nu = nu,
-          scale = TRUE,
-          kernel = kernel_type,
-          gamma = gamma,
-          class.weights = class_weights
-        )
-        multiclass_SVM <- do.call(svm, svm_args)
+        if (is.null(class_weights)) {
+          stop("Failed to calculate class weights")
+        }
 
-        # Validate the model
-        top_features <- colnames(selected_feature_data)
-        validation_features <- validation_data[, ..top_features]
-        validation_features <- na.omit(validation_features) # Clean validation data
-        numeric_validation_data <- as.matrix(validation_features[, !("Activity"), with = FALSE])
-        ground_truth_labels <- validation_features$Activity
+        # SVM model training
+        multiclass_SVM <- tryCatch({
+          svm_args <- list(
+            x = as.matrix(selected_training_data[, !("Activity"), with = FALSE]),
+            y = as.factor(selected_training_data$Activity),
+            type = "C-classification",
+            nu = nu,
+            scale = TRUE,
+            kernel = kernel_type,
+            gamma = gamma,
+            class.weights = class_weights
+          )
+          do.call(svm, svm_args)
+        }, error = function(e) {
+          message("Error in SVM training: ", e$message)
+          return(NULL)
+        })
 
-        # Predictions
-        predictions <- predict(multiclass_SVM, newdata = numeric_validation_data)
+        if (is.null(multiclass_SVM)) {
+          stop("SVM model training failed")
+        }
 
-        # Compute confusion matrix and F1-scores
-        confusion_matrix <- table(predictions, ground_truth_labels)
-        all_classes <- sort(union(rownames(confusion_matrix), colnames(confusion_matrix)))
-        conf_matrix_padded <- matrix(0,
-          nrow = length(all_classes), ncol = length(all_classes),
-          dimnames = list(all_classes, all_classes)
-        )
-        conf_matrix_padded[rownames(confusion_matrix), colnames(confusion_matrix)] <- confusion_matrix
+        message("model trained")
+        flush.console()
 
-        # Calculate the F1 scores using confusionMatrix function
-        metrics <- confusionMatrix(conf_matrix_padded)
-        f1 <- metrics$byClass[, "F1"]
-        f1[is.na(f1)] <- 0 # Replace NAs with 0
-        return(mean(f1)) # Return the macro F1 score from this iteration
-      },
-      error = function(e) {
+        # Validation data preparation
+        validation_features <- tryCatch({
+          val_features <- validation_data[, ..top_features]
+          val_features <- na.omit(val_features)
+          as.data.table(val_features)
+        }, error = function(e) {
+          message("Error preparing validation data: ", e$message)
+          return(NULL)
+        })
+
+        if (is.null(validation_features)) {
+          stop("Validation data preparation failed")
+        }
+
+        # Predictions and performance calculation
+        predictions_and_metrics <- tryCatch({
+          ground_truth_labels <- validation_features$Activity
+          numeric_validation_data <- validation_features[, !("Activity"), with = FALSE]
+
+          # Handle invalid rows - important for seal data, don't remove
+          invalid_row_indices <- which(!complete.cases(numeric_validation_data) |
+            !apply(numeric_validation_data, 1, function(row) all(is.finite(row))))
+
+          if (length(invalid_row_indices) > 0) {
+            numeric_validation_data <- numeric_validation_data[-invalid_row_indices, , drop = FALSE]
+            ground_truth_labels <- ground_truth_labels[-invalid_row_indices]
+          }
+
+          predictions <- predict(multiclass_SVM, newdata = numeric_validation_data)
+
+          # Compute confusion matrix and metrics
+          confusion_matrix <- table(predictions, ground_truth_labels)
+          all_classes <- sort(union(rownames(confusion_matrix), colnames(confusion_matrix)))
+          conf_matrix_padded <- matrix(0,
+            nrow = length(all_classes), ncol = length(all_classes),
+            dimnames = list(all_classes, all_classes)
+          )
+          conf_matrix_padded[rownames(confusion_matrix), colnames(confusion_matrix)] <- confusion_matrix
+
+          metrics <- confusionMatrix(conf_matrix_padded)
+          f1 <- metrics$byClass[, "F1"]
+          f1[is.na(f1)] <- 0
+
+          list(macro_f1 = mean(f1), top_features = paste(top_features, collapse = ", "))
+        }, error = function(e) {
+          message("Error in predictions and metrics calculation: ", e$message)
+          return(NULL)
+        })
+
+        if (is.null(predictions_and_metrics)) {
+          stop("Failed to calculate predictions and metrics")
+        }
+
+        return(predictions_and_metrics)
+
+      }, error = function(e) {
         message("Error during iteration ", i, ": ", e$message)
-        return(NA) # Return NA when error
-      }
-    )
-  }, future.seed = TRUE)
+        return(NULL)
+      })
+    })
 
-  # Return average F1-score
-  average_macro_f1 <- mean(f1_scores, na.rm = TRUE)
+    # Process results
+    valid_outcomes <- Filter(Negate(is.null), future_outcomes)
 
-  # Return results
-  return(list(Score = average_macro_f1, Pred = top_features))
-}
-
-
-#' Adjust activity labels based on model type
-#' @param data Data.table containing feature data
-#' @param model Model type ("OCC" or "Binary")
-#' @param activity Target activity to classify
-#' @return Data.table with adjusted activity labels
-adjust_activity <- function(data, model, activity) {
-  # Ensure the input is a data.table
-  data <- data.table::as.data.table(data)
-  
-  # Adjust the Activity column based on the model type
-  data[, Activity := ifelse(Activity == activity, activity, "Other")]
-  
-  # For OCC model, retain only the target activity and "Other"
-  if (model == "OCC") {
-    data <- data[Activity %in% c(activity, "Other")]
-  }
-  
-  return(data)
-}
-
-
-#' Ensure target activity is represented in validation data
-#' @param validation_data Data.table containing validation set
-#' @param model Model type
-#' @param retries Number of attempts to create valid split
-#' @return Data.table with validated split
-ensure_activity_representation <- function(validation_data, model, retries = 10) {
-  retry_count <- 0
-  while (sum(validation_data$Activity == activity) == 0 && retry_count < retries) {
-    retry_count <- retry_count + 1
-    message(activity, " not represented in validation fold. Retrying... (Attempt ", retry_count, ")")
-    test_ids <- sample(unique_ids, ceiling(length(unique_ids) * validation_proportion))
-    validation_data <- feature_data[ID %in% test_ids]
-    validation_data <- adjust_activity(validation_data, model, activity)
-  }
-  if (retry_count == retries) stop("Unable to find a valid validation split after ", retries, " attempts.")
-  return(validation_data)
-}
-
-#' Balance dataset by undersampling majority classes
-#' @param data Data.table to balance
-#' @return Balanced data.table
-balance_data <- function(data) {
-  activity_count <- data[data$Activity == activity, .N] / length(unique(data$Activity))
-  data[, .SD[sample(.N, min(.N, activity_count))], by = Activity]
-}
-
-#' Split data into training and validation sets
-#' @param model Model type ("OCC", "Binary", or "Multi")
-#' @param activity Target activity
-#' @param balance Balancing strategy
-#' @param feature_data Input feature data
-#' @param validation_proportion Proportion for validation set
-#' @return List containing training and validation datasets
-split_data <- function(model, activity, balance, feature_data, validation_proportion) {
-  # Ensure feature_data is a data.table
-  setDT(feature_data)
-  
-  unique_ids <- unique(feature_data$ID)
-  test_ids <- sample(unique_ids, ceiling(length(unique_ids) * validation_proportion))
-  
-  training_data <- feature_data[!ID %in% test_ids]
-  validation_data <- feature_data[ID %in% test_ids]
-  
-  # Balance validation and training data
-  if (model == "OCC") {
-    training_data <- training_data[training_data$Activity == activity, ]
-    # Apply balancing only to validation data if needed
-    if (balance == "stratified_balance") {
-      validation_data <- balance_data(validation_data)
+    if (length(valid_outcomes) == 0) {
+      stop("No valid outcomes from any iteration")
     }
-  } else {
-    if (balance == "stratified_balance") {
-      validation_data <- balance_data(validation_data)
-      training_data <- balance_data(training_data)
+
+    model_outcomes <- tryCatch({
+      rbindlist(valid_outcomes, fill = TRUE)
+    }, error = function(e) {
+      message("Error combining results: ", e$message)
+      return(NULL)
+    })
+
+    if (is.null(model_outcomes)) {
+      stop("Failed to combine model outcomes")
     }
-  }
-  
-  # Adjust training and validation data based on the model type
-  training_data <- adjust_activity(training_data, model, activity)
-  validation_data <- adjust_activity(validation_data, model, activity)
-  
-  # Retry logic if the target activity is not represented
-  validation_data <- ensure_activity_representation(validation_data, model)
-  
-  if (model == "OCC") {
-    training_data <- training_data[training_data$Activity == activity, ]
-  }
-  
-  return(list(training_data = training_data, validation_data = validation_data))
-}
 
+    # Calculate final metrics
+    avg_outcome <- tryCatch({
+      mean_f1 <- mean(as.numeric(model_outcomes$macro_f1), na.rm = TRUE)
+      selected_features <- model_outcomes$top_features[1]  # Take features from first valid run
 
-save_best_params <- function(data_name, model_type, activity, elapsed_time, results) {
+      list(Score = mean_f1, Pred = selected_features)
+    }, error = function(e) {
+      message("Error calculating final metrics: ", e$message)
+      return(list(Score = NA, Pred = NA))
+    })
 
-  features <- paste(unique(unlist(results$Pred[[which(results$History$Value == results$Best_Value)[1]]])), collapse = ", ")
-  
-  results <- data.frame(
-    data_name = data_name,
-    model_type = model_type,
-    behaviour_or_activity = activity,
-    elapsed = as.numeric(elapsed_time[3]),
-    system = as.numeric(elapsed_time[2]),
-    user = as.numeric(elapsed_time[1]),
-    nu = results$Best_Par["nu"],
-    gamma = results$Best_Par["gamma"],
-    kernel = results$Best_Par["kernel"],
-    number_trees = ifelse(!is.na(results$Best_Par["number_trees"]), results$Best_Par["number_trees"], NA),
-    number_features = ifelse(!is.na(results$Best_Par["number_features"]), results$Best_Par["number_features"], NA),
-    Best_Value = results$Best_Value,
-    Selected_Features = features
-  )
-  return(results) 
-}
+    return(avg_outcome)
 
-save_results <- function(results_list, file_path) {
-  results_df <- rbindlist(results_list, use.names = TRUE, fill = TRUE)
-  fwrite(results_df, file_path, row.names = FALSE)
+  }, error = function(e) {
+    message("Critical error in multiclassModelTuning: ", e$message)
+    return(list(Score = NA, Pred = NA))
+  })
 }

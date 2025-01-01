@@ -6,13 +6,13 @@
 #| Saves optimization results to CSV files in the Output/Tuning directory.
 
 # Define parameter bounds for Bayesian Optimization
-# nu: Controls training error/support vector ratio (0.01 to 0.5)
-# gamma: RBF kernel parameter (0.0001 to 1)
-# kernel: Kernel type (1=linear, 2=radial, 3=polynomial)
-# number_features: Number of features to select (5 to 100)
+#' nu: Controls training error/support vector ratio (0.01 to 0.5)
+#' gamma: RBF kernel parameter (0.0001 to 1)
+#' kernel: Kernel type (1=linear, 2=radial, 3=polynomial)
+#'  number_features: Number of features to select (5 to 100)
 bounds <- list(
   nu = c(0.01, 0.5),
-  gamma = c(0.0001, 1),
+  gamma = c(0.001, 1),
   kernel = c(1, 2, 3),
   number_features = c(5, 100)
 )
@@ -22,7 +22,7 @@ bounds <- list(
 # Can currently do binary and OCC, will expand to multi-class as well
 
 model_types <- c("OCC", "Binary")
-model <- model_types[1]
+model <- model_types[2]
 
 feature_data <- fread(
   file.path(base_path, "Data", "Feature_data", 
@@ -95,11 +95,9 @@ save_results(
   file.path(base_path, "Output", "Tuning", 
             paste0(dataset_name, "_", model, "_hyperparmaters.csv")))
 
-# Multiclass model tuning -------------------------------------------------
-if (!file.exists(multi_hyperparam_file)) {
-  print("Beginning optimization for multiclass models.")
-  best_params_list <- list()
 
+
+# Multiclass model tuning -------------------------------------------------
   # Define different behaviour column groupings
   behaviour_columns <- c("Activity", "OtherActivity", "GeneralisedActivity")
 
@@ -109,12 +107,16 @@ if (!file.exists(multi_hyperparam_file)) {
               paste0(dataset_name, "_multi_features.csv"))
   ) %>%
     as.data.table()
-
-  # Optimize for each behaviour grouping
+  
+  # Optimise for each behaviour grouping at a time
   for (behaviours in behaviour_columns) {
+    if(file.exists(file.path(base_path, "Output", "Tuning", 
+                             paste0(dataset_name, "_", model, "_", behaviours, "_hyperparmaters.csv")))){
+      print(paste0("models have been tuned for multiclass ", behaviours, " model already."))
+    } else {
     print(paste("Tuning multiclass model for behaviour column:", behaviours))
 
-    # Prepare data for current behavior grouping
+    # Prepare data for current grouping
     multiclass_data <- feature_data %>%
       select(-(setdiff(behaviour_columns, behaviours))) %>%
       rename("Activity" = !!sym(behaviours))
@@ -124,19 +126,22 @@ if (!file.exists(multi_hyperparam_file)) {
     }
 
     # Set up parallel processing
-    plan(multisession, workers = detectCores() - 1)
+    # plan(multisession, workers = availableCores() - 1)
 
     # Perform Bayesian optimization for multiclass model
     elapsed_time <- system.time({
       results <- BayesianOptimization(
-        FUN = function(nu, gamma, kernel, number_trees, number_features) {
+        FUN = function(nu, gamma, kernel, number_features) {
           multiclassModelTuning(
+            model = "Multi",
             multiclass_data = multiclass_data,
             nu = nu,
             kernel = kernel,
             gamma = gamma,
-            number_trees = number_trees,
-            number_features = number_features
+            number_features = number_features,
+            validation_proportion = validation_proportion,
+            balance = balance,
+            loops = 1 # only repeat once
           )
         },
         bounds = bounds,
@@ -148,9 +153,10 @@ if (!file.exists(multi_hyperparam_file)) {
     })
 
     gc()
-
+    # plan(sequential)
+    
     # Store results for this grouping
-    results_stored[[activity]] <- save_best_params(
+    results_stored <- save_best_params(
       data_name = dataset_name,
       model_type = "Multi",
       activity = behaviours,
@@ -158,10 +164,11 @@ if (!file.exists(multi_hyperparam_file)) {
       results = results
     )
   }
-
-  plan(sequential)
+    
   # Save all multiclass results
-  save_results(best_params_list, multi_hyperparam_file)
-} else {
-  print("Multi-class parameters have already been tuned and saved")
+    results_df <- rbind(results_stored)
+    fwrite(results_df, file.path(base_path, "Output", "Tuning", 
+              paste0(dataset_name, "_", model, "_", behaviours, "_hyperparmaters.csv")),  row.names = FALSE)
+
 }
+
