@@ -115,7 +115,7 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
       multiclass_test_data <- multiclass_test_data %>% filter(!Activity == "")
     }
     
-    selected_multiclass_test_data <- multiclass_test_data[, .SD, .SDcols = c(selected_features, "Activity", "Time")]
+    selected_multiclass_test_data <- multiclass_test_data[, .SD, .SDcols = c(selected_features, "Activity", "Time", "ID")]
     selected_multiclass_test_data <- na.omit(selected_multiclass_test_data)
     selected_multiclass_test_data <- as.data.table(selected_multiclass_test_data)
     
@@ -129,6 +129,7 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
                                    !apply(numeric_test_data, 1, function(row) all(is.finite(row))))
     
     if (length(invalid_row_indices) > 0) {
+      print("there were some invalid indices")
       numeric_test_data <- numeric_test_data[-invalid_row_indices, , drop = FALSE]
       ground_truth_labels <- ground_truth_labels[-invalid_row_indices]
       time_values <- time_values[-invalid_row_indices]
@@ -143,6 +144,8 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
     message("predictions made")
     
     # Ensure predictions and ground_truth are factors with the same levels
+    # ground_truth_labels <- sample(selected_multiclass_test_data$Activity) # randomise order
+    
     unique_classes <- sort(union(predictions, ground_truth_labels))
     predictions <- factor(predictions, levels = unique_classes)
     ground_truth_labels <- factor(ground_truth_labels, levels = unique_classes)
@@ -151,7 +154,6 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
       stop("Error: Predictions and ground truth labels have different lengths.")
     }
     
-    # Calculate per-class metrics and macro average
     # Calculate per-class metrics and macro average
     class_metrics <- lapply(unique_classes, function(class) {
       # Convert to binary problem for this class
@@ -234,4 +236,16 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
 
 # save the results
 fwrite(test_results, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_multi_test_performance.csv")))
+
+
+
+
+
+
+load(file.path(base_path, "Output", "Models", paste0(dataset_name, "_Multi_", "Activity", "_final_model.rda")))
+unique(trained_SVM$call$y)
+
+
+
+
 

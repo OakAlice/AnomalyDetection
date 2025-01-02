@@ -7,11 +7,11 @@ test_data_labels <- fread(file.path(base_path, "Data", "Feature_data", paste0(da
   select(Activity, Time, ID) %>%
   filter(ID == ID[1])
 
-files <- list.files(file.path(base_path, "Output", "Predictions"), "*?_binary_predictions.csv", full.names = TRUE)
+files <- list.files(file.path(base_path, "Output", "Testing", "Predictions"), paste(dataset_name, "*?_Binary_*?"), full.names = TRUE) 
 
 data_files <- lapply(files, function(file) {
   df <- fread(file)
-  df[, extracted_word := str_extract(basename(file), paste0("(?<=^", dataset_name, "_)[^_]+(?=_binary_predictions)"))]
+  df[, extracted_word := str_extract(basename(file), "(?<=_)[^_]+(?=_[^_]*$)")]
   return(df)
 })
 data <- rbindlist(data_files)

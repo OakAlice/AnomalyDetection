@@ -22,7 +22,6 @@ bounds <- list(
 # Can currently do binary and OCC, will expand to multi-class as well
 
 model_types <- c("OCC", "Binary")
-model <- model_types[2]
 
 feature_data <- fread(
   file.path(base_path, "Data", "Feature_data", 
@@ -33,6 +32,7 @@ feature_data <- fread(
 
 results_stored <- list()
 
+for (model in model_types){
 for (activity in target_activities) {
   print(paste("Tuning", model, "model for activity:", activity))
   
@@ -94,6 +94,8 @@ save_results(
   results_stored, 
   file.path(base_path, "Output", "Tuning", 
             paste0(dataset_name, "_", model, "_hyperparmaters.csv")))
+
+}
 
 
 

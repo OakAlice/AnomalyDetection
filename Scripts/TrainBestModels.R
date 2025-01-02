@@ -6,10 +6,16 @@ training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(datas
   as.data.table()
 
 for (model in c("OCC", "Binary", "Multi")) {
+  
+  # model <- "Multi"
+  
   # Load hyperparameter file
   hyperparam_file <- fread(file = file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_", model, "_hyperparmaters.csv")))
 
-  for (i in seq_len(nrow(hyperparam_file))) {
+
+  # hyperparam_file <- fread(file = file.path(base_path, "Output", "Tuning", "previous", paste0(dataset_name, "_", model, "_hyperparmaters.csv")))
+  
+    for (i in seq_len(nrow(hyperparam_file))) {
     parameter_row <- hyperparam_file[i, ]
 
     # Extract selected features
@@ -23,7 +29,7 @@ for (model in c("OCC", "Binary", "Multi")) {
         model = parameter_row$model_type,
         activity = parameter_row$behaviour_or_activity
       )
-    } else { # adjust for multi
+    } else { # adjust for multi # they will all be named "Activity" - need to sub for the column we really want
       selected_training_data <- selected_training_data %>% select(-Activity)
       behaviour_set <- parameter_row$behaviour_or_activity
       selected_training_data <- cbind(selected_training_data, "Activity" = training_data[[behaviour_set]])
@@ -45,6 +51,7 @@ for (model in c("OCC", "Binary", "Multi")) {
     selected_training_data_x <- selected_training_data %>%
       select(-Activity) %>%
       mutate(across(everything(), as.numeric))
+    selected_training_data_y <- as.factor(selected_training_data$Activity)
 
     message("Training data prepared.")
 
@@ -64,7 +71,7 @@ for (model in c("OCC", "Binary", "Multi")) {
 
     # Add response variable and class weights for Binary and Multiclass model
     if (!parameter_row$model_type == "OCC") {
-      svm_args$y <- as.factor(selected_training_data$Activity)
+      svm_args$y <- selected_training_data_y
       class_weights <- table(selected_training_data$Activity)
       svm_args$class.weights <- max(class_weights) / class_weights
     }
