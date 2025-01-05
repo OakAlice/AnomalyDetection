@@ -2,6 +2,10 @@
 # load in the test data
 test_feature_data <- fread(file = file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
 
+# make a minor formatting change
+test_feature_data$GeneralisedActivity <- str_to_title(test_feature_data$GeneralisedActivity)
+
+
 # Dichotomous models ------------------------------------------------------
 test_results <- data.frame()
 
@@ -14,13 +18,13 @@ for(model in c("OCC", "Binary")){
     selected_features <- colnames(trained_SVM$call$x)
     
     # prepare the test data
-    selected_test_feature_data <- test_feature_data[, .SD, .SDcols = c(selected_features, "Activity", "Time")]
+    selected_test_feature_data <- test_feature_data[, .SD, .SDcols = c(selected_features, "Activity", "Time", "ID")]
     selected_test_feature_data <- na.omit(selected_test_feature_data)
     selected_test_feature_data <- as.data.table(selected_test_feature_data)
     selected_test_feature_data$Activity <- ifelse(selected_test_feature_data$Activity == behaviour, behaviour, "Other")
     ground_truth_labels <- selected_test_feature_data$Activity
     time_values <- selected_test_feature_data$Time
-    ID_values <- selected_multiclass_test_data$ID
+    ID_values <- selected_test_feature_data$ID
     numeric_test_data <- selected_test_feature_data[, !c("Activity", "Time", "ID"), with = FALSE]
     
     # this bit was important for the seal data, don't remove
@@ -36,8 +40,9 @@ for(model in c("OCC", "Binary")){
     
     message("testing data prepared")
     
-    # make the predictions
-    predictions <- predict(trained_SVM, newdata = numeric_test_data)
+    # make the predictions with reported distance from hyperplane
+    predictions <- predict(trained_SVM, newdata = numeric_test_data, decision.values = TRUE)
+    decision_values <- attr(predictions, "decision.values")
     
     message("predictions made")
     
@@ -85,7 +90,8 @@ for(model in c("OCC", "Binary")){
       "Time" = time_values,
       "ID" = ID_values,
       "Ground_truth" = ground_truth_labels, 
-      "Predictions" = predictions
+      "Predictions" = predictions,
+      "Decision_values" = decision_values
     )
     fwrite(output, file.path(base_path, "Output", "Testing", "Predictions", paste(dataset_name, model, behaviour, "predictions.csv", sep = "_")))
     message("predictions saved")
@@ -216,6 +222,7 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
 
     # Combine macro-average and per-class results
     test_results <- rbind(test_results, macro_results, class_level_results)
+    # fwrite(test_results, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_Activity_test_performance.csv")))
     message("test results stored")
     
     # write out the predictions for later plotting
@@ -242,8 +249,6 @@ fwrite(test_results, file.path(base_path, "Output", "Testing", paste0(dataset_na
 
 
 
-load(file.path(base_path, "Output", "Models", paste0(dataset_name, "_Multi_", "Activity", "_final_model.rda")))
-unique(trained_SVM$call$y)
 
 
 

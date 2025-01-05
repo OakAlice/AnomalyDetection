@@ -1,16 +1,16 @@
 
 # Plotting the performance comparing dichotomous with multiclass ----------
 
-# load in and combine the data
-dichotomous_results <- fread(file = file.path(base_path, "Output", "Testing", paste0(dataset_name, "_dichotomous_test_performance.csv"))) %>%
-  select(-MCC, -BalancedAccuracy, -Specificity)
-multiclass_results <- fread(file = file.path(base_path, "Output", "Testing", paste0(dataset_name, "_multi_test_performance.csv")))
+# read in
+combined_results <- fread(file = file.path(base_path, "Output", "Testing", "Complete_test_performance.csv"))
+combined_results$Activity <- str_to_title(combined_results$Activity) # format for consistency
 
-combined_results <- rbind(dichotomous_results, multiclass_results)
+dog_results <- combined_results %>% filter(Dataset == "Vehkaoja_Dog")
+seal_results <- combined_results %>% filter(Dataset == "Ladds_Seal")
 
 # generate plot of perofrmance metrics
-generate_plots(combined_results, dataset_name, base_path)
-
+generate_plots(seal_results, "Ladds_Seal", base_path)
+generate_plots(dog_results, "Vehkaoja_Dog", base_path)
 
 
 
@@ -33,7 +33,7 @@ ggplot(seal_data, aes(x = model_type, y = value, color = metric, shape = metric)
   theme(
     panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
     axis.text.x = element_text(angle = 45, hjust = 1),
-    strip.text = element_text(size = 12),
+    strip.text = element_text(size = 12), 
     strip.background = element_blank(),
     axis.title.y = element_blank(), # Remove y-axis label for all facets
     panel.spacing = unit(2, "lines") # Adjust space between panels

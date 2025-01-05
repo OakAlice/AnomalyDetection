@@ -11,12 +11,12 @@ renameColumns <- function(data, dataset_name, target_activities) {
   if (dataset_name == "Vehkaoja_Dog") {
     # 4 general categories, discarding difficult behaviours
     data[, GeneralisedActivity := fifelse( # nested ifelse
-      Activity %in% c("Walking", "Trotting", "Pacing", "Tugging", "Jumping", "Galloping", "Carrying object"), "Travelling",
+      Activity %in% c("Walking", "Trotting", "Pacing", "Tugging", "Jumping", "Galloping", "Carrying object"), "Walking",
       fifelse(
-        Activity %in% c("Eating", "Drinking", "Sniffing"), "Feeding",
+        Activity %in% c("Eating", "Drinking", "Sniffing"), "Eating",
         fifelse(
-          Activity %in% c("Sitting", "Lying chest", "Standing"), "Resting",
-          fifelse(Activity == "Shaking", "Grooming", NA_character_)
+          Activity %in% c("Sitting", "Lying chest", "Standing"), "Lying chest",
+          fifelse(Activity == "Shaking", "Shaking", NA_character_)
         )
       )
     )]
@@ -25,12 +25,12 @@ renameColumns <- function(data, dataset_name, target_activities) {
   } else if (dataset_name == "Ladds_Seal") {
     # 4 general categories, discarding difficult behaviours
     data[, GeneralisedActivity := fifelse( # nested ifelse
-      Activity %in% c("swimming", "sailing", "slow", "fast", "moving"), "Swimming",
+      Activity %in% c("swimming", "sailing", "slow", "fast", "moving"), "swimming",
       fifelse(
-        Activity %in% c("chewing", "holdntear", "feeding", "manipulation"), "Chewing",
+        Activity %in% c("chewing", "holdntear", "feeding", "manipulation"), "chewing",
         fifelse(
-          Activity %in% c("still", "lying", "sitting", "stationary"), "Still",
-          fifelse(Activity %in% c("scratch", "rubbing", "facerub", "shake", "grooming"), "Facerub", NA_character_)
+          Activity %in% c("still", "lying", "sitting", "stationary"), "still",
+          fifelse(Activity %in% c("scratch", "rubbing", "facerub", "shake", "grooming"), "facerub", NA_character_)
         )
       )
     )]

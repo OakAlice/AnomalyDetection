@@ -170,7 +170,7 @@ save_results(
   # Save all multiclass results
     results_df <- rbind(results_stored)
     fwrite(results_df, file.path(base_path, "Output", "Tuning", 
-              paste0(dataset_name, "_", model, "_", behaviours, "_hyperparmaters.csv")),  row.names = FALSE)
+              paste0(dataset_name, "_Multi_", behaviours, "_hyperparmaters.csv")),  row.names = FALSE)
 
 }
 

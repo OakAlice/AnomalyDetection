@@ -1,6 +1,6 @@
 # Feature Generation  ----------------------------------------------
 # does all of the data
-if (file.exists(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv")))) {
+if (file.exists(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))) {
   print("feature data already generated.")
 } else {
   # extract the appropriate window_length from the dictionary above
@@ -25,23 +25,23 @@ if (file.exists(file.path(base_path, "Data", "Feature_data", paste0(dataset_name
       )
 
     # save it
-    fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_", id, "_multi_features.csv")))
+    fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_", id, "_other_features.csv")))
   }
 
   # stitch all the id feature data back together
   files <- list.files(file.path(base_path, "Data/Feature_data"), pattern = "*.csv", full.names = TRUE)
-  pattern <- paste0(dataset_name, ".*", "multi")
+  pattern <- paste0(dataset_name, ".*", "other")
   matching_files <- grep(pattern, files, value = TRUE)
 
   feature_data_list <- lapply(matching_files, read.csv)
   feature_data <- do.call(rbind, feature_data_list)
 
   # save this as well
-  fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_multi_features.csv")))
+  fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv")))
 }
 
 # Feature Generation for Test Data -----------------------------------------
-if (file.exists(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_multi_features.csv")))) {
+if (file.exists(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))) {
   print("test features also already generated")
 } else {
   test_data <- fread(file.path(base_path, "Data", "Hold_out_test", paste0(dataset_name, "_test.csv")))
@@ -76,5 +76,5 @@ if (file.exists(file.path(base_path, "Data", "Feature_data", paste0(dataset_name
   feature_data <- do.call(rbind, feature_data_list)
 
   # save this as well
-  fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_multi_features.csv")))
+  fwrite(feature_data, file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
 }

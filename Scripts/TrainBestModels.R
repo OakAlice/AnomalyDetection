@@ -7,7 +7,7 @@ training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(datas
 
 for (model in c("OCC", "Binary", "Multi")) {
   
-  # model <- "Multi"
+  # model <- "OCC"
   
   # Load hyperparameter file
   hyperparam_file <- fread(file = file.path(base_path, "Output", "Tuning", paste0(dataset_name, "_", model, "_hyperparmaters.csv")))

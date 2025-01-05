@@ -26,33 +26,33 @@ generate_plots <- function(combined_results, dataset_name, base_path) {
   if (dataset_name == "Vehkaoja_Dog") {
     animal_data <- results_long %>%
       filter(
-        data == dataset_name,
-        metric != "accuracy"
-      ) %>%
-      mutate(
-        behaviour = factor(behaviour, levels = c("Macro", "Walking", "Eating", "Lying Chest", "Shaking", "Other")),
-        model_type = factor(model_type, levels = c("1-class", "Binary", "Full multi-class", "Other multi-class", "Generalised multi-class")),
-        is_na = is.na(value)
-      )
-    
-    animal_data_reduced <- animal_data %>%
-      filter(model_type %in% c("1-class", "Full multi-class"))
-    
-  } else if (dataset_name == "Ladds_Seal") {
-    animal_data <- results_long %>%
-      filter(
-        Dataset == dataset_name,
+        Dataset == "Vehkaoja_Dog",
         Metric != "Accuracy"
       ) %>%
-      mutate(Activity = str_to_title(Activity)) %>%
       mutate(
-        Activity = factor(Activity, levels = c("MacroAverage", "Swimming", "Chewing", "Still", "Facerub", "Other")),
+        Activity = factor(Activity, levels = c("Macroaverage", "Walking", "Eating", "Lying Chest", "Shaking", "Other")),
         Model = factor(Model, levels = c("1-class", "Binary", "Full multi-class", "Other multi-class", "Generalised multi-class")),
         is_na = is.na(Value)
       )
     
     animal_data_reduced <- animal_data %>%
       filter(Model %in% c("1-class", "Full multi-class"))
+    
+  } else if (dataset_name == "Ladds_Seal") {
+    animal_data <- results_long %>%
+      filter(
+        Dataset == "Ladds_Seal",
+        Metric != "Accuracy"
+      ) %>%
+      mutate(Activity = str_to_title(Activity)) %>%
+      mutate(
+        Activity = factor(Activity, levels = c("Macroaverage", "Swimming", "Chewing", "Still", "Facerub", "Other")),
+        Model = factor(Model, levels = c("1-class", "Binary", "Full multi-class", "Other multi-class", "Generalised multi-class")),
+        is_na = is.na(Value)
+      )
+    
+    animal_data_reduced <- animal_data %>%
+      filter(Model %in% c("Binary", "Full multi-class"))
     
   } else {
     stop("Dont know how to work with this data - have to define in function")

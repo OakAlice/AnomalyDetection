@@ -72,7 +72,8 @@ function_files <- c(
   "FeatureGenerationFunctions.R",   # Feature extraction
   "FeatureSelectionFunctions.R",    # Feature selection methods
   "ModelTuningFunctions.R",         # Model optimisation
-  "OtherFunctions.R"                # Utility functions
+  "OtherFunctions.R",               # Utility functions
+  "PlotFunctions.R"                 # Generating performance plots
 )
 
 invisible(lapply(function_files, function(file) {
