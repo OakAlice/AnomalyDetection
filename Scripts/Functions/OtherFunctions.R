@@ -178,3 +178,83 @@ calculateMCC <- function(y_true, y_pred) {
 }
 
 
+# Random performance baseline ---------------------------------------------
+calculate_random_baseline <- function(ground_truth_labels, n_iterations = 100) {
+  # Get class proportions from ground truth
+  class_props <- table(ground_truth_labels) / length(ground_truth_labels)
+  
+  # Store results for each iteration
+  iteration_metrics <- matrix(0, nrow = n_iterations, ncol = 4)
+  colnames(iteration_metrics) <- c("F1_Score", "Precision", "Recall", "Accuracy")
+  
+  for(i in 1:n_iterations) {
+    # Generate random predictions maintaining class proportions
+    random_preds <- sample(
+      x = levels(ground_truth_labels),
+      size = length(ground_truth_labels),
+      prob = class_props,
+      replace = TRUE
+    )
+    random_preds <- factor(random_preds, levels = levels(ground_truth_labels))
+    
+    # Calculate metrics for this iteration
+    iteration_metrics[i, "F1_Score"] <- MLmetrics::F1_Score(
+      y_true = ground_truth_labels, 
+      y_pred = random_preds
+    )
+    iteration_metrics[i, "Precision"] <- MLmetrics::Precision(
+      y_true = ground_truth_labels, 
+      y_pred = random_preds
+    )
+    iteration_metrics[i, "Recall"] <- MLmetrics::Recall(
+      y_true = ground_truth_labels, 
+      y_pred = random_preds
+    )
+    iteration_metrics[i, "Accuracy"] <- MLmetrics::Accuracy(
+      y_true = ground_truth_labels, 
+      y_pred = random_preds
+    )
+  }
+  
+  # Return mean metrics across iterations
+  colMeans(iteration_metrics, na.rm = TRUE)
+}
+
+
+
+calculate_zero_rate_baseline <- function(ground_truth_labels, model_type, target_class = NULL) {
+  if (model_type == "OCC") {
+    # For OCC, always predict the target class
+    zero_rate_preds <- factor(
+      rep(target_class, length(ground_truth_labels)),
+      levels = levels(ground_truth_labels)
+    )
+    # Calculate metrics
+    f1 <- MLmetrics::F1_Score(y_true = ground_truth_labels, y_pred = zero_rate_preds, positive = target_class)
+    precision <- MLmetrics::Precision(y_true = ground_truth_labels, y_pred = zero_rate_preds, positive = target_class)
+    recall <- MLmetrics::Recall(y_true = ground_truth_labels, y_pred = zero_rate_preds, positive = target_class)
+    accuracy <- MLmetrics::Accuracy(y_true = ground_truth_labels, y_pred = zero_rate_preds)
+    
+  } else {
+    # For Binary and multiclass, predict majority class
+    majority_class <- names(which.max(table(ground_truth_labels)))
+    zero_rate_preds <- factor(
+      rep(majority_class, length(ground_truth_labels)),
+      levels = levels(ground_truth_labels)
+    )
+    
+    # Calculate metrics
+    f1 <- MLmetrics::F1_Score(y_true = ground_truth_labels, y_pred = zero_rate_preds)
+    precision <- MLmetrics::Precision(y_true = ground_truth_labels, y_pred = zero_rate_preds)
+    recall <- MLmetrics::Recall(y_true = ground_truth_labels, y_pred = zero_rate_preds)
+    accuracy <- MLmetrics::Accuracy(y_true = ground_truth_labels, y_pred = zero_rate_preds)
+  }
+  
+  # Return metrics
+  c(
+    F1_Score = f1,
+    Precision = precision,
+    Recall = recall,
+    Accuracy = accuracy
+  )
+}

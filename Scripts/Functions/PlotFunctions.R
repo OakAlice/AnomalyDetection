@@ -16,6 +16,8 @@ generate_plots <- function(combined_results, dataset_name, base_path) {
     mutate(Model = case_when(
       Model == "OCC" ~ "1-class",
       Model == "Binary" ~ "Binary",
+      Model == "OCCEnsemble" ~ "1-class ensemble",
+      Model == "BinaryEnsemble" ~ "Binary ensemble",
       Model == "Activity" ~ "Full multi-class",
       Model == "OtherActivity" ~ "Other multi-class",
       Model == "GeneralisedActivity" ~ "Generalised multi-class",
@@ -31,12 +33,12 @@ generate_plots <- function(combined_results, dataset_name, base_path) {
       ) %>%
       mutate(
         Activity = factor(Activity, levels = c("Macroaverage", "Walking", "Eating", "Lying Chest", "Shaking", "Other")),
-        Model = factor(Model, levels = c("1-class", "Binary", "Full multi-class", "Other multi-class", "Generalised multi-class")),
+        Model = factor(Model, levels = c("1-class",  "1-class ensemble", "Binary", "Binary ensemble", "Full multi-class", "Other multi-class", "Generalised multi-class")),
         is_na = is.na(Value)
       )
     
     animal_data_reduced <- animal_data %>%
-      filter(Model %in% c("1-class", "Full multi-class"))
+      filter(Model %in% c("Binary", "Binary ensemble", "Full multi-class"))
     
   } else if (dataset_name == "Ladds_Seal") {
     animal_data <- results_long %>%
@@ -47,12 +49,12 @@ generate_plots <- function(combined_results, dataset_name, base_path) {
       mutate(Activity = str_to_title(Activity)) %>%
       mutate(
         Activity = factor(Activity, levels = c("Macroaverage", "Swimming", "Chewing", "Still", "Facerub", "Other")),
-        Model = factor(Model, levels = c("1-class", "Binary", "Full multi-class", "Other multi-class", "Generalised multi-class")),
+        Model = factor(Model, levels = c("1-class",  "1-class ensemble", "Binary", "Binary ensemble", "Full multi-class", "Other multi-class", "Generalised multi-class")),
         is_na = is.na(Value)
       )
     
     animal_data_reduced <- animal_data %>%
-      filter(Model %in% c("Binary", "Full multi-class"))
+      filter(Model %in% c("Binary", "Binary ensemble", "Full multi-class"))
     
   } else {
     stop("Dont know how to work with this data - have to define in function")
