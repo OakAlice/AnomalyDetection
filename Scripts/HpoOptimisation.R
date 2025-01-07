@@ -154,7 +154,7 @@ save_results(
       )
     })
 
-    gc()
+     gc()
     # plan(sequential)
     
     # Store results for this grouping

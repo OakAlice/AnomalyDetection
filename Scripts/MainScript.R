@@ -69,11 +69,12 @@ balance <- "stratified_balance"
 
 # Custom Functions -------------------------------------------------------
 function_files <- c(
-  "FeatureGenerationFunctions.R",   # Feature extraction
-  "FeatureSelectionFunctions.R",    # Feature selection methods
-  "ModelTuningFunctions.R",         # Model optimisation
-  "OtherFunctions.R",               # Utility functions
-  "PlotFunctions.R"                 # Generating performance plots
+  "FeatureGenerationFunctions.R",      # Feature extraction
+  "FeatureSelectionFunctions.R",       # Feature selection methods
+  "ModelTuningFunctions.R",            # Model optimisation
+  "PerformanceCalculationFunctions.R", # Functions for perofmrance and baselines
+  "OtherFunctions.R",                  # Utility functions
+  "PlotFunctions.R"                    # Generating performance plots
 )
 
 invisible(lapply(function_files, function(file) {

@@ -65,7 +65,7 @@ ensure_activity_representation <- function(validation_data, model, retries = 10)
 #' Balance dataset by undersampling majority classes
 #' @param data Data.table to balance
 #' @return Balanced data.table
-balance_data <- function(data) {
+balance_data <- function(data, activity) {
   activity_count <- data[data$Activity == activity, .N] / length(unique(data$Activity))
   data[, .SD[sample(.N, min(.N, activity_count))], by = Activity]
 }
@@ -92,15 +92,15 @@ split_data <- function(model, activity, balance, feature_data, validation_propor
     training_data <- training_data[training_data$Activity == activity, ]
     # Apply balancing only to validation data if needed
     if (balance == "stratified_balance") {
-      validation_data <- balance_data(validation_data)
+      validation_data <- balance_data(validation_data, activity)
     }
   } else if (model == "Binary") {
     if (balance == "stratified_balance") {
-      validation_data <- balance_data(validation_data)
-      training_data <- balance_data(training_data)
+      validation_data <- balance_data(validation_data, activity)
+      training_data <- balance_data(training_data, activity)
     }
   } else if (model == "Multi"){
-    # not sure whether I should add balancing logic here.
+    # not sure whether I should add balancing logic here...
     validation_data <- validation_data
     training_data <- training_data
   }
@@ -147,114 +147,4 @@ save_best_params <- function(data_name, model_type, activity, elapsed_time, resu
 save_results <- function(results_list, file_path) {
   results_df <- rbindlist(results_list, use.names = TRUE, fill = TRUE)
   fwrite(results_df, file_path, row.names = FALSE)
-}
-
-
-
-# Custom function for finding the balanced accuracy -----------------------
-calculateBalancedAccuracy <- function(y_true, y_pred) {
-  sensitivity <- Recall(y_pred, y_true)
-  specificity <- Specificity(y_pred, y_true)
-  (sensitivity + specificity) / 2
-}
-
-# Custom MCC function -----------------------------------------------------
-calculateMCC <- function(y_true, y_pred) {
-  # Create a confusion matrix
-  tp <- sum(y_true == 1 & y_pred == 1)  # True positives
-  tn <- sum(y_true == 0 & y_pred == 0)  # True negatives
-  fp <- sum(y_true == 0 & y_pred == 1)  # False positives
-  fn <- sum(y_true == 1 & y_pred == 0)  # False negatives
-  
-  # Calculate MCC
-  numerator <- (tp * tn) - (fp * fn)
-  denominator <- sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
-  
-  if (denominator == 0) {
-    return(0)  # Handle division by zero case
-  }
-  
-  return(numerator / denominator)
-}
-
-
-# Random performance baseline ---------------------------------------------
-calculate_random_baseline <- function(ground_truth_labels, n_iterations = 100) {
-  # Get class proportions from ground truth
-  class_props <- table(ground_truth_labels) / length(ground_truth_labels)
-  
-  # Store results for each iteration
-  iteration_metrics <- matrix(0, nrow = n_iterations, ncol = 4)
-  colnames(iteration_metrics) <- c("F1_Score", "Precision", "Recall", "Accuracy")
-  
-  for(i in 1:n_iterations) {
-    # Generate random predictions maintaining class proportions
-    random_preds <- sample(
-      x = levels(ground_truth_labels),
-      size = length(ground_truth_labels),
-      prob = class_props,
-      replace = TRUE
-    )
-    random_preds <- factor(random_preds, levels = levels(ground_truth_labels))
-    
-    # Calculate metrics for this iteration
-    iteration_metrics[i, "F1_Score"] <- MLmetrics::F1_Score(
-      y_true = ground_truth_labels, 
-      y_pred = random_preds
-    )
-    iteration_metrics[i, "Precision"] <- MLmetrics::Precision(
-      y_true = ground_truth_labels, 
-      y_pred = random_preds
-    )
-    iteration_metrics[i, "Recall"] <- MLmetrics::Recall(
-      y_true = ground_truth_labels, 
-      y_pred = random_preds
-    )
-    iteration_metrics[i, "Accuracy"] <- MLmetrics::Accuracy(
-      y_true = ground_truth_labels, 
-      y_pred = random_preds
-    )
-  }
-  
-  # Return mean metrics across iterations
-  colMeans(iteration_metrics, na.rm = TRUE)
-}
-
-
-
-calculate_zero_rate_baseline <- function(ground_truth_labels, model_type, target_class = NULL) {
-  if (model_type == "OCC") {
-    # For OCC, always predict the target class
-    zero_rate_preds <- factor(
-      rep(target_class, length(ground_truth_labels)),
-      levels = levels(ground_truth_labels)
-    )
-    # Calculate metrics
-    f1 <- MLmetrics::F1_Score(y_true = ground_truth_labels, y_pred = zero_rate_preds, positive = target_class)
-    precision <- MLmetrics::Precision(y_true = ground_truth_labels, y_pred = zero_rate_preds, positive = target_class)
-    recall <- MLmetrics::Recall(y_true = ground_truth_labels, y_pred = zero_rate_preds, positive = target_class)
-    accuracy <- MLmetrics::Accuracy(y_true = ground_truth_labels, y_pred = zero_rate_preds)
-    
-  } else {
-    # For Binary and multiclass, predict majority class
-    majority_class <- names(which.max(table(ground_truth_labels)))
-    zero_rate_preds <- factor(
-      rep(majority_class, length(ground_truth_labels)),
-      levels = levels(ground_truth_labels)
-    )
-    
-    # Calculate metrics
-    f1 <- MLmetrics::F1_Score(y_true = ground_truth_labels, y_pred = zero_rate_preds)
-    precision <- MLmetrics::Precision(y_true = ground_truth_labels, y_pred = zero_rate_preds)
-    recall <- MLmetrics::Recall(y_true = ground_truth_labels, y_pred = zero_rate_preds)
-    accuracy <- MLmetrics::Accuracy(y_true = ground_truth_labels, y_pred = zero_rate_preds)
-  }
-  
-  # Return metrics
-  c(
-    F1_Score = f1,
-    Precision = precision,
-    Recall = recall,
-    Accuracy = accuracy
-  )
 }

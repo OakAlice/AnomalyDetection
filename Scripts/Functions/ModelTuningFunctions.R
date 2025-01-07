@@ -78,23 +78,10 @@ modelTuning <- function(model, activity, feature_data,
             flush.console()
 
             # Select features from the validation data
-            selected_validation_data <- validation_data[, .SD, .SDcols = c(top_features, "Activity")]
-            selected_validation_data <- na.omit(selected_validation_data)
-            selected_validation_data <- as.data.table(selected_validation_data)
-
-            # Generate predictions and calculate performance
-            ground_truth_labels <- selected_validation_data$Activity
-            numeric_validation_data <- selected_validation_data[, !("Activity"), with = FALSE]
-
-            # this bit was important for the seal data, don't remove
-            invalid_row_indices <- which(!complete.cases(numeric_validation_data) |
-              !apply(numeric_validation_data, 1, function(row) all(is.finite(row))))
-
-            if (length(invalid_row_indices) > 0) {
-              numeric_validation_data <- numeric_validation_data[-invalid_row_indices, , drop = FALSE]
-              ground_truth_labels <- ground_truth_labels[-invalid_row_indices]
-            }
-
+            prepared_validation_data <- prepare_test_data(validation_data, selected_features = c(top_features, "Activity"), behaviour = activity)
+            numeric_validation_data <- prepared_validation_data$numeric_data
+            ground_truth_labels <- prepared_validation_data$ground_truth_labels
+            
             predictions <- predict(trained_SVM, newdata = numeric_validation_data)
 
             message("predictions")
@@ -114,11 +101,6 @@ modelTuning <- function(model, activity, feature_data,
 
             # Compute confusion matrix
             f1_score <- MLmetrics::F1_Score(y_true = ground_truth_labels, y_pred = predictions, positive = activity)
-            precision_metric <- MLmetrics::Precision(y_true = ground_truth_labels, y_pred = predictions, positive = activity)
-            recall_metric <- MLmetrics::Recall(y_true = ground_truth_labels, y_pred = predictions, positive = activity)
-
-            # Replace NAs with 0
-            f1_score[is.na(f1_score)] <- 0
 
             # Compile results for this run
             list(
@@ -300,14 +282,9 @@ multiclassModelTuning <- function(model, multiclass_data, nu, kernel, gamma,
         flush.console()
 
         # Validation data preparation
-        validation_features <- tryCatch({
-          val_features <- validation_data[, ..top_features]
-          val_features <- na.omit(val_features)
-          as.data.table(val_features)
-        }, error = function(e) {
-          message("Error preparing validation data: ", e$message)
-          return(NULL)
-        })
+        multiclass_test_data <- prepare_test_data(validation_data, selected_features = c(top_features, "Activity"), behaviour = NULL)
+        numeric_validation_data <- as.data.frame(multiclass_test_data$numeric_data)
+        ground_truth_labels <- multiclass_test_data$ground_truth_labels
 
         if (is.null(validation_features)) {
           stop("Validation data preparation failed")
@@ -315,8 +292,7 @@ multiclassModelTuning <- function(model, multiclass_data, nu, kernel, gamma,
 
         # Predictions and performance calculation
         predictions_and_metrics <- tryCatch({
-          ground_truth_labels <- validation_features$Activity
-          numeric_validation_data <- validation_features[, !("Activity"), with = FALSE]
+          numeric_validation_data <- numeric_validation_data[, !("Activity"), with = FALSE]
 
           # Handle invalid rows - important for seal data, don't remove
           invalid_row_indices <- which(!complete.cases(numeric_validation_data) |
@@ -329,20 +305,11 @@ multiclassModelTuning <- function(model, multiclass_data, nu, kernel, gamma,
 
           predictions <- predict(multiclass_SVM, newdata = numeric_validation_data)
 
-          # Compute confusion matrix and metrics
-          confusion_matrix <- table(predictions, ground_truth_labels)
-          all_classes <- sort(union(rownames(confusion_matrix), colnames(confusion_matrix)))
-          conf_matrix_padded <- matrix(0,
-            nrow = length(all_classes), ncol = length(all_classes),
-            dimnames = list(all_classes, all_classes)
-          )
-          conf_matrix_padded[rownames(confusion_matrix), colnames(confusion_matrix)] <- confusion_matrix
+          # find the per-class metrics and then average to macro
+          macro_multiclass_scores <- multiclass_class_metrics(ground_truth_labels, predictions)
+          macro_metrics <- macro_multiclass_scores$macro_metrics
 
-          metrics <- confusionMatrix(conf_matrix_padded)
-          f1 <- metrics$byClass[, "F1"]
-          f1[is.na(f1)] <- 0
-
-          list(macro_f1 = mean(f1), top_features = paste(top_features, collapse = ", "))
+          list(macro_f1 = macro_metrics$F1_Score, top_features = paste(top_features, collapse = ", "))
         }, error = function(e) {
           message("Error in predictions and metrics calculation: ", e$message)
           return(NULL)
