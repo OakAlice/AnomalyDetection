@@ -22,8 +22,8 @@ load_predictions <- function(pattern) {
 }
 
 # Process predictions -----------------------------------------------------
-test_results <- data.frame()
 for (model in c("OCC", "Binary")){
+  test_results <- data.frame()
   print(model)
   
   data <- load_predictions(paste0(dataset_name, ".*_", model, "_.*\\.csv$"))
@@ -71,67 +71,85 @@ for (model in c("OCC", "Binary")){
   }
   
   # Calculate per-class metrics and macro average
-  class_metrics <- lapply(unique_classes, function(class) {
-    # Convert to binary problem for this class
-    binary_true <- factor(collective_ground_truth == class, levels = c(FALSE, TRUE))
-    binary_pred <- factor(collective_predictions == class, levels = c(FALSE, TRUE))
-    
-    # Calculate metrics for this class
-    f1 <- MLmetrics::F1_Score(y_true = binary_true, y_pred = binary_pred, positive = TRUE)
-    precision <- MLmetrics::Precision(y_true = binary_true, y_pred = binary_pred, positive = TRUE)
-    recall <- MLmetrics::Recall(y_true = binary_true, y_pred = binary_pred, positive = TRUE)
-    accuracy <- MLmetrics::Accuracy(y_true = binary_true, y_pred = binary_pred)
-    
-    # Return as named vector
-    c(
-      Class = as.character(class),
-      F1_Score = f1,
-      Precision = precision,
-      Recall = recall,
-      Accuracy = accuracy
-    )
-  })
+  ensemble_results <- multiclass_class_metrics(collective_ground_truth, collective_predictions)
+  class_metrics_df <- ensemble_results$class_metrics
+  macro_metrics <- ensemble_results$macro_metrics
   
-  # Combine per-class metrics into a data frame - first turn each class into a row
-  class_metrics_df <- do.call(rbind, lapply(class_metrics, function(x) {
-    # Convert the named vector to a one-row data frame
+  class_metrics_df <- do.call(rbind, lapply(class_metrics_df, function(x) {
+    # Convert any "NaN" to NA
+    x[x == "NaN"] <- NA
+    # Convert numeric strings to actual numbers
+    x[-1] <- as.numeric(x[-1])  # Keep first column (Class) as character
     as.data.frame(t(x), stringsAsFactors = FALSE)
   }))
-  # convert all to numeric
-  class_metrics_df$F1_Score <- as.numeric(class_metrics_df$F1_Score)
-  class_metrics_df$Precision <- as.numeric(class_metrics_df$Precision)
-  class_metrics_df$Recall <- as.numeric(class_metrics_df$Recall)
-  class_metrics_df$Accuracy <- as.numeric(class_metrics_df$Accuracy)
   
-  # Calculate macro averages (replacing NA with 0)
-  macro_metrics <- colMeans(replace(class_metrics_df[, c("F1_Score", "Precision", "Recall", "Accuracy")], 
-                                    is.na(class_metrics_df[, c("F1_Score", "Precision", "Recall", "Accuracy")]), 
-                                    0))
+  # Get baseline metrics
+  # 1. Zero Rate (always predict the majority class)
+  majority_class <- names(which.max(table(collective_ground_truth)))
+  zero_rate_preds <- factor(
+    rep(majority_class, length(collective_ground_truth)),
+    levels = levels(as.factor(collective_ground_truth))
+  )
+  zero_rate_baseline <- multiclass_class_metrics(collective_ground_truth, zero_rate_preds)
+  #### extract the per-class values ####
+  macro_metrics_zero <- zero_rate_baseline$macro_metrics
+  class_metrics_zero <- zero_rate_baseline$class_metrics
+  class_metrics_zero <- do.call(rbind, lapply(class_metrics_zero, function(x) {
+    as.data.frame(t(x), stringsAsFactors = FALSE)
+  }))
+  
+  # 2. Random baseline (randomly select in stratified proportion to true data)
+  random_multiclass <- random_baseline_metrics(collective_ground_truth, iterations = 100)
+  random_macro_summary <- random_multiclass$macro_summary
+  random_class_summary <- random_multiclass$class_summary$averages
+  random_class_summary <- as.data.frame(random_class_summary)
   
   # Compile results for macro averages
   macro_results <- data.frame(
     Dataset = as.character(dataset_name),
-    Model = model,
+    Model = paste0(model, "_Ensemble"),
     Activity = "MacroAverage",
     F1_Score = as.numeric(macro_metrics["F1_Score"]),
     Precision = as.numeric(macro_metrics["Precision"]),
     Recall = as.numeric(macro_metrics["Recall"]),
-    Accuracy = as.numeric(macro_metrics["Accuracy"])
+    Accuracy = as.numeric(macro_metrics["Accuracy"]),
+    Random_F1_Score = random_macro_summary$averages["F1_Score"],
+    Random_Precision = random_macro_summary$averages["Precision"],
+    Random_Recall = random_macro_summary$averages["Recall"],
+    Random_Accuracy = random_macro_summary$averages["Accuracy"],
+    ZeroR_F1_Score = macro_metrics_zero$F1_Score,
+    ZeroR_Precision = macro_metrics_zero$Precision,
+    ZeroR_Recall = macro_metrics_zero$Recall,
+    ZeroR_Accuracy = macro_metrics_zero$Accuracy
   )
   
-  # Add per-class results
-  class_level_results <- data.frame(
-    Dataset = rep(as.character(dataset_name), length(unique_classes)),
-    Model = rep(model, length(unique_classes)),
-    Activity = class_metrics_df$Class,
-    F1_Score = class_metrics_df$F1_Score,
-    Precision = class_metrics_df$Precision,
-    Recall = class_metrics_df$Recall,
-    Accuracy = class_metrics_df$Accuracy
-  )
+  activity_results_list <- list()
+  # Loop through each unique activity
+  for (activity in unique(collective_ground_truth)) {
+    # Create dataframe for current activity
+    activity_results_list[[activity]] <- data.frame(
+      Dataset = dataset_name,
+      Model = paste0(model, "_Ensemble"),
+      Activity = activity,
+      F1_Score = class_metrics_df$F1_Score[class_metrics_df$Class == activity],
+      Precision = class_metrics_df$Precision[class_metrics_df$Class == activity],
+      Recall = class_metrics_df$Recall[class_metrics_df$Class == activity],
+      Accuracy = class_metrics_df$Accuracy[class_metrics_df$Class == activity],
+      Random_F1_Score = random_class_summary[activity, "F1_Score"],
+      Random_Precision = random_class_summary[activity, "Precision"],
+      Random_Recall = random_class_summary[activity, "Recall"],
+      Random_Accuracy = random_class_summary[activity, "Accuracy"],
+      ZeroR_F1_Score = class_metrics_zero$F1_Score[class_metrics_zero$Class == activity],
+      ZeroR_Precision = class_metrics_zero$Precision[class_metrics_zero$Class == activity],
+      ZeroR_Recall = class_metrics_zero$Recall[class_metrics_zero$Class == activity],
+      ZeroR_Accuracy = class_metrics_zero$Accuracy[class_metrics_zero$Class == activity]
+    )
+  }
+  
+  final_class_results <- do.call(rbind, activity_results_list)
   
   # Combine macro-average and per-class results
-  test_results <- rbind(test_results, macro_results, class_level_results)
+  test_results <- rbind(test_results, macro_results, final_class_results)
   
   # save the ensemble results
   fwrite(test_results, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_", model, "_ensemble_test_performance.csv")))

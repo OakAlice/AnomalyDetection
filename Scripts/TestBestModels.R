@@ -149,6 +149,13 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
   zero_rate_baseline <- multiclass_class_metrics(ground_truth_labels, zero_rate_preds)
   #### extract the per-class values ####
   macro_metrics_zero <- zero_rate_baseline$macro_metrics
+  class_metrics_zero <- zero_rate_baseline$class_metrics
+  class_metrics_zero <- do.call(rbind, lapply(class_metrics_zero, function(x) {
+    as.data.frame(t(x), stringsAsFactors = FALSE)
+  }))
+  
+  # View the resulting data frame
+  head(class_metrics_df)
   
   # 2. Random baseline (randomly select in stratified proportion to true data)
   random_multiclass <- random_baseline_metrics(ground_truth_labels, iterations = 100)
@@ -191,10 +198,10 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
       Random_Precision = random_class_summary[activity, "Precision"],
       Random_Recall = random_class_summary[activity, "Recall"],
       Random_Accuracy = random_class_summary[activity, "Accuracy"],
-      ZeroR_F1_Score = NA,
-      ZeroR_Precision = NA,
-      ZeroR_Recall = NA,
-      ZeroR_Accuracy = NA
+      ZeroR_F1_Score = class_metrics_zero$F1_Score[class_metrics_zero$Class == activity],
+      ZeroR_Precision = class_metrics_zero$Precision[class_metrics_zero$Class == activity],
+      ZeroR_Recall = class_metrics_zero$Recall[class_metrics_zero$Class == activity],
+      ZeroR_Accuracy = class_metrics_zero$Accuracy[class_metrics_zero$Class == activity]
     )
   }
   
