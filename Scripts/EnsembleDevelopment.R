@@ -28,7 +28,7 @@ for (model in c("OCC", "Binary")){
   
   data <- load_predictions(paste0(dataset_name, ".*_", model, "_.*\\.csv$"))
   
-  data_wide <- merge(
+  data_wide1 <- merge(
     dcast(data, Time + ID + Ground_truth ~ model_activity, 
           value.var = "Predictions"),
     dcast(data, Time + ID + Ground_truth ~ model_activity, 
@@ -37,18 +37,35 @@ for (model in c("OCC", "Binary")){
     suffixes = c("_Prediction", "_Decision")
   ) 
   
+  
+  data_wide <- data_wide1#[1:50,]
+  
+  
   data_wide_summarised <- data_wide %>% 
     rowwise() %>%
     mutate(
       collective_prediction = {
         preds <- c_across(ends_with("_Prediction"))
-        scores <- c_across(ends_with("_Decision"))
-        valid_idx <- which(preds != "Other")
+        # Filter out both "Other" and NA values
+        valid_idx <- which(preds != "Other" & !is.na(preds))
         
         if(length(valid_idx) > 0) {
-          preds[valid_idx[which.max(abs(scores[valid_idx]))]]
+          # Get the valid predictions
+          valid_preds <- preds[valid_idx]
+          
+          # Define priority order
+          priority_order <- c("Shaking", "Walking", "Eating", "Lying chest")
+          
+          # Find the first matching priority behavior
+          matching_priorities <- priority_order[priority_order %in% valid_preds]
+          
+          if(length(matching_priorities) > 0) {
+            matching_priorities[1]  # Take the highest priority match
+          } else {
+            valid_preds[1]  # Fallback to first valid prediction
+          }
+          
         } else {
-          # Default to "Other" if no valid predictions
           "Other"
         }
       }
@@ -56,102 +73,88 @@ for (model in c("OCC", "Binary")){
     ungroup()
   
   # merge with the ground truth
-  data_wide <- merge(data_wide_summarised, ground_truth_labels, by = c("Time", "ID"))
+  data_wide2 <- merge(data_wide_summarised, ground_truth_labels, by = c("Time", "ID"))
   
   # calculate performance
-  collective_predictions <- data_wide$collective_prediction
-  collective_ground_truth <- data_wide$Activity
-  
-  unique_classes <- sort(union(collective_predictions, collective_ground_truth))
-  collective_predictions <- factor(collective_predictions, levels = unique_classes)
-  collective_ground_truth <- factor(collective_ground_truth, levels = unique_classes)
+  collective_predictions <- data_wide2$collective_prediction
+  collective_ground_truth <- data_wide2$Activity
   
   if (length(collective_predictions) != length(collective_ground_truth)) {
     stop("Error: Predictions and ground truth labels have different lengths.")
   }
   
   # Calculate per-class metrics and macro average
-  ensemble_results <- multiclass_class_metrics(collective_ground_truth, collective_predictions)
-  class_metrics_df <- ensemble_results$class_metrics
-  macro_metrics <- ensemble_results$macro_metrics
-  
-  class_metrics_df <- do.call(rbind, lapply(class_metrics_df, function(x) {
-    # Convert any "NaN" to NA
-    x[x == "NaN"] <- NA
-    # Convert numeric strings to actual numbers
-    x[-1] <- as.numeric(x[-1])  # Keep first column (Class) as character
-    as.data.frame(t(x), stringsAsFactors = FALSE)
-  }))
-  
-  # Get baseline metrics
-  # 1. Zero Rate (always predict the majority class)
-  majority_class <- names(which.max(table(collective_ground_truth)))
-  zero_rate_preds <- factor(
-    rep(majority_class, length(collective_ground_truth)),
-    levels = levels(as.factor(collective_ground_truth))
-  )
-  zero_rate_baseline <- multiclass_class_metrics(collective_ground_truth, zero_rate_preds)
-  #### extract the per-class values ####
-  macro_metrics_zero <- zero_rate_baseline$macro_metrics
-  class_metrics_zero <- zero_rate_baseline$class_metrics
-  class_metrics_zero <- do.call(rbind, lapply(class_metrics_zero, function(x) {
-    as.data.frame(t(x), stringsAsFactors = FALSE)
-  }))
-  
-  # 2. Random baseline (randomly select in stratified proportion to true data)
-  random_multiclass <- random_baseline_metrics(collective_ground_truth, iterations = 100)
-  random_macro_summary <- random_multiclass$macro_summary
-  random_class_summary <- random_multiclass$class_summary$averages
-  random_class_summary <- as.data.frame(random_class_summary)
-  
-  # Compile results for macro averages
-  macro_results <- data.frame(
-    Dataset = as.character(dataset_name),
-    Model = paste0(model, "_Ensemble"),
-    Activity = "MacroAverage",
-    F1_Score = as.numeric(macro_metrics["F1_Score"]),
-    Precision = as.numeric(macro_metrics["Precision"]),
-    Recall = as.numeric(macro_metrics["Recall"]),
-    Accuracy = as.numeric(macro_metrics["Accuracy"]),
-    Random_F1_Score = random_macro_summary$averages["F1_Score"],
-    Random_Precision = random_macro_summary$averages["Precision"],
-    Random_Recall = random_macro_summary$averages["Recall"],
-    Random_Accuracy = random_macro_summary$averages["Accuracy"],
-    ZeroR_F1_Score = macro_metrics_zero$F1_Score,
-    ZeroR_Precision = macro_metrics_zero$Precision,
-    ZeroR_Recall = macro_metrics_zero$Recall,
-    ZeroR_Accuracy = macro_metrics_zero$Accuracy
-  )
-  
-  activity_results_list <- list()
-  # Loop through each unique activity
-  for (activity in unique(collective_ground_truth)) {
-    # Create dataframe for current activity
-    activity_results_list[[activity]] <- data.frame(
-      Dataset = dataset_name,
-      Model = paste0(model, "_Ensemble"),
-      Activity = activity,
-      F1_Score = class_metrics_df$F1_Score[class_metrics_df$Class == activity],
-      Precision = class_metrics_df$Precision[class_metrics_df$Class == activity],
-      Recall = class_metrics_df$Recall[class_metrics_df$Class == activity],
-      Accuracy = class_metrics_df$Accuracy[class_metrics_df$Class == activity],
-      Random_F1_Score = random_class_summary[activity, "F1_Score"],
-      Random_Precision = random_class_summary[activity, "Precision"],
-      Random_Recall = random_class_summary[activity, "Recall"],
-      Random_Accuracy = random_class_summary[activity, "Accuracy"],
-      ZeroR_F1_Score = class_metrics_zero$F1_Score[class_metrics_zero$Class == activity],
-      ZeroR_Precision = class_metrics_zero$Precision[class_metrics_zero$Class == activity],
-      ZeroR_Recall = class_metrics_zero$Recall[class_metrics_zero$Class == activity],
-      ZeroR_Accuracy = class_metrics_zero$Accuracy[class_metrics_zero$Class == activity]
-    )
-  }
-  
-  final_class_results <- do.call(rbind, activity_results_list)
-  
-  # Combine macro-average and per-class results
-  test_results <- rbind(test_results, macro_results, final_class_results)
-  
+  test_results <- calculate_full_multi_performance(ground_truth_labels = collective_ground_truth, predictions = collective_predictions)
+    
   # save the ensemble results
   fwrite(test_results, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_", model, "_ensemble_test_performance.csv")))
   fwrite(data_wide, file.path(base_path, "Output", "Testing", "Predictions", paste0(dataset_name, "_", model, "_ensemble_predictions.csv")))
 }
+
+
+
+
+
+
+
+
+
+# Plotting performance ----------------------------------------------------
+
+ground_truth <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv"))) %>%
+  select(Time, ID, Activity, OtherActivity, GeneralisedActivity)
+ground_truth_labels <- ground_truth %>% 
+  select(Time, ID, Activity) %>%
+  mutate(Activity = ifelse(!Activity %in% target_activities, "Other", Activity))
+
+
+OCC_ensemble <- fread(file.path(base_path, "Output", "Testing", "Predictions", paste0(dataset_name, "_Binary_ensemble_predictions.csv"))) %>%
+  select(-Ground_truth)
+
+First_ind <- OCC_ensemble %>% filter(ID == unique(OCC_ensemble$ID)[1])
+
+
+# Create the activity plot
+activity_plot <- ggplot(First_ind, aes(x = Time, y = 1, fill = Activity)) +
+  geom_tile() +
+  scale_fill_brewer(palette = "Set3") +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),
+        axis.title.y = element_blank()) +
+  labs(title = "Activity Over Time")
+
+# Reshape prediction data for plotting
+predictions_data <- First_ind %>%
+  select(Time, ends_with("_Prediction")) %>%
+  pivot_longer(
+    cols = ends_with("_Prediction"),
+    names_to = "Prediction_Type",
+    values_to = "Prediction"
+  ) %>%
+  # Remove "_Prediction" from names for cleaner labels
+  mutate(Prediction_Type = gsub("_Prediction", "", Prediction_Type))
+
+Lying <- predictions_data %>% filter(Prediction_Type == "Lying chest")
+
+
+
+# Create the predictions plot
+predictions_plot <- ggplot(predictions_data, aes(x = Time, y = Prediction_Type, fill = Prediction)) +
+  geom_tile() +
+  scale_fill_brewer(palette = "Set3") +
+  theme_minimal() +
+  labs(y = "Prediction Type",
+       title = "Predictions Over Time")
+
+# Combine plots vertically
+combined_plot <- activity_plot / predictions_plot +
+  plot_layout(heights = c(1, 4))
+
+# Display the combined plot
+print(combined_plot)
+
+
+
+
+
+

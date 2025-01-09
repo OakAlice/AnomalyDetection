@@ -150,7 +150,7 @@ save_results(
         init_points = 5,
         n_iter = 10,
         acq = "ucb",
-        kappa = 2.576
+        kappa = 2.576 
       )
     })
 

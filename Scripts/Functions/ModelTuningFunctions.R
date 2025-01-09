@@ -65,7 +65,6 @@ modelTuning <- function(model, activity, feature_data,
             # Add some extra things only when it's not OCC
             if (model != "OCC") {
               svm_args$y <- as.factor(selected_training_data$Activity)
-
               class_weights <- table(selected_training_data$Activity)
               class_weights <- max(class_weights) / class_weights
 
