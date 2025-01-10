@@ -28,7 +28,7 @@ for (model in c("OCC", "Binary")){
   
   data <- load_predictions(paste0(dataset_name, ".*_", model, "_.*\\.csv$"))
   
-  data_wide1 <- merge(
+  data_wide <- merge(
     dcast(data, Time + ID + Ground_truth ~ model_activity, 
           value.var = "Predictions"),
     dcast(data, Time + ID + Ground_truth ~ model_activity, 
@@ -36,10 +36,6 @@ for (model in c("OCC", "Binary")){
     by = c("Time", "ID", "Ground_truth"),
     suffixes = c("_Prediction", "_Decision")
   ) 
-  
-  
-  data_wide <- data_wide1#[1:50,]
-  
   
   data_wide_summarised <- data_wide %>% 
     rowwise() %>%
@@ -54,7 +50,11 @@ for (model in c("OCC", "Binary")){
           valid_preds <- preds[valid_idx]
           
           # Define priority order
-          priority_order <- c("Shaking", "Walking", "Eating", "Lying chest")
+          if(dataset_name == "Vehkaoja_Dog"){
+            priority_order <- c("Shaking", "Walking", "Eating", "Lying chest")
+          } else if(dataset_name == "Ladds_Seal"){
+            priority_order <- c("Still", "Swimming", "Chewing", "Facerub")
+          }
           
           # Find the first matching priority behavior
           matching_priorities <- priority_order[priority_order %in% valid_preds]
@@ -84,7 +84,7 @@ for (model in c("OCC", "Binary")){
   }
   
   # Calculate per-class metrics and macro average
-  test_results <- calculate_full_multi_performance(ground_truth_labels = collective_ground_truth, predictions = collective_predictions)
+  test_results <- calculate_full_multi_performance(ground_truth_labels = collective_ground_truth, predictions = collective_predictions, model = paste0(model, "_Ensemble"))
     
   # save the ensemble results
   fwrite(test_results, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_", model, "_ensemble_test_performance.csv")))

@@ -1,9 +1,9 @@
 # Zero rate Classification for dichotomous models -------------------------
 calculate_zero_rate_baseline <- function(ground_truth_labels, model_type, target_class = NULL) {
   if (model_type == "OCC" | model_type == "Binary") {
-    # For OCC and Binary, always predict the target class
+    # For OCC and Binary, always predict the non-target class
     zero_rate_preds <- factor(
-      rep(target_class, length(ground_truth_labels)),
+      rep("Other", length(ground_truth_labels)),
       levels = levels(ground_truth_labels)
     )
     # Calculate metrics
@@ -13,7 +13,7 @@ calculate_zero_rate_baseline <- function(ground_truth_labels, model_type, target
     accuracy <- MLmetrics::Accuracy(y_true = ground_truth_labels, y_pred = zero_rate_preds)
     
   } else {
-    print("this doesn't work for multiclass")
+    print("this doesn't work for multiclass, use other one")
   }
   # Return metrics
   c(
@@ -70,7 +70,7 @@ multiclass_class_metrics <- function(ground_truth_labels, predictions) {
     summarize(across(c(F1_Score, Precision, Recall, Accuracy), ~ sum(.x * prevalence_df$Prevalence, na.rm = TRUE))) %>%
     as.list()
   
-  # Calculate macro averages
+  # Calculate macro averages (not weighted)
   macro_metrics <- colMeans(replace(class_metrics_df[, c("F1_Score", "Precision", "Recall", "Accuracy")], 
                                     is.na(class_metrics_df[, c("F1_Score", "Precision", "Recall", "Accuracy")]), 
                                     0)) %>% as.list()
@@ -144,7 +144,7 @@ save_results <- function(results, predictions, ground_truth_labels, time_values,
 
 
 # Random baseline for multiclass metrics ----------------------------------
-random_baseline_metrics <- function(ground_truth_labels, iterations = 100) {
+random_baseline_metrics <- function(ground_truth_labels, iterations = 100, model = "Multi") {
   # Convert ground truth to factor and get class information
   ground_truth_labels <- factor(ground_truth_labels)
   class_levels <- levels(ground_truth_labels)
@@ -171,7 +171,7 @@ random_baseline_metrics <- function(ground_truth_labels, iterations = 100) {
     
   # Calculate average for each class and metric
   class_metrics_combined <- do.call(rbind, class_metrics)
-  
+
   averages_df <- class_metrics_combined %>%
     group_by(Class) %>%
     summarise(
@@ -182,33 +182,35 @@ random_baseline_metrics <- function(ground_truth_labels, iterations = 100) {
       Prevalence = mean(Prevalence, na.rm = TRUE)
     )
   
-  # calculate the weighted average from the individual classes
-  weighted_metrics <- averages_df %>%
+  if(model == "OCC" | model == "Binary"){
+    selected_metrics <- averages_df[!averages_df$Class == "Other", ]
+    
+  } else {
+    # calculate the weighted average from the individual classes
+  selected_metrics <- averages_df %>%
     summarize(across(c(F1_Score, Precision, Recall, Accuracy), ~ sum(.x * averages_df$Prevalence, na.rm = TRUE))) %>%
     as.list()
+  }
   
   # Calculate summary statistics
   list(
     macro_summary = list(
-      F1_Score = weighted_metrics$F1_Score,
-      Precision = weighted_metrics$Precision,
-      Recall = weighted_metrics$Recall,
-      Accuracy = weighted_metrics$Accuracy
+      F1_Score = selected_metrics$F1_Score,
+      Precision = selected_metrics$Precision,
+      Recall = selected_metrics$Recall,
+      Accuracy = selected_metrics$Accuracy
     ),
     class_summary = averages_df
   )
 }
 
-
-
 # Unadjusted performance, random, and zero baseline -----------------------
-calculate_full_multi_performance <- function(ground_truth_labels, predictions){
+calculate_full_multi_performance <- function(ground_truth_labels, predictions, model){
   
   # 1. absolute scores (unadjusted)
   macro_multiclass_scores <- multiclass_class_metrics(ground_truth_labels, predictions)
-  class_metrics_df <- macro_multiclass_scores$class_metrics
-  macro_metrics <- macro_multiclass_scores$macro_metrics
-  weighted_metrics <- macro_multiclass_scores$weighted_metrics
+    class_metrics_df <- macro_multiclass_scores$class_metrics
+    weighted_metrics <- macro_multiclass_scores$weighted_metrics
   
   # 2. Zero Rate baseline (always predict the majority class)
   majority_class <- names(which.max(table(ground_truth_labels)))
@@ -217,19 +219,22 @@ calculate_full_multi_performance <- function(ground_truth_labels, predictions){
     levels = levels(as.factor(ground_truth_labels))
   )
   zero_rate_baseline <- multiclass_class_metrics(ground_truth_labels, zero_rate_preds)
-  macro_metrics_zero <- zero_rate_baseline$macro_metrics
-  class_metrics_zero <- zero_rate_baseline$class_metrics
+    macro_metrics_zero <- zero_rate_baseline$macro_metrics
+    class_metrics_zero <- zero_rate_baseline$class_metrics
   
   # 3. Random baseline (randomly select in stratified proportion to true data)
-  random_multiclass <- random_baseline_metrics(ground_truth_labels, iterations = 100)
-  random_macro_summary <- random_multiclass$macro_summary
-  random_class_summary <- random_multiclass$class_summary
+  random_multiclass <- random_baseline_metrics(ground_truth_labels, iterations = 100, model)
+    random_macro_summary <- random_multiclass$macro_summary
+    random_class_summary <- random_multiclass$class_summary
   
   # Compile results
   macro_results <- data.frame(
     Dataset = dataset_name,
-    Model = behaviour_set,
+    Model = model,
     Activity = "WeightedMacroAverage",
+    
+    Prevalence = NA,
+    
     F1_Score = weighted_metrics["F1_Score"],
     Precision = weighted_metrics["Precision"],
     Recall = weighted_metrics["Recall"],
@@ -243,15 +248,17 @@ calculate_full_multi_performance <- function(ground_truth_labels, predictions){
     ZeroR_Recall = macro_metrics_zero$Recall,
     ZeroR_Accuracy = macro_metrics_zero$Accuracy
   )
-  
+
   activity_results_list <- list()
   # Loop through each unique activity
   for (activity in unique(ground_truth_labels)) {
     # Create dataframe for current activity
     activity_results_list[[activity]] <- data.frame(
       Dataset = dataset_name,
-      Model = behaviour_set,
+      Model = model,
       Activity = activity,
+      
+      Prevalence = class_metrics_df$Prevalence[class_metrics_df$Class == activity],
       
       F1_Score = class_metrics_df$F1_Score[class_metrics_df$Class == activity],
       Precision = class_metrics_df$Precision[class_metrics_df$Class == activity],
@@ -274,5 +281,6 @@ calculate_full_multi_performance <- function(ground_truth_labels, predictions){
   final_class_results <- do.call(rbind, activity_results_list)
   
   # Combine all results
-  test_results <- rbind(test_results, macro_results, final_class_results)
+  test_results <- rbind(macro_results, final_class_results)
 }
+

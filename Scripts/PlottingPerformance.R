@@ -3,18 +3,8 @@
 
 # read in
 combined_results <- fread(file = file.path(base_path, "Output", "Testing", paste0(dataset_name, "_complete_test_performance.csv"))) %>% as.data.frame()
-combined_results$Activity <- str_to_title(combined_results$Activity) # format for consistency
 
-training_data <- fread(
-  file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv"))) %>%
-  as.data.table()
-training_data$Activity <- str_to_title(training_data$Activity)
-
-tuning_files <- list.files(file.path(base_path, "Output", "Tuning"), pattern = "*.csv", full.names = TRUE)
-combined_tuning_data <- lapply(tuning_files, read.csv) %>%
-  bind_rows()
-combined_tuning_data$behaviour_or_activity <- str_to_title(combined_tuning_data$behaviour_or_activity) # format for consistency
-
+combined_results <- combined_results %>% mutate(Activity = ifelse(Activity == "Weightedmacroaverage", "Macroaverage", Activity))
 
 
 # generate plot of perofrmance metrics
@@ -33,7 +23,29 @@ performance_to_volume(combined_results, training_data, dataset_name, base_path)
 
 
 
+
+
+
+
+
+# add in the ground truth labels
+training_data <- fread(
+  file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv"))) %>%
+  as.data.table()
+training_data$Activity <- str_to_title(training_data$Activity)
+
+
+
 # tuning plot -------------------------------------------------------------
+
+# time for tuning per model
+tuning_files <- list.files(file.path(base_path, "Output", "Tuning"), pattern = "*.csv", full.names = TRUE)
+combined_tuning_data <- lapply(tuning_files, read.csv) %>%
+  bind_rows()
+combined_tuning_data$behaviour_or_activity <- str_to_title(combined_tuning_data$behaviour_or_activity) # format for consistency
+
+
+
 colours <- c(
   "#A63A50", "#FFCF56", "#D4B2D8", "#3891A6", "#3BB273", "#031D44",
   "#FF8C42", "#4F7190", "#BF6D4C", "#7CB518", "#6A4C93"

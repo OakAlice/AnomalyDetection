@@ -9,7 +9,7 @@ test_feature_data$GeneralisedActivity <- str_to_title(test_feature_data$Generali
 for(model in c("OCC", "Binary")){
   test_results <- data.frame()
   for(behaviour in target_activities){
-    # behaviour <- target_activities[2]
+    # behaviour <- target_activities[1]
     
     # load in the model, comes in as "trained_SVM"
     load(file.path(base_path, "Output", "Models", paste0(dataset_name, "_", model, "_", behaviour, "_final_model.rda")))
@@ -55,25 +55,26 @@ for(model in c("OCC", "Binary")){
    
     # Compute baseline metrics
     zero_rate_baseline <- as.list(calculate_zero_rate_baseline(ground_truth_labels, model, behaviour))
-    random_baseline <- as.list(calculate_random_baseline(ground_truth_labels, behaviour, n_iterations = 100))
+    random_baseline <- as.list(random_baseline_metrics(ground_truth_labels, iterations = 100, model))
     
     # Compile results for this run
     results <- data.frame(
       Dataset = as.character(dataset_name),
       Model = as.character(model),
       Activity = as.character(behaviour),
+      Prevelance = NA, # just a space filler so it fits with the others
       F1_Score = as.numeric(f1_score),
       Precision = as.numeric(precision_metric),
       Recall = as.numeric(recall_metric),
       Accuracy = as.numeric(accuracy_metric),
-      ZeroR_F1 = zero_rate_baseline$F1_Score,
+      ZeroR_F1_Score = zero_rate_baseline$F1_Score,
       ZeroR_Precision = zero_rate_baseline$Precision,
       ZeroR_Recall = zero_rate_baseline$Recall,
       ZeroR_Accuracy = zero_rate_baseline$Accuracy,
-      Random_F1 = random_baseline$F1_Score,
-      Random_Precision = random_baseline$Precision,
-      Random_Recall = random_baseline$Recall,
-      Random_Accuracy = random_baseline$Accuracy
+      Random_F1_Score = random_baseline$macro_summary$F1_Score,
+      Random_Precision = random_baseline$macro_summary$Precision,
+      Random_Recall = random_baseline$macro_summary$Recall,
+      Random_Accuracy = random_baseline$macro_summary$Accuracy
     )
   
     test_results <- rbind(test_results, results)
@@ -100,7 +101,6 @@ for(model in c("OCC", "Binary")){
 # Multi-class models ------------------------------------------------------
 
 for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
-  test_results <- data.frame()
   
   # load in the model, comes in as "trained_SVM"
   load(file.path(base_path, "Output", "Models", paste0(dataset_name, "_Multi_", behaviour_set, "_final_model.rda")))
@@ -130,9 +130,9 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
     stop("Error: Predictions and ground truth labels have different lengths.")
   }
   
-  test_results <- calculate_full_multi_performance(ground_truth_labels, predictions)
+  test_results <- calculate_full_multi_performance(ground_truth_labels, predictions, model = behaviour_set)
 
-  fwrite(test_results, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_Multi_", behaviour_set, "_test_performance.csv")))
+  fwrite(test_results, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_Multi_", behaviour_set, "_test_performance.csv")), row.names = FALSE)
   message("test results stored")
   
   # Save predictions
@@ -150,3 +150,37 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
     message("No predictions to save.")
   }
 }
+
+
+
+# Read all files together -------------------------------------------------
+test_files <- list.files(file.path(base_path, "Output", "Testing"), pattern = paste0(dataset_name, "_.*\\.csv$"), full.names = TRUE)
+test_outcome <- rbindlist(
+  lapply(test_files, function(file) {
+    df <- fread(file)
+    return(df)
+  }),
+  use.names = TRUE
+)
+
+test_outcome[is.na(test_outcome)] <- 0
+
+test_outcome$Activity <- str_to_title(test_outcome$Activity) # format for consistency
+# calculate the adjusted values
+combined_results_adjusted <- test_outcome %>%
+  mutate(Zero_adj_F1_Score = F1_Score - ZeroR_F1_Score,
+         Zero_adj_Precision = Precision - ZeroR_Precision,
+         Zero_adj_Recall = Recall - ZeroR_Recall,
+         Zero_adj_Accuracy = Accuracy - ZeroR_Accuracy,
+         Rand_adj_F1_Score = F1_Score - Random_F1_Score,
+         Rand_adj_Precision = Precision - Random_Precision,
+         Rand_adj_Recall = Recall - Random_Recall,
+         Rand_adj_Accuracy = Accuracy - Random_Accuracy)
+
+fwrite(combined_results_adjusted, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_complete_test_performance.csv")))
+
+
+
+
+
+

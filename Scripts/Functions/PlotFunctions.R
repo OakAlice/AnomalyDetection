@@ -92,7 +92,6 @@ plot_and_save <- function(results_long, dataset_name, base_path, suffix = "") {
 
 prepare_results <- function(combined_results) {
   combined_results %>%
-    mutate(across(c(F1_Score, Precision, Recall, Accuracy), as.numeric)) %>%
     melt(
       id.vars = c("Dataset", "Model", "Activity"),
       measure.vars = c("F1_Score", "Precision", "Recall", "Accuracy"),
@@ -121,26 +120,36 @@ absolute_performance <- function(combined_results, dataset_name, base_path) {
 
 # adjusted for the zero rate performance
 zero_performance <- function(combined_results, dataset_name, base_path) {
-   combined_results_zero <- combined_results %>%
-    mutate(across(where(is.numeric), ~replace(., is.nan(.), 0)))
   
-  combined_results_zero_sum <- combined_results_zero %>%
-    mutate(across(c(F1_Score, Precision, Recall, Accuracy), 
-                 ~.x - get(paste0("ZeroR_", sub("_Score$", "", cur_column()))))) %>%
-    select(Dataset, Model, Activity, F1_Score, Precision, Recall, Accuracy)
+  combined_results_zero <- combined_results %>%
+    select(Dataset, Model, Activity, Zero_adj_F1_Score, Zero_adj_Precision, Zero_adj_Recall, Zero_adj_Accuracy) %>%
+    rename(F1_Score = Zero_adj_F1_Score,
+           Precision = Zero_adj_Precision,
+           Recall = Zero_adj_Recall,
+           Accuracy = Zero_adj_Accuracy) %>%
+    mutate(across(where(is.numeric), ~replace(., is.nan(.), 0))) 
+   
+  results_long <- prepare_results(combined_results_zero)
   
-  results_long <- prepare_results(combined_results_zero_sum)
+  
   plot_and_save(results_long, dataset_name, base_path, "_zero")
 }
 
+
+
 # adjusted for random guessing performance
 random_performance <- function(combined_results, dataset_name, base_path) {
-  combined_results <- combined_results %>%
-    mutate(across(c(F1_Score, Precision, Recall, Accuracy), 
-                 ~.x - get(paste0("Random_", sub("_Score$", "", cur_column()))))) %>%
-    select(Dataset, Model, Activity, F1_Score, Precision, Recall, Accuracy)
   
-  results_long <- prepare_results(combined_results)
+  combined_results_rand <- combined_results %>%
+    select(Dataset, Model, Activity, Rand_adj_F1_Score, Rand_adj_Precision, Rand_adj_Recall, Rand_adj_Accuracy) %>%
+    rename(F1_Score = Rand_adj_F1_Score,
+           Precision = Rand_adj_Precision,
+           Recall = Rand_adj_Recall,
+           Accuracy = Rand_adj_Accuracy) %>%
+    mutate(across(where(is.numeric), ~replace(., is.nan(.), 0))) 
+  
+  results_long <- prepare_results(combined_results_rand)
+  
   plot_and_save(results_long, dataset_name, base_path, "_random")
 }
 
@@ -191,7 +200,7 @@ full_multi <- function(combined_results, dataset_name, base_path) {
     geom_point(size = 5, na.rm = TRUE, alpha = 0.8) +
     geom_point(
       data = results_long %>% filter(is_na),
-      aes(y = -0.1),
+      aes(y = -1),
       size = 5,
       alpha = 0.8
     ) +
