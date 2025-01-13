@@ -8,7 +8,6 @@
 #' @param activity Character. The target activity/behavior to classify
 #' @param feature_data Data frame. The input features and activity data
 #' @param n_trees Integer. Number of trees in the random forest
-#' @param mtry Integer. Number of variables randomly sampled at each split
 #' @param validation_proportion Numeric. Proportion of data to use for validation (0-1)
 #' @param balance Logical. Whether to balance the classes in training data
 #'
@@ -16,7 +15,7 @@
 #'   \item{Score}{Numeric. Average F1 score across iterations}
 #'   \item{Pred}{Character vector. Selected feature names}
 
-dichotomousModelTuningRF <- function(model, activity, feature_data, nodesize,
+dichotomousModelTuningRF <- function(model, activity, feature_data, nodesize, n_trees,
                                     validation_proportion, 
                                     balance) {
   # Input validation
@@ -77,16 +76,12 @@ dichotomousModelTuningRF <- function(model, activity, feature_data, nodesize,
         message(paste0("Training data rows: ", nrow(selected_training_data)))
         message(paste0("Validation data rows: ", nrow(selected_validation_data)))
         
+        message("training model")
+        flush.console() 
         
         if (model == "Binary"){
           # use a binary decision tree
-          # check that mtry isn't too big
-          mtry <- ifelse(mtry > ncol(selected_training_data) - 1, ncol(selected_training_data) - 1, mtry)
-  
-          message("training model")
-          flush.console()
           
-          # Decision tree
           trained_tree <- tree(
             formula = Activity ~ .,
             data = as.data.frame(selected_training_data), # Ensure data is a data frame
@@ -97,7 +92,7 @@ dichotomousModelTuningRF <- function(model, activity, feature_data, nodesize,
             )
           )
         
-          message("Model trained successfully")
+          message("Binary model trained successfully")
           
           # select the important stuff
           truth_labels <- selected_validation_data$Activity
@@ -105,6 +100,7 @@ dichotomousModelTuningRF <- function(model, activity, feature_data, nodesize,
   
           # Make predictions
           prediction_labels <- predict(trained_tree, newdata = as.data.frame(numeric_pred_data), type = "class")
+          
         } else if (model == "OCC"){
           
           target_training_data <- selected_training_data %>% filter(Activity == activity)
@@ -114,6 +110,8 @@ dichotomousModelTuningRF <- function(model, activity, feature_data, nodesize,
           iso_forest <- isolation.forest(train_num, 
                                          ntrees = n_trees, 
                                          sample_size = 256)
+          
+          message("Iso model trained successfully")
           
           # prep validation data
           truth_labels <- selected_validation_data$Activity
@@ -148,7 +146,6 @@ dichotomousModelTuningRF <- function(model, activity, feature_data, nodesize,
         list(
           Activity = as.character(activity),
           n_trees = as.numeric(n_trees),
-          mtry = as.numeric(mtry),
           nodesize = as.numeric(nodesize),
           f1 = as.numeric(f1_score),
           top_features = as.character(top_features)
@@ -172,7 +169,7 @@ dichotomousModelTuningRF <- function(model, activity, feature_data, nodesize,
     model_outcomes <- unique(rbindlist(future_outcomes, use.names = TRUE, fill = TRUE))
     
     avg_outcomes <- model_outcomes %>%
-      group_by(Activity, n_trees, mtry, nodesize) %>%
+      group_by(Activity, n_trees, nodesize) %>%
       summarise(
         mean_F1 = mean(f1),
         .groups = 'drop'

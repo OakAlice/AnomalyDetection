@@ -39,10 +39,6 @@ overlap_percent <- window_settings[[dataset_name]]$overlap_percent
 target_activities <- window_settings[[dataset_name]]$target_activities
 
 # Load Required Packages --------------------------------------------------
-# isolation forest is not on CRAN and has to be loaded seperately
-#install.packages("http://download.r-forge.r-project.org/src/contrib/IsolationForest_0.0-26.tar.gz", repo=NULL, type="source")
-
-# remainder can be loaded as a group
 library(pacman)
 p_load(
   caret,           # Classification and regression training

@@ -37,7 +37,7 @@ adjust_activity <- function(data, model, activity) {
   
   # Adjust the Activity column based on the model type
   data[, Activity := ifelse(Activity == activity, activity, "Other")]
-  
+
   data <- data[Activity %in% c(activity, "Other")]
   
   return(data)
@@ -138,6 +138,25 @@ save_best_params <- function(data_name, model_type, activity, elapsed_time, resu
     kernel = results$Best_Par["kernel"],
     number_trees = ifelse(!is.na(results$Best_Par["number_trees"]), results$Best_Par["number_trees"], NA),
     number_features = ifelse(!is.na(results$Best_Par["number_features"]), results$Best_Par["number_features"], NA),
+    Best_Value = results$Best_Value,
+    Selected_Features = features
+  )
+  return(results) 
+}
+
+save_best_params_RF <- function(data_name, model_type, activity, elapsed_time, results) {
+  
+  features <- paste(unique(unlist(results$Pred[[which(results$History$Value == results$Best_Value)[1]]])), collapse = ", ")
+  
+  results <- data.frame(
+    data_name = data_name,
+    model_type = model_type,
+    behaviour_or_activity = activity,
+    elapsed = as.numeric(elapsed_time[3]),
+    system = as.numeric(elapsed_time[2]),
+    user = as.numeric(elapsed_time[1]),
+    nodesize = results$Best_Par["nodesize"],
+    n_trees = results$Best_Par["n_trees"],
     Best_Value = results$Best_Value,
     Selected_Features = features
   )

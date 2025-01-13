@@ -20,7 +20,6 @@ if (ML_method == "SVM"){
 } else if (ML_method == "Tree"){
   bounds <- list(
     n_trees = c(100, 1000),
-    mtry = c(1, 200),
     nodesize = c(5, 20)
   )
 }
@@ -28,7 +27,7 @@ if (ML_method == "SVM"){
 # Dichotomous Model tuning master call --------------------------------------
 # Can currently do binary and OCC, will expand to multi-class as well
 
-model_types <- "Binary" # c("OCC", "Binary")
+model_types <- c("OCC", "Binary")
 
 feature_data <- fread(
   file.path(base_path, "Data", "Feature_data", 
@@ -73,25 +72,24 @@ for (model in model_types){
         )
       })
       
-    } else if (ML_method == "RF"){
+    } else if (ML_method == "Tree"){
     
       elapsed_time <- system.time({
         results <- BayesianOptimization(
-          FUN = function(nodesize, mtry, n_trees) {
+          FUN = function(nodesize, n_trees) {
             dichotomousModelTuningRF(
               model = model,
               activity = activity,
               feature_data = feature_data,
               nodesize = nodesize,
-              # mtry = mtry,
-              # n_trees = n_trees,
+              n_trees = n_trees,
               validation_proportion = validation_proportion,
               balance = balance
             )
           },
           bounds = bounds,
-          init_points = 10,
-          n_iter = 20,
+          init_points = 15,
+          n_iter = 1,
           acq = "ucb",
           kappa = 2.576
         )
@@ -104,19 +102,29 @@ for (model in model_types){
     # plan(sequential)
     
     # Store results for this activity
-    result <- tryCatch(
-      save_best_params(
-        data_name = as.character(dataset_name),
-        model_type = as.character(model),
-        activity = as.character(activity),
-        elapsed_time = elapsed_time,
-        results = results
-      ),
-      error = function(e) {
-        message("Error in save_best_params: ", e$message)
-        return(NULL)
+    # rewrite this code to be better - i.e., handle ML method inside of function
+    result <- tryCatch({
+      if (ML_method == "Tree") {
+        save_best_params_RF(
+          data_name = as.character(dataset_name),
+          model_type = as.character(model),
+          activity = as.character(activity),
+          elapsed_time = elapsed_time,
+          results = results
+        )
+      } else if (ML_method == "SVM") {
+        save_best_params_SVM(
+          data_name = as.character(dataset_name),
+          model_type = as.character(model),
+          activity = as.character(activity),
+          elapsed_time = elapsed_time,
+          results = results
+        )
       }
-    )
+    }, error = function(e) {
+      message("Error in save_best_params: ", e$message)
+      return(NULL)
+    })
     
     # Add result to results_stored list if valid
     if (!is.null(result)) {
@@ -128,10 +136,14 @@ for (model in model_types){
   
   save_results(
     results_stored, 
-    file.path(base_path, "Output", "Tuning", 
+    file.path(base_path, "Output", "Tuning", ML_method,
               paste0(dataset_name, "_", model, "_hyperparmaters.csv")))
 
 }
+
+
+
+
 
 
 

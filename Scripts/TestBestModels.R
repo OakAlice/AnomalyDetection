@@ -11,12 +11,24 @@ for(model in c("OCC", "Binary")){
   for(behaviour in target_activities){
     # behaviour <- target_activities[1]
     
-    # load in the model, comes in as "trained_SVM"
-    load(file.path(base_path, "Output", "Models", paste0(dataset_name, "_", model, "_", behaviour, "_final_model.rda")))
+    # load in the model, comes in as "trained_SVM" or "trained_tree" - need to standardise
+    load(file.path(base_path, "Output", "Models", ML_method, paste0(dataset_name, "_", model, "_", behaviour, "_final_model.rda")))
     
-    # extract the right variables from the model
-    selected_features <- colnames(trained_SVM$call$x)
-    
+    if (ML_method == "Tree"){
+      trained_model <- trained_tree
+      if (model == "OCC"){
+        selected_features <- trained_model[["metadata"]][["cols_num"]]
+      } else if (model == "Binary"){
+        selected_features <- as.character(trained_model[["frame"]][["var"]])
+      }
+      
+    } else if (ML_method == "SVM"){
+      trained_model <- trained_SVM
+      
+      # extract the right variables from the model
+      selected_features <- colnames(trained_model$call$x)
+    }
+      
     # prepare the test data
     test_data <- prepare_test_data(test_feature_data, selected_features, behaviour = behaviour)
     numeric_test_data <- as.data.frame(test_data$numeric_data)
@@ -26,32 +38,42 @@ for(model in c("OCC", "Binary")){
     
     message("testing data prepared")
     
-    # make the predictions with reported distance from hyperplane
-    predictions <- predict(trained_SVM, newdata = numeric_test_data, decision.values = TRUE)
-    decision_values <- attr(predictions, "decision.values")
+    if (ML_method == "SVM"){
+      # make the predictions with reported distance from hyperplane
+      predictions <- predict(trained_model, newdata = numeric_test_data, decision.values = TRUE)
+      decision_prob <- attr(predictions, "decision.values")
+      
+      if (model == "OCC") {
+        predictions <- ifelse(predictions == FALSE, "Other", behaviour)
+      }
+      
+    } else if (ML_method == "Tree"){
+      if (model == "OCC"){
+        decision_prob <- predict(trained_model, numeric_test_data)
+        prediction_labels <- ifelse(decision_prob > 0.5, "Other", behaviour)
+      } else if (model == "Binary"){
+        prediction_labels <- predict(trained_model, newdata = as.data.frame(numeric_test_data), type = "class")
+      }
+    }
     
     message("predictions made")
     
-    if (model == "OCC") {
-      predictions <- ifelse(predictions == FALSE, "Other", behaviour)
-    }
-    
     # Ensure predictions and ground_truth are factors with the same levels
-    unique_classes <- sort(union(predictions, ground_truth_labels))
-    predictions <- factor(predictions, levels = unique_classes)
+    unique_classes <- sort(union(prediction_labels, ground_truth_labels))
+    prediction_labels <- factor(prediction_labels, levels = unique_classes)
     ground_truth_labels <- factor(ground_truth_labels, levels = unique_classes)
     
-    if (length(predictions) != length(ground_truth_labels)) {
+    if (length(prediction_labels) != length(ground_truth_labels)) {
       stop("Error: Predictions and ground truth labels have different lengths.")
     }
     
-    table(ground_truth_labels, predictions)
+    table(ground_truth_labels, prediction_labels)
     
     # Compute performance metrics
-    f1_score <- MLmetrics::F1_Score(y_true = ground_truth_labels, y_pred = predictions, positive = behaviour)
-    precision_metric <- MLmetrics::Precision(y_true = ground_truth_labels, y_pred = predictions, positive = behaviour)
-    recall_metric <- MLmetrics::Recall(y_true = ground_truth_labels, y_pred = predictions, positive = behaviour)
-    accuracy_metric <- MLmetrics::Accuracy(y_true = ground_truth_labels, y_pred = predictions)
+    f1_score <- MLmetrics::F1_Score(y_true = ground_truth_labels, y_pred = prediction_labels, positive = behaviour)
+    precision_metric <- MLmetrics::Precision(y_true = ground_truth_labels, y_pred = prediction_labels, positive = behaviour)
+    recall_metric <- MLmetrics::Recall(y_true = ground_truth_labels, y_pred = prediction_labels, positive = behaviour)
+    accuracy_metric <- MLmetrics::Accuracy(y_true = ground_truth_labels, y_pred = prediction_labels)
    
     # Compute baseline metrics
     zero_rate_baseline <- as.list(calculate_zero_rate_baseline(ground_truth_labels, model, behaviour))
@@ -85,15 +107,15 @@ for(model in c("OCC", "Binary")){
       "Time" = time_values,
       "ID" = ID_values,
       "Ground_truth" = ground_truth_labels, 
-      "Predictions" = predictions,
-      "Decision_values" = as.vector(decision_values)
+      "Predictions" = prediction_labels,
+      "decision_prob" = as.vector(decision_prob)
     )
-    fwrite(output, file.path(base_path, "Output", "Testing", "Predictions", paste(dataset_name, model, behaviour, "predictions.csv", sep = "_")))
+    fwrite(output, file.path(base_path, "Output", "Testing", ML_method, "Predictions", paste(dataset_name, model, behaviour, "predictions.csv", sep = "_")))
     message("predictions saved")
     
   }
   # save the results
-  fwrite(test_results, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_", model, "_test_performance.csv")))
+  fwrite(test_results, file.path(base_path, "Output", "Testing", ML_method, paste0(dataset_name, "_", model, "_test_performance.csv")))
 }
 
 
