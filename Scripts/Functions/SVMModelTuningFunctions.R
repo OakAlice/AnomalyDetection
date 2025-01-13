@@ -15,7 +15,7 @@
 #' @param validation_proportion Proportion for validation set
 #' @param balance Data balancing strategy
 #' @return List containing Score (F1) and selected features
-modelTuning <- function(model, activity, feature_data, 
+modelTuningSVM <- function(model, activity, feature_data, 
                         nu, kernel, gamma, number_features, 
                         validation_proportion, balance) {
   tryCatch(
@@ -163,7 +163,7 @@ modelTuning <- function(model, activity, feature_data,
 #' @param validation_proportion Proportion for validation set
 #' @param loops Number of cross-validation iterations
 #' @return List containing Score (macro F1) and selected features
-multiclassModelTuning <- function(model, multiclass_data, nu, kernel, gamma, 
+multiclassModelTuningSVM <- function(model, multiclass_data, nu, kernel, gamma, 
                                 number_features, 
                                 validation_proportion, balance, loops) {
   tryCatch({

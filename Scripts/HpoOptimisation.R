@@ -10,18 +10,25 @@
 #' gamma: RBF kernel parameter (0.0001 to 1)
 #' kernel: Kernel type (1=linear, 2=radial, 3=polynomial)
 #'  number_features: Number of features to select (5 to 100)
-bounds <- list(
-  nu = c(0.01, 0.5),
-  gamma = c(0.001, 1),
-  kernel = c(1, 2, 3),
-  number_features = c(5, 100)
-)
-
+if (ML_method == "SVM"){
+   bounds <- list(
+    nu = c(0.01, 0.5),
+    gamma = c(0.001, 1),
+    kernel = c(1, 2, 3),
+    number_features = c(5, 100)
+  ) 
+} else if (ML_method == "Tree"){
+  bounds <- list(
+    n_trees = c(100, 1000),
+    mtry = c(1, 200),
+    nodesize = c(5, 20)
+  )
+}
 
 # Dichotomous Model tuning master call --------------------------------------
 # Can currently do binary and OCC, will expand to multi-class as well
 
-model_types <- c("OCC", "Binary")
+model_types <- "Binary" # c("OCC", "Binary")
 
 feature_data <- fread(
   file.path(base_path, "Data", "Feature_data", 
@@ -33,67 +40,96 @@ feature_data <- fread(
 results_stored <- list()
 
 for (model in model_types){
-for (activity in target_activities) {
-  print(paste("Tuning", model, "model for activity:", activity))
-  
-  # Set up parallel processing
-  plan(multisession, workers = availableCores() - 1)
-  
-  # Perform Bayesian optimization
-  elapsed_time <- system.time({
-    results <- BayesianOptimization(
-      FUN = function(nu, gamma, kernel, number_features) {
-        modelTuning(
-          model = model,
-          activity = activity,
-          feature_data = feature_data,
-          nu = nu,
-          kernel = kernel,
-          gamma = gamma,
-          number_features = number_features,
-          validation_proportion = validation_proportion,
-          balance = balance
+  for (activity in target_activities) {
+    print(paste("Tuning", model, "model for activity:", activity))
+    
+    # Set up parallel processing
+    # plan(multisession, workers = availableCores() - 1)
+    
+    
+    if (ML_method == "SVM"){
+      
+      # Perform Bayesian optimization
+      elapsed_time <- system.time({
+        results <- BayesianOptimization(
+          FUN = function(nu, gamma, kernel, number_features) {
+            dichotomousModelTuningSVM(
+              model = model,
+              activity = activity,
+              feature_data = feature_data,
+              nu = nu,
+              kernel = kernel,
+              gamma = gamma,
+              number_features = number_features,
+              validation_proportion = validation_proportion,
+              balance = balance
+            )
+          },
+          bounds = bounds,
+          init_points = 10,
+          n_iter = 20,
+          acq = "ucb",
+          kappa = 2.576
         )
-      },
-      bounds = bounds,
-      init_points = 10,
-      n_iter = 20,
-      acq = "ucb",
-      kappa = 2.576
-    )
-  })
-  
-  # Clean up and reset to sequential processing
-  gc()
-  plan(sequential)
-  
-  # Store results for this activity
-  result <- tryCatch(
-    save_best_params(
-      data_name = as.character(dataset_name),
-      model_type = as.character(model),
-      activity = as.character(activity),
-      elapsed_time = elapsed_time,
-      results = results
-    ),
-    error = function(e) {
-      message("Error in save_best_params: ", e$message)
-      return(NULL)
+      })
+      
+    } else if (ML_method == "RF"){
+    
+      elapsed_time <- system.time({
+        results <- BayesianOptimization(
+          FUN = function(nodesize, mtry, n_trees) {
+            dichotomousModelTuningRF(
+              model = model,
+              activity = activity,
+              feature_data = feature_data,
+              nodesize = nodesize,
+              # mtry = mtry,
+              # n_trees = n_trees,
+              validation_proportion = validation_proportion,
+              balance = balance
+            )
+          },
+          bounds = bounds,
+          init_points = 10,
+          n_iter = 20,
+          acq = "ucb",
+          kappa = 2.576
+        )
+      })
+      
     }
-  )
-  
-  # Add result to results_stored list if valid
-  if (!is.null(result)) {
-    results_stored[[activity]] <- result
-  } else {
-    message("Skipping activity ", activity, " due to error.")
+    
+    # Clean up and reset to sequential processing
+    gc()
+    # plan(sequential)
+    
+    # Store results for this activity
+    result <- tryCatch(
+      save_best_params(
+        data_name = as.character(dataset_name),
+        model_type = as.character(model),
+        activity = as.character(activity),
+        elapsed_time = elapsed_time,
+        results = results
+      ),
+      error = function(e) {
+        message("Error in save_best_params: ", e$message)
+        return(NULL)
+      }
+    )
+    
+    # Add result to results_stored list if valid
+    if (!is.null(result)) {
+      results_stored[[activity]] <- result
+    } else {
+      message("Skipping activity ", activity, " due to error.")
+    }
   }
-}
-
-save_results(
-  results_stored, 
-  file.path(base_path, "Output", "Tuning", 
-            paste0(dataset_name, "_", model, "_hyperparmaters.csv")))
+  
+  save_results(
+    results_stored, 
+    file.path(base_path, "Output", "Tuning", 
+              paste0(dataset_name, "_", model, "_hyperparmaters.csv")))
 
 }
 
@@ -131,10 +167,13 @@ save_results(
     # plan(multisession, workers = availableCores() - 1)
 
     # Perform Bayesian optimization for multiclass model
+    
+    if (ML_method == "SVM"){
+      
     elapsed_time <- system.time({
       results <- BayesianOptimization(
         FUN = function(nu, gamma, kernel, number_features) {
-          multiclassModelTuning(
+          multiclassModelTuningSVM(
             model = "Multi",
             multiclass_data = multiclass_data,
             nu = nu,
@@ -153,6 +192,33 @@ save_results(
         kappa = 2.576 
       )
     })
+    
+    } else if (ML_method == "RF"){
+      
+      elapsed_time <- system.time({
+        results <- BayesianOptimization(
+          FUN = function(n_trees, mtry, min_node_size, sample_fraction) {
+            multiclassModelTuningRF(
+              model = "Multi",
+              multiclass_data = multiclass_data,
+              n_trees = n_trees, 
+              mtry = mtry, 
+              min_node_size = min_node_size, 
+              sample_fraction = sample_fraction,
+              validation_proportion = validation_proportion,
+              balance = balance,
+              loops = 1 # only repeat once
+            )
+          },
+          bounds = bounds,
+          init_points = 5,
+          n_iter = 10,
+          acq = "ucb",
+          kappa = 2.576 
+        )
+      })
+      
+    }
 
      gc()
     # plan(sequential)

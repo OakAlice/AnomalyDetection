@@ -18,7 +18,7 @@
 # 3. Removes zero-variance features
 # 4. Removes highly correlated features based on correlation threshold
 # 5. Uses Random Forest or PCA to select top features
-featureSelection <- function(model, training_data, number_features, corr_threshold = 0.9) {
+featureSelection <- function(model, training_data, number_features, corr_threshold = 0.9, forest = TRUE) {
   tryCatch(
     {
       # Ensure this is a whole number
@@ -28,44 +28,48 @@ featureSelection <- function(model, training_data, number_features, corr_thresho
       training_data_clean <- training_data[, ..clean_columns]
       training_data_clean <- training_data_clean[complete.cases(training_data_clean), ]
       
-      # Check for multiple classes in Activity column
-      if (length(unique(training_data_clean$Activity)) <= 1) {
-        message("Only one class detected; implementing PCA feature selection.")
-        flush.console()
-
-        # PCA feature selection finds variables that best describe target class
-        top_features <- pca_feature_selection(
-          data = training_data_clean,
-          number_features = number_features,
-          model = "OCC"
-        )
-
-      } else {
-        # Random Forest feature selection
-        if (ncol(training_data_clean) > number_features) {
-          message("Starting Random Forest feature selection.")
+      if (forest == TRUE){
+        # Check for multiple classes in Activity column
+        if (length(unique(training_data_clean$Activity)) <= 1) {
+          message("Only one class detected; implementing PCA feature selection.")
           flush.console()
-
-          # Sample 75% of data for feature selection
-          sampled_data <- training_data_clean %>%
-            group_by(Activity) %>%
-            slice_sample(prop = 0.75) %>%
-            as.data.frame()
-
-          top_features <- featureSelectionRF(
-            data = sampled_data,
-            n_trees = 500,
-            number_features = as.numeric(number_features)
+  
+          # PCA feature selection finds variables that best describe target class
+          top_features <- pca_feature_selection(
+            data = training_data_clean,
+            number_features = number_features,
+            model = "OCC"
           )
-
-          if (is.null(top_features)) {
-            message("Random Forest feature selection failed; returning all features.")
+  
+        } else {
+          # Random Forest feature selection
+          if (ncol(training_data_clean) > number_features) {
+            message("Starting Random Forest feature selection.")
             flush.console()
+  
+            # Sample 75% of data for feature selection
+            sampled_data <- training_data_clean %>%
+              group_by(Activity) %>%
+              slice_sample(prop = 0.75) %>%
+              as.data.frame()
+  
+            top_features <- featureSelectionRF(
+              data = sampled_data,
+              n_trees = 500,
+              number_features = as.numeric(number_features)
+            )
+  
+            if (is.null(top_features)) {
+              message("Random Forest feature selection failed; returning all features.")
+              flush.console()
+              top_features <- names(training_data_clean)
+            }
+          } else {
             top_features <- names(training_data_clean)
           }
-        } else {
-          top_features <- names(training_data_clean)
         }
+      } else {
+        top_features <- clean_columns[-length(clean_columns)]  # remove activity
       }
 
       # Include "Activity" in the final feature set

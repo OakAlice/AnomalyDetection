@@ -39,6 +39,10 @@ overlap_percent <- window_settings[[dataset_name]]$overlap_percent
 target_activities <- window_settings[[dataset_name]]$target_activities
 
 # Load Required Packages --------------------------------------------------
+# isolation forest is not on CRAN and has to be loaded seperately
+#install.packages("http://download.r-forge.r-project.org/src/contrib/IsolationForest_0.0-26.tar.gz", repo=NULL, type="source")
+
+# remainder can be loaded as a group
 library(pacman)
 p_load(
   caret,           # Classification and regression training
@@ -46,6 +50,7 @@ p_load(
   e1071,           # SVM implementation
   future,          # Parallel processing
   future.apply,    # Parallel apply functions
+  isotree,         # Anomaly detection forest package
   parallelly,      # Parallel processing utilities
   plotly,          # Interactive plotting
   purrr,           # Functional programming tools
@@ -53,6 +58,8 @@ p_load(
   rBayesianOptimization,  # Bayesian optimization
   MLmetrics,       # Machine learning metrics
   ranger,          # Fast random forests
+  randomForest,    # normal random forest
+  tree,            # decision tree 
   tsfeatures,      # Time series feature extraction
   tidyverse,       # Data manipulation and visualization
   zoo,             # Time series functions
@@ -60,6 +67,7 @@ p_load(
 )
 
 # Global Variables -------------------------------------------------------
+ML_method <- "Tree" # or "SVM
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
 label_columns <- c("Activity", "Time", "ID")
 test_proportion <- 0.2
@@ -71,7 +79,8 @@ balance <- "stratified_balance"
 function_files <- c(
   "FeatureGenerationFunctions.R",      # Feature extraction
   "FeatureSelectionFunctions.R",       # Feature selection methods
-  "ModelTuningFunctions.R",            # Model optimisation
+  "SVMModelTuningFunctions.R",         # SVM Model optimisation
+  "RFModelTuningFunctions.R",          # RF Model optimisation
   "PerformanceCalculationFunctions.R", # Functions for perofmrance and baselines
   "OtherFunctions.R",                  # Utility functions
   "PlotFunctions.R"                    # Generating performance plots

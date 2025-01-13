@@ -148,3 +148,45 @@ save_results <- function(results_list, file_path) {
   results_df <- rbindlist(results_list, use.names = TRUE, fill = TRUE)
   fwrite(results_df, file_path, row.names = FALSE)
 }
+
+
+# Undersampling the binary data -------------------------------------------
+undersample <- function(data, target_col) {
+  # Get class counts
+  class_counts <- data[, .N, by = target_col]
+  min_count <- min(class_counts$N)
+  
+  # Perform undersampling
+  balanced_data <- data[, .SD[sample(.N, min_count)], by = target_col]
+  return(balanced_data)
+}
+
+
+# Cleaning of non numeric values ------------------------------------------
+# to be used in the decision tree function
+clean_dataset <- function(data, activity_col = "Activity") {
+  # Separate features from target
+  features <- data[, !activity_col, with = FALSE]
+  target <- data[[activity_col]]
+  
+  # Convert all columns to numeric and check for invalid values in one pass
+  valid_rows <- features[, complete.cases(.SD) & 
+                           apply(.SD, 1, function(row) all(is.finite(row)))]
+  
+  if (!any(valid_rows)) {
+    stop("No valid rows remaining after removing NA/NaN/Inf values")
+  }
+  
+  # Filter both features and target
+  clean_features <- features[valid_rows]
+  clean_target <- target[valid_rows]
+  
+  # Combine and format
+  result <- data.frame(clean_features, Activity = as.factor(clean_target))
+  
+  return(list(
+    data = result,
+    n_removed = sum(!valid_rows),
+    n_remaining = sum(valid_rows)
+  ))
+}
