@@ -14,21 +14,11 @@ for(model in c("OCC", "Binary")){
     # load in the model, comes in as "trained_SVM" or "trained_tree" - need to standardise
     load(file.path(base_path, "Output", "Models", ML_method, paste0(dataset_name, "_", model, "_", behaviour, "_final_model.rda")))
     
-    if (ML_method == "Tree"){
-      trained_model <- trained_tree
-      if (model == "OCC"){
-        selected_features <- trained_model[["metadata"]][["cols_num"]]
-      } else if (model == "Binary"){
-        selected_features <- as.character(trained_model[["frame"]][["var"]])
-      }
+    trained_model <- trained_SVM
       
-    } else if (ML_method == "SVM"){
-      trained_model <- trained_SVM
-      
-      # extract the right variables from the model
-      selected_features <- colnames(trained_model$call$x)
-    }
-      
+    # extract the right variables from the model
+    selected_features <- colnames(trained_model$call$x)
+    
     # prepare the test data
     test_data <- prepare_test_data(test_feature_data, selected_features, behaviour = behaviour)
     numeric_test_data <- as.data.frame(test_data$numeric_data)
@@ -38,24 +28,14 @@ for(model in c("OCC", "Binary")){
     
     message("testing data prepared")
     
-    if (ML_method == "SVM"){
-      # make the predictions with reported distance from hyperplane
-      predictions <- predict(trained_model, newdata = numeric_test_data, decision.values = TRUE)
-      decision_prob <- attr(predictions, "decision.values")
-      
-      if (model == "OCC") {
-        predictions <- ifelse(predictions == FALSE, "Other", behaviour)
-      }
-      
-    } else if (ML_method == "Tree"){
-      if (model == "OCC"){
-        decision_prob <- predict(trained_model, numeric_test_data)
-        prediction_labels <- ifelse(decision_prob > 0.5, "Other", behaviour)
-      } else if (model == "Binary"){
-        prediction_labels <- predict(trained_model, newdata = as.data.frame(numeric_test_data), type = "class")
-      }
-    }
+    # make the predictions with reported distance from hyperplane
+    predictions <- predict(trained_model, newdata = numeric_test_data, decision.values = TRUE)
+    decision_prob <- attr(predictions, "decision.values")
     
+    if (model == "OCC") {
+      predictions <- ifelse(predictions == FALSE, "Other", behaviour)
+    }
+     
     message("predictions made")
     
     # Ensure predictions and ground_truth are factors with the same levels

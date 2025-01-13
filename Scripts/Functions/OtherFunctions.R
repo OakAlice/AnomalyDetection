@@ -184,6 +184,9 @@ undersample <- function(data, target_col) {
 # Cleaning of non numeric values ------------------------------------------
 # to be used in the decision tree function
 clean_dataset <- function(data, activity_col = "Activity") {
+  
+  data <- data[complete.cases(data),]
+  
   # Separate features from target
   features <- data[, !activity_col, with = FALSE]
   target <- data[[activity_col]]
@@ -203,9 +206,5 @@ clean_dataset <- function(data, activity_col = "Activity") {
   # Combine and format
   result <- data.frame(clean_features, Activity = as.factor(clean_target))
   
-  return(list(
-    data = result,
-    n_removed = sum(!valid_rows),
-    n_remaining = sum(valid_rows)
-  ))
+  return(result)
 }

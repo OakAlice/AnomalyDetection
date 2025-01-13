@@ -7,7 +7,8 @@
 #' @param model Character. Either "OCC" or "Binary" specifying the classification type
 #' @param activity Character. The target activity/behavior to classify
 #' @param feature_data Data frame. The input features and activity data
-#' @param n_trees Integer. Number of trees in the random forest
+#' @param n_trees Integer. Number of trees in the 1-class binary decision tree
+#' @param nodesize Integer. Size of node in isolation forest
 #' @param validation_proportion Numeric. Proportion of data to use for validation (0-1)
 #' @param balance Logical. Whether to balance the classes in training data
 #'
@@ -63,18 +64,11 @@ dichotomousModelTuningRF <- function(model, activity, feature_data, nodesize, n_
                                          corr_threshold = 0.8, 
                                          forest = FALSE)
         selected_training_data <- training_data[, .SD, .SDcols = c(top_features, "Activity")]
-        selected_training_data <- selected_training_data[complete.cases(selected_training_data),]
         selected_training_data <- clean_dataset(selected_training_data)
-        selected_training_data <- selected_training_data$data
         
         # Clean validation data to match
         selected_validation_data <- validation_data[, .SD, .SDcols = c(top_features, "Activity")]
         selected_validation_data <- clean_dataset(selected_validation_data)
-        selected_validation_data <- selected_validation_data$data
-        
-        # Print summary of cleaning
-        message(paste0("Training data rows: ", nrow(selected_training_data)))
-        message(paste0("Validation data rows: ", nrow(selected_validation_data)))
         
         message("training model")
         flush.console() 
@@ -189,9 +183,13 @@ dichotomousModelTuningRF <- function(model, activity, feature_data, nodesize, n_
 }
 
 
+# Multiclass model tuning -------------------------------------------------
 
-
-
+multiclassModelTuningRF <- function(model, multiclass_data, n_trees, mtry, min_node_size, sample_fraction,
+  validation_proportion, balance, loops){
+  
+  
+  
 
 # for the multiclass scenario
 # class_weights <- table(selected_training_data$Activity)
@@ -222,3 +220,6 @@ dichotomousModelTuningRF <- function(model, activity, feature_data, nodesize, n_
 #   nodesize = as.numeric(nodesize),
 #   classwt = class_weights
 # )
+  
+  
+}

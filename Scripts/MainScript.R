@@ -76,8 +76,8 @@ function_files <- c(
   "FeatureGenerationFunctions.R",      # Feature extraction
   "FeatureSelectionFunctions.R",       # Feature selection methods
   "SVMModelTuningFunctions.R",         # SVM Model optimisation
-  "RFModelTuningFunctions.R",          # RF Model optimisation
-  "PerformanceCalculationFunctions.R", # Functions for perofmrance and baselines
+  "TreeModelTuningFunctions.R",        # Tree Model optimisation
+  "PerformanceCalculationFunctions.R", # Functions for performance and baselines
   "OtherFunctions.R",                  # Utility functions
   "PlotFunctions.R"                    # Generating performance plots
 )
@@ -99,11 +99,18 @@ source(file.path(base_path, "Scripts", "Preprocessing.R"))
 source(file.path(base_path, "Scripts", "ClusteringBehaviours.R"))
 
 # 4. Hyperparameter Optimization
-source(file.path(base_path, "Scripts", "HpoOptimisation.R"))
+# options for SVM and Tree based comparisons
+source(file.path(base_path, "Scripts", "SVMHpoOptimisation.R"))
+source(file.path(base_path, "Scripts", "TreeHpoOptimisation.R"))
 
-# 5. Model Evaluation
-source(file.path(base_path, "Scripts", "TestBestModels.R"))
+# 5. Generate optimal models
+source(file.path(base_path, "Scripts", "SVMTrainBestModels.R"))
+source(file.path(base_path, "Scripts", "TreeTrainBestModels.R"))
 
-# 6. Results Visualization and Comparison
+# 6. Model Evaluation
+source(file.path(base_path, "Scripts", "SVMTestBestModels.R"))
+source(file.path(base_path, "Scripts", "TreeTestBestModels.R"))
+
+# 7. Results Visualization and Comparison
 source(file.path(base_path, "Scripts", "PlottingPerformance.R"))
 source(file.path(base_path, "Scripts", "PlotPredictions.R"))
