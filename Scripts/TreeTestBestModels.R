@@ -3,13 +3,15 @@
 test_feature_data <- fread(file = file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_test_features.csv")))
 
 # make a minor formatting change
-test_feature_data$GeneralisedActivity <- str_to_title(test_feature_data$GeneralisedActivity)
+if (dataset_name == "Vehkaoja_Dog"){
+  test_feature_data$GeneralisedActivity <- str_to_title(test_feature_data$GeneralisedActivity)
+}
 
 # Dichotomous models -----------------------------------------------------
 for(model in c("OCC", "Binary")){
   test_results <- data.frame()
   for(behaviour in target_activities){
-    # behaviour <- target_activities[1]
+    # behaviour <- target_activities[2]
     
     # load in the model, comes in as "trained_SVM" or "trained_tree" - need to standardise
     load(file.path(base_path, "Output", "Models", ML_method, paste0(dataset_name, "_", model, "_", behaviour, "_final_model.rda")))
@@ -20,8 +22,11 @@ for(model in c("OCC", "Binary")){
     if (model == "OCC"){
       selected_features <- trained_model[["metadata"]][["cols_num"]]
     } else if (model == "Binary"){
-      selected_features <- levels(trained_model[["frame"]][["var"]])
-      selected_features <- setdiff(selected_features, "<leaf>")
+      feature_string <- trained_model[["terms"]][[3]]
+      selected_features <- str_split(as.character(feature_string), "\\+") %>%
+        unlist() %>%
+        str_trim()
+      selected_features <- selected_features[selected_features != ""]
     }
     
     # prepare the test data
@@ -53,11 +58,11 @@ for(model in c("OCC", "Binary")){
     message("testing data prepared")
     
    if (model == "OCC"){
-      decision_prob <- predict(trained_model, numeric_test_data)
+      decision_prob <- predict(trained_model, numeric_data)
       prediction_labels <- ifelse(decision_prob > 0.5, "Other", behaviour)
     } else if (model == "Binary"){
       prediction_labels <- predict(trained_model, newdata = as.data.frame(numeric_data), type = "class")
-      probabilities <- predict(trained_model, newdata = as.data.frame(numeric_data), type = "vector")
+      probabilities <- predict(trained_model, newdata = as.data.frame(numeric_data), type = "prob")
       decision_prob <- probabilities[, behaviour]
     }
     
@@ -129,10 +134,10 @@ for(model in c("OCC", "Binary")){
 for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
   
   # load in the model, comes in as "trained_SVM"
-  load(file.path(base_path, "Output", "Models", paste0(dataset_name, "_Multi_", behaviour_set, "_final_model.rda")))
+  load(file.path(base_path, "Output", "Models", ML_method, paste0(dataset_name, "_Multi_", behaviour_set, "_final_model.rda")))
   
   # extract the right variables from the model
-  selected_features <- colnames(trained_SVM$call$x)
+  selected_features <- trained_tree$forest$independent.variable.names
   
   # prepare the test data
   multiclass_test_data <- update_feature_data(test_feature_data, behaviour_set)
@@ -149,16 +154,19 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
   message("testing data prepared")
   
   # make predictions
-  predictions <- predict(trained_SVM, newdata = numeric_test_data)
+  predictions <- predict(trained_tree, data = numeric_test_data)
+  prediction_labels <- predictions$predictions
   message("predictions made")
   
-  if (length(predictions) != length(ground_truth_labels)) {
+  if (length(prediction_labels) != length(ground_truth_labels)) {
     stop("Error: Predictions and ground truth labels have different lengths.")
   }
   
-  test_results <- calculate_full_multi_performance(ground_truth_labels, predictions, model = behaviour_set)
+  table(ground_truth_labels, prediction_labels)
   
-  fwrite(test_results, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_Multi_", behaviour_set, "_test_performance.csv")), row.names = FALSE)
+  test_results <- calculate_full_multi_performance(ground_truth_labels, predictions = prediction_labels, model = behaviour_set)
+  
+  fwrite(test_results, file.path(base_path, "Output", "Testing", ML_method, paste0(dataset_name, "_Multi_", behaviour_set, "_test_performance.csv")), row.names = FALSE)
   message("test results stored")
   
   # Save predictions
@@ -166,11 +174,11 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
     "Time" = time_values,
     "ID" = ID_values,
     "Ground_truth" = ground_truth_labels, 
-    "Predictions" = predictions
+    "Predictions" = prediction_labels
   )
   
   if (nrow(output) > 0) {
-    fwrite(output, file.path(base_path, "Output", "Testing", "Predictions", paste(dataset_name, behaviour_set, "predictions.csv", sep = "_")))
+    fwrite(output, file.path(base_path, "Output", "Testing", ML_method, "Predictions", paste(dataset_name, behaviour_set, "predictions.csv", sep = "_")))
     message("predictions saved")
   } else {
     message("No predictions to save.")
@@ -180,13 +188,13 @@ for(behaviour_set in c("Activity", "OtherActivity", "GeneralisedActivity")){
 
 
 # Read all files together -------------------------------------------------
-test_files <- list.files(file.path(base_path, "Output", "Testing"), pattern = paste0(dataset_name, "_.*\\.csv$"), full.names = TRUE)
+test_files <- list.files(file.path(base_path, "Output", "Testing", ML_method), pattern = paste0(dataset_name, "_.*\\.csv$"), full.names = TRUE)
 test_outcome <- rbindlist(
   lapply(test_files, function(file) {
     df <- fread(file)
     return(df)
   }),
-  use.names = TRUE
+  use.names = TRUE, fill=TRUE
 )
 
 test_outcome[is.na(test_outcome)] <- 0
@@ -203,7 +211,7 @@ combined_results_adjusted <- test_outcome %>%
          Rand_adj_Recall = Recall - Random_Recall,
          Rand_adj_Accuracy = Accuracy - Random_Accuracy)
 
-fwrite(combined_results_adjusted, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_complete_test_performance.csv")))
+fwrite(combined_results_adjusted, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_", ML_method, "_complete_test_performance.csv")))
 
 
 

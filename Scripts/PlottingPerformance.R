@@ -2,7 +2,7 @@
 # Plotting the performance comparing dichotomous with multiclass ----------
 
 # read in
-combined_results <- fread(file = file.path(base_path, "Output", "Testing", paste0(dataset_name, "_complete_test_performance.csv"))) %>% as.data.frame()
+combined_results <- fread(file = file.path(base_path, "Output", "Testing", paste0(dataset_name, "_", ML_method, "_complete_test_performance.csv"))) %>% as.data.frame()
 
 combined_results <- combined_results %>% mutate(Activity = ifelse(Activity == "Weightedmacroaverage", "Macroaverage", Activity))
 

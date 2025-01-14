@@ -60,7 +60,7 @@ process_dataset <- function(results_long, dataset_name) {
 
 save_plots <- function(full_plot, reduced_plot, dataset_name, base_path, suffix = "") {
   pdf(
-    file = file.path(base_path, "Output", "Plots", paste0(dataset_name, "_all_models_plot", suffix, ".pdf")),
+    file = file.path(base_path, "Output", "Plots", ML_method, paste0(dataset_name, "_all_models_plot", suffix, ".pdf")),
     width = 12,
     height = 8
   )
@@ -92,7 +92,7 @@ plot_and_save <- function(results_long, dataset_name, base_path, suffix = "") {
 
 prepare_results <- function(combined_results) {
   combined_results %>%
-    melt(
+    reshape2::melt(
       id.vars = c("Dataset", "Model", "Activity"),
       measure.vars = c("F1_Score", "Precision", "Recall", "Accuracy"),
       variable.name = "Metric",
@@ -169,7 +169,7 @@ full_multi <- function(combined_results, dataset_name, base_path) {
   # Reshape to long format
   results_long <- combined_results %>%
     mutate(across(c(F1_Score, Precision, Recall, Accuracy), as.numeric)) %>%
-    melt(
+    reshape2::melt(
       id.vars = c("Dataset", "Model", "Activity"),
       measure.vars = c("F1_Score", "Precision", "Recall", "Accuracy"),
       variable.name = "Metric",

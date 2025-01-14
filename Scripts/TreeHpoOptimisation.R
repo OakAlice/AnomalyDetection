@@ -1,6 +1,6 @@
 #| Hyperparameter Optimisation Script for Tree types
 
-model_type <- c("OCC", "Binary") # "Multi"
+model_type <- c("OCC", "Binary", "Multi")
 
 # Define bounds -----------------------------------------------------------
 OCC_bounds <- list(
@@ -16,11 +16,10 @@ Binary_bounds <- list(
 
 Multi_bounds <- list(
         n_trees = c(100, 500),          # Standard range for random forests
-        mtry = c(floor(sqrt(p)), p/3),  # p is number of features
+        mtry = c(5, 30),                # p is number of features
         min_samples_leaf = c(1, 20),    # Can be smaller due to ensemble
         max_depth = c(10, 30),          # Deeper trees work well in RF
-        max_features = c(0.2, 0.8),     # Traditional RF feature sampling
-        sample_fraction = c(0.5, 1.0)   # Bagging fraction
+        max_features = c(0.2, 0.8)      # Traditional RF feature sampling
     )
 
 # Load in data ------------------------------------------------------------
@@ -35,8 +34,8 @@ multiclass_feature_data <- fread(file.path(base_path, "Data", "Feature_data",
 
 
 # OCC model tuning (with Isolation Forest) --------------------------------
+results_stored <- list()
 if ("OCC" %in% model_type){
-  results_stored <- list()
   for (activity in target_activities) {
     print(paste("Tuning 1-class model for activity:", activity))
     
@@ -73,7 +72,7 @@ if ("OCC" %in% model_type){
       features <- paste(unique(unlist(results$Pred[[which(results$History$Value == results$Best_Value)[1]]])), collapse = ", ")
       
       summarised_results <- data.frame(
-        data_name = data_name,
+        data_name = dataset_name,
         model_type = model_type,
         behaviour_or_activity = activity,
         elapsed = as.numeric(elapsed_time[3]),
@@ -100,8 +99,8 @@ if ("OCC" %in% model_type){
 }
   
 # Binary model tuning (with Decision Tree) --------------------------------
+results_stored <- list()
 if ("Binary" %in% model_type){
-  results_stored <- list()
   for (activity in target_activities) {
     print(paste("Tuning Binary model for activity:", activity))
     
@@ -140,7 +139,7 @@ if ("Binary" %in% model_type){
     features <- paste(unique(unlist(results$Pred[[which(results$History$Value == results$Best_Value)[1]]])), collapse = ", ")
     
     summarised_results <- data.frame(
-      data_name = data_name,
+      data_name = dataset_name,
       model_type = model_type,
       behaviour_or_activity = activity,
       elapsed = as.numeric(elapsed_time[3]),
@@ -171,13 +170,9 @@ if ("Binary" %in% model_type){
 # Define different behaviour column groupings
 behaviour_columns <- c("Activity", "OtherActivity", "GeneralisedActivity")
 
-if ("Multi" %in% model_types){
+if ("Multi" %in% model_type){
   # Optimise for each behaviour grouping at a time
   for (behaviours in behaviour_columns) {
-    if(file.exists(file.path(base_path, "Output", "Tuning", 
-                             paste0(dataset_name, "_", model, "_", behaviours, "_hyperparmaters.csv")))){
-      print(paste0("models have been tuned for multiclass ", behaviours, " model already."))
-    } else {
       print(paste("Tuning multiclass model for behaviour column:", behaviours))
       
       # Prepare data for current grouping
@@ -196,14 +191,17 @@ if ("Multi" %in% model_types){
       
      elapsed_time <- system.time({
           results <- BayesianOptimization(
-            FUN = function(n_trees, mtry, min_node_size, sample_fraction) {
+            FUN = function(n_trees, mtry, min_samples_leaf, max_depth, max_features) {
               multiclassModelTuningRF(
                 model = "Multi",
                 multiclass_data = multiclass_data,
+                
                 n_trees = n_trees, 
                 mtry = mtry, 
-                min_node_size = min_node_size, 
-                sample_fraction = sample_fraction,
+                min_samples_leaf = min_samples_leaf,
+                max_depth = max_depth,
+                max_features = max_features,
+                
                 validation_proportion = validation_proportion,
                 balance = balance,
                 loops = 1 # only repeat once
@@ -221,19 +219,41 @@ if ("Multi" %in% model_types){
       # plan(sequential)
       
       # Store results for this grouping
-      results_stored <- save_best_params(
+      features <- paste(unique(unlist(results$Pred[[which(results$History$Value == results$Best_Value)[1]]])), collapse = ", ")
+      
+      results <- data.frame(
         data_name = dataset_name,
         model_type = "Multi",
-        activity = behaviours,
-        elapsed_time = elapsed_time,
-        results = results
+        behaviour_or_activity = behaviours,
+        elapsed = as.numeric(elapsed_time[3]),
+        system = as.numeric(elapsed_time[2]),
+        user = as.numeric(elapsed_time[1]),
+        n_trees = results$Best_Par["n_trees"],
+        mtry = results$Best_Par["mtry"],
+        min_samples_leaf = results$Best_Par["min_samples_leaf"],
+        max_depth = results$Best_Par["max_depth"],
+        Best_Value = results$Best_Value,
+        Selected_Features = features
       )
-    }
-    
-    # Save all multiclass results
-    results_df <- rbind(results_stored)
-    fwrite(results_df, file.path(base_path, "Output", "Tuning", 
+      
+      # Save all multiclass results
+    fwrite(results, file.path(base_path, "Output", "Tuning", ML_method,
                                  paste0(dataset_name, "_Multi_", behaviours, "_hyperparmaters.csv")),  row.names = FALSE)
     
   }
 }
+
+# Read all multi files together ----------------------------------------
+tune_files <- list.files(file.path(base_path, "Output", "Tuning", ML_method), pattern = paste0(dataset_name, "_Multi_.*\\.csv$"), full.names = TRUE)
+multi_tuning <- rbindlist(
+  lapply(tune_files, function(file) {
+    df <- fread(file)
+    return(df)
+  }),
+  use.names = TRUE
+)
+fwrite(multi_tuning, file.path(base_path, "Output", "Tuning", ML_method, paste0(dataset_name, "_Multi_hyperparmaters.csv")))
+
+
+
+

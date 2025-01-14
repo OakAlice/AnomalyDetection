@@ -3,9 +3,9 @@
 training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv"))) %>%
   as.data.table()
 
-for (model in c("OCC", "Binary")) { #, "Multi")) {
+for (model in c("OCC", "Binary", "Multi")) {
     
-    # model <- "Binary"
+    # model <- "OCC"
     
     # Load hyperparameter file
     hyperparam_file <- fread(file = file.path(base_path, "Output", "Tuning", ML_method, paste0(dataset_name, "_", model, "_hyperparmaters.csv")))
@@ -34,7 +34,7 @@ for (model in c("OCC", "Binary")) { #, "Multi")) {
         
         target_training_data <- selected_training_data %>% select(-Activity)
         behaviour_set <- parameter_row$behaviour_or_activity
-        target_training_data <- cbind(target_training_data, "Activity" = selected_training_data[[behaviour_set]])
+        target_training_data <- cbind(target_training_data, "Activity" = training_data[[behaviour_set]])
         
         if (parameter_row$behaviour_or_activity == "GeneralisedActivity") {
           target_training_data <- target_training_data %>% filter(!Activity == "")
@@ -56,14 +56,17 @@ for (model in c("OCC", "Binary")) { #, "Multi")) {
         Activity <- Activity[-invalid_rows]
       }
       
+      # recombine post mutations and cleaning
       target_training_data <- cbind(numeric_training_data, Activity)
+      target_training_data$Activity <- as.factor(target_training_data$Activity)
       
       message("Training data prepared.")
       
       if (parameter_row$model_type == "OCC"){
         
+        n_trees <- abs(round(as.numeric(parameter_row$n_trees), 0))
         trained_tree <- isolation.forest(numeric_training_data, 
-                                         ntrees = parameter_row$n_trees, 
+                                         ntrees = n_trees, 
                                          sample_size = 256)
         
       } else if (parameter_row$model_type == "Binary"){
@@ -73,20 +76,39 @@ for (model in c("OCC", "Binary")) { #, "Multi")) {
           target_training_data <- undersample(target_training_data, "Activity")
         }
         
-        trained_tree <- tree(
-          formula = as.factor(Activity) ~ .,
+        trained_tree <- rpart(
+          formula = Activity ~ .,
           data = as.data.frame(target_training_data),
-          control = tree.control(
-            nobs = nrow(target_training_data),
-            minsize = as.numeric(parameter_row$nodesize) * 2, 
-            mindev = 0.01                        
+          method = "class",  # Use "class" for classification
+          control = rpart.control(
+            maxdepth = parameter_row$max_depth,
+            minsplit = parameter_row$min_samples_split,
+            minbucket = parameter_row$min_samples_leaf, 
+            
+            cp = 0.01, 
+            xval = 10 
           )
         )
         
       } else if (parameter_row$model_type == "Multi"){
         
-        print("haven't added this yet")
-        
+        trained_tree <- tryCatch({
+          class_weights <- table(target_training_data$Activity)
+          class_weights <- max(class_weights) / class_weights
+          
+          ranger(
+            x = numeric_training_data, 
+            y = as.factor(Activity),
+            num.trees = parameter_row$n_trees,
+            mtry = parameter_row$mtry, 
+            min.node.size = parameter_row$min_samples_leaf, 
+            max.depth = parameter_row$max_depth,
+            class.weights = class_weights
+          )
+        }, error = function(e) {
+          message("Error in model training: ", e$message)
+          return(NULL)
+        })
       }
       
       # Save the trained model

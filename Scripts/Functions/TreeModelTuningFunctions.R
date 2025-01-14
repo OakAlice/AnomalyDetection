@@ -334,41 +334,128 @@ BinaryModelTuningRF <- function(model, activity, feature_data,
 #'   \item{Score}{Numeric. Average F1 score across iterations}
 #'   \item{Pred}{Character vector. Selected feature names}
 #'
-multiclassModelTuningRF <- function(model, multiclass_data, n_trees, mtry, min_node_size, sample_fraction,
+multiclassModelTuningRF <- function(model, multiclass_data, 
+                                   n_trees, mtry, min_samples_leaf, max_depth, max_features,
                                    validation_proportion, balance, loops) {
   
+  future_outcomes <- list()
   
-  
-
-# for the multiclass scenario
-# class_weights <- table(selected_training_data$Activity)
-# class_weights <- max(class_weights) / class_weights
-# 
-# RF_args <- list(
-#   x = numeric_training_data,
-#   y = as.factor(selected_training_data$Activity),
-#   n_trees = n_trees,
-#   mtry = mtry,
-#   min_node_size = min_node_size,
-#   sample.fraction = sample_fraction,
-#   scale = TRUE,
-#   class.weights = class_weights
-# )
-# 
-# trained_RF <- do.call(ranger, RF_args)
-
-
-
-
-
-# trained_RF <- randomForest(
-#   formula = Activity ~ .,
-#   data = as.data.frame(selected_training_data),
-#   ntree = as.numeric(n_trees), 
-#   mtry = as.numeric(mtry),
-#   nodesize = as.numeric(nodesize),
-#   classwt = class_weights
-# )
-  
-  
+  # Main processing block
+  tryCatch({
+    message("Starting multiclass model tuning")
+    
+    # Split data
+    message("Splitting data")
+    data_split <- tryCatch({
+      split_data("Multi", activity, balance, multiclass_data, validation_proportion)
+    }, error = function(e) {
+      message("Error in data splitting: ", e$message)
+      return(NULL)
+    })
+    
+    if (is.null(data_split) || nrow(data_split$training_data) == 0) {
+      stop("Data split returned NULL or empty training data")
+    }
+    
+    # Data preparation
+    training_data <- as.data.table(data_split$training_data)
+    validation_data <- as.data.table(data_split$validation_data)
+    
+    # Feature selection
+    message("Performing feature selection")
+    top_features <- tryCatch({
+      featureSelection(model = "Multi",
+                      training_data,
+                      number_features = NA,
+                      corr_threshold = 0.8,
+                      forest = FALSE)
+    }, error = function(e) {
+      message("Error in feature selection: ", e$message)
+      return(NULL)
+    })
+    
+    if (is.null(top_features)) {
+      stop("Feature selection failed")
+    }
+    
+    # Clean and prepare datasets
+    message("Cleaning and preparing datasets")
+    tryCatch({
+      selected_training_data <- training_data[, .SD, .SDcols = c(top_features, "Activity")]
+      selected_training_data <- clean_dataset(selected_training_data)
+      
+      selected_validation_data <- validation_data[, .SD, .SDcols = c(top_features, "Activity")]
+      selected_validation_data <- clean_dataset(selected_validation_data)
+      
+      train_num <- as.data.table(selected_training_data)[, !("Activity"), with = FALSE]
+      ground_truth_labels <- as.factor(selected_training_data$Activity)
+    }, error = function(e) {
+      stop("Error in data preparation: ", e$message)
+    })
+    
+    # Model training
+    message("Training model")
+    flush.console()
+    
+    trained_tree <- tryCatch({
+      class_weights <- table(selected_training_data$Activity)
+      class_weights <- max(class_weights) / class_weights
+      
+      ranger(
+        x = train_num, 
+        y = ground_truth_labels,
+        num.trees = n_trees,
+        mtry = mtry, 
+        min.node.size = min_samples_leaf, 
+        max.depth = max_depth,
+        class.weights = class_weights
+      )
+    }, error = function(e) {
+      message("Error in model training: ", e$message)
+      return(NULL)
+    })
+    
+    if (is.null(trained_tree)) {
+      stop("Model training failed")
+    }
+    
+    message("Multi model trained successfully")
+    
+    # Predictions and evaluation
+    tryCatch({
+      truth_labels <- selected_validation_data$Activity
+      numeric_pred_data <- as.data.table(selected_validation_data)[, !("Activity"), with = FALSE]
+      
+      predictions <- predict(trained_tree, data = as.data.frame(numeric_pred_data))
+      prediction_labels <- predictions$predictions
+      
+      if (length(prediction_labels) != length(truth_labels)) {
+        stop(sprintf("Mismatch in lengths: predictions=%d, ground_truth=%d", 
+                    length(prediction_labels), length(truth_labels)))
+      }
+      
+      # Create factors with consistent levels
+      unique_classes <- sort(unique(c(prediction_labels, truth_labels)))
+      prediction_labels <- factor(prediction_labels, levels = unique_classes)
+      ground_truth_labels <- factor(truth_labels, levels = unique_classes)
+      
+      # Calculate metrics
+      macro_multiclass_scores <- multiclass_class_metrics(ground_truth_labels, prediction_labels)
+      macro_metrics <- macro_multiclass_scores$weighted_metrics
+      
+      return(list(
+        Score = macro_metrics$F1_Score, 
+        Pred = paste(top_features, collapse = ", ")
+      ))
+      
+    }, error = function(e) {
+      message("Error in prediction and evaluation: ", e$message)
+      return(list(Score = NA, Pred = character(0)))
+    })
+    
+  }, error = function(e) {
+    message("Critical error in main function: ", e$message)
+    gc()
+    return(list(Score = NA, Pred = character(0)))
+  })
 }

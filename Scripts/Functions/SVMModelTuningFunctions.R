@@ -306,7 +306,7 @@ multiclassModelTuningSVM <- function(model, multiclass_data, nu, kernel, gamma,
 
           # find the per-class metrics and then average to macro
           macro_multiclass_scores <- multiclass_class_metrics(ground_truth_labels, predictions)
-          macro_metrics <- macro_multiclass_scores$macro_metrics
+          macro_metrics <- macro_multiclass_scores$weighted_metrics
 
           list(macro_f1 = macro_metrics$F1_Score, top_features = paste(top_features, collapse = ", "))
         }, error = function(e) {

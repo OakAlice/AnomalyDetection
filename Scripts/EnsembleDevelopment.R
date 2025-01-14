@@ -10,7 +10,7 @@ ground_truth_labels <- ground_truth %>%
 # Load in the data --------------------------------------------------------
 # Helper function to load prediction files
 load_predictions <- function(pattern) {
-  files <- list.files(file.path(base_path, "Output", "Testing", "Predictions"), 
+  files <- list.files(file.path(base_path, "Output", "Testing", ML_method, "Predictions"), 
                       pattern = pattern,
                       full.names = TRUE)
   
@@ -27,15 +27,27 @@ for (model in c("OCC", "Binary")){
   print(model)
   
   data <- load_predictions(paste0(dataset_name, ".*_", model, "_.*\\.csv$"))
+  data$model_activity <- str_to_title(data$model_activity)
   
-  data_wide <- merge(
-    dcast(data, Time + ID + Ground_truth ~ model_activity, 
-          value.var = "Predictions"),
-    dcast(data, Time + ID + Ground_truth ~ model_activity, 
-          value.var = "Decision_values"),
-    by = c("Time", "ID", "Ground_truth"),
-    suffixes = c("_Prediction", "_Decision")
-  ) 
+  if (ML_method == "SVM"){
+    data_wide <- merge(
+      dcast(data, Time + ID + Ground_truth ~ model_activity, 
+            value.var = "Predictions"),
+      dcast(data, Time + ID + Ground_truth ~ model_activity, 
+            value.var = "Decision_values"),
+      by = c("Time", "ID", "Ground_truth"),
+      suffixes = c("_Prediction", "_Decision")
+    ) 
+  } else if (ML_method == "Tree"){
+    data_wide <- merge(
+      dcast(data, Time + ID + Ground_truth ~ model_activity, 
+            value.var = "Predictions"),
+      dcast(data, Time + ID + Ground_truth ~ model_activity, 
+            value.var = "decision_prob"),
+      by = c("Time", "ID", "Ground_truth"),
+      suffixes = c("_Prediction", "_Decision")
+    ) 
+  }
   
   data_wide_summarised <- data_wide %>% 
     rowwise() %>%
@@ -87,8 +99,8 @@ for (model in c("OCC", "Binary")){
   test_results <- calculate_full_multi_performance(ground_truth_labels = collective_ground_truth, predictions = collective_predictions, model = paste0(model, "_Ensemble"))
     
   # save the ensemble results
-  fwrite(test_results, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_", model, "_ensemble_test_performance.csv")))
-  fwrite(data_wide, file.path(base_path, "Output", "Testing", "Predictions", paste0(dataset_name, "_", model, "_ensemble_predictions.csv")))
+  fwrite(test_results, file.path(base_path, "Output", "Testing", ML_method, paste0(dataset_name, "_", model, "_ensemble_test_performance.csv")))
+  fwrite(data_wide, file.path(base_path, "Output", "Testing", ML_method, "Predictions", paste0(dataset_name, "_", model, "_ensemble_predictions.csv")))
 }
 
 
