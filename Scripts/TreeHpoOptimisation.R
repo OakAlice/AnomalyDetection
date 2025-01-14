@@ -70,23 +70,24 @@ if ("OCC" %in% model_type){
     # plan(sequential)
     
     # Store results for this activity
-    # rewrite this code to be better - i.e., handle ML method inside of function
-    result <- tryCatch({
-        save_best_params_RF(
-          data_name = as.character(dataset_name),
-          model_type = "OCC",
-          activity = as.character(activity),
-          elapsed_time = elapsed_time,
-          results = results
-        )
-    }, error = function(e) {
-      message("Error in save_best_params: ", e$message)
-      return(NULL)
-    })
+      features <- paste(unique(unlist(results$Pred[[which(results$History$Value == results$Best_Value)[1]]])), collapse = ", ")
+      
+      summarised_results <- data.frame(
+        data_name = data_name,
+        model_type = model_type,
+        behaviour_or_activity = activity,
+        elapsed = as.numeric(elapsed_time[3]),
+        system = as.numeric(elapsed_time[2]),
+        user = as.numeric(elapsed_time[1]),
+        n_trees = results$Best_Par["n_trees"],
+        max_depth = results$Best_Par["max_depth"],
+        Best_Value = results$Best_Value,
+        Selected_Features = features
+      )
     
     # Add result to results_stored list if valid
-    if (!is.null(result)) {
-      results_stored[[activity]] <- result
+    if (!is.null(summarised_results)) {
+      results_stored[[activity]] <- summarised_results
     } else {
       message("Skipping activity ", activity, " due to error.")
     }
@@ -109,7 +110,7 @@ if ("Binary" %in% model_type){
     
     elapsed_time <- system.time({
       results <- BayesianOptimization(
-        FUN = function(nodesize, variables) {
+        FUN = function(min_samples_leaf, min_samples_split, max_depth) {
           BinaryModelTuningRF(
             model = "Binary",
             activity = activity,
@@ -136,22 +137,25 @@ if ("Binary" %in% model_type){
     
     # Store results for this activity
     # rewrite this code to be better - i.e., handle ML method inside of function
-    result <- tryCatch({
-      save_best_params_RF(
-        data_name = as.character(dataset_name),
-        model_type = "Binary",
-        activity = as.character(activity),
-        elapsed_time = elapsed_time,
-        results = results
-      )
-    }, error = function(e) {
-      message("Error in save_best_params: ", e$message)
-      return(NULL)
-    })
+    features <- paste(unique(unlist(results$Pred[[which(results$History$Value == results$Best_Value)[1]]])), collapse = ", ")
+    
+    summarised_results <- data.frame(
+      data_name = data_name,
+      model_type = model_type,
+      behaviour_or_activity = activity,
+      elapsed = as.numeric(elapsed_time[3]),
+      system = as.numeric(elapsed_time[2]),
+      user = as.numeric(elapsed_time[1]),
+      min_samples_split = results$Best_Par["min_samples_split"],
+      min_samples_leaf = results$Best_Par["min_samples_leaf"],
+      max_depth = results$Best_Par["max_depth"],
+      Best_Value = results$Best_Value,
+      Selected_Features = features
+    )
     
     # Add result to results_stored list if valid
-    if (!is.null(result)) {
-      results_stored[[activity]] <- result
+    if (!is.null(summarised_results)) {
+      results_stored[[activity]] <- summarised_results
     } else {
       message("Skipping activity ", activity, " due to error.")
     }

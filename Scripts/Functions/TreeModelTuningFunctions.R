@@ -214,15 +214,30 @@ BinaryModelTuningRF <- function(model, activity, feature_data,
         message("Training model")
         flush.console()
         
-        trained_tree <- tree(
+        # stopped using this version as had less hyperparameters
+        # trained_tree <- tree(
+        #   formula = Activity ~ .,
+        #   data = as.data.frame(selected_training_data),
+        #   control = tree.control(
+        #     nobs = nrow(selected_training_data),
+        #     mindev = 0.01,
+        #     minsize = min_samples_leaf, 
+        #     mincut = min_samples_split
+        #   )
+        # )
+        
+        trained_tree <- rpart(
           formula = Activity ~ .,
           data = as.data.frame(selected_training_data),
-          control = tree.control(
-            nobs = nrow(selected_training_data),
-            minsize = min_samples_leaf, 
-            mindev = 0.01,  
-            mincut = min_samples_split,
-            nmax = 2^max_depth
+          method = "class",  # Use "class" for classification
+          control = rpart.control(
+            maxdepth = max_depth,          # Maximum depth of the tree
+            minsplit = min_samples_split,  # Minimum number of observations for a split
+            minbucket = min_samples_leaf,  # Minimum number of observations in terminal nodes
+            
+            # Additional control parameters
+            cp = 0.01,                     # Complexity parameter for pruning
+            xval = 10                      # Number of cross-validations
           )
         )
         
@@ -231,6 +246,7 @@ BinaryModelTuningRF <- function(model, activity, feature_data,
         # Prediction and evaluation
         truth_labels <- selected_validation_data$Activity
         numeric_pred_data <- as.data.table(selected_validation_data)[, !("Activity"), with = FALSE]
+        
         prediction_labels <- predict(trained_tree, newdata = as.data.frame(numeric_pred_data), type = "class")
         
         # Validation checks
@@ -243,6 +259,8 @@ BinaryModelTuningRF <- function(model, activity, feature_data,
         unique_classes <- sort(unique(c(prediction_labels, truth_labels)))
         prediction_labels <- factor(prediction_labels, levels = unique_classes)
         ground_truth_labels <- factor(truth_labels, levels = unique_classes)
+        
+        # table(prediction_labels, ground_truth_labels)
         
         f1_score <- MLmetrics::F1_Score(
           y_true = truth_labels,

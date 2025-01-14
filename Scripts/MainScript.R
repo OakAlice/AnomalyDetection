@@ -1,11 +1,11 @@
 #| Animal Behaviour Classification using Machine Learning
 #| 
-#| This script implements a comparative analysis of machine learning approaches
-#| for classifying animal behaviors from accelerometer data. It compares:
+#| This program implements a comparative analysis of machine learning approaches
+#| for classifying animal behaviours from accelerometer data.
+#| It compares SVM and Tree based systems for
 #| - One-Class Classification (OCC)
 #| - Binary Classification
 #| - Multi-class Classification
-
 
 # dataset_name <- "Vehkaoja_Dog"
 dataset_name <- "Ladds_Seal"
