@@ -152,27 +152,50 @@ random_baseline_metrics <- function(ground_truth_labels, iterations = 100, model
   n_classes <- length(class_levels)
   n_samples <- length(ground_truth_labels)
   
+  class_prop_equal <- rep(1/n_classes, n_classes)
+  
   # Pre-allocate matrices for storing results
-  class_metrics <- list()
+  class_metrics_prev <- list()
+  class_metrics_equal <- list()
   # Run iterations
   for (i in 1:iterations) {
     # Generate random predictions
-    random_preds <- factor(
+    random_preds_prev <- factor(
       sample(class_levels, size = n_samples, prob = class_props, replace = TRUE),
       levels = class_levels
     )
     
-    random_baseline <- multiclass_class_metrics(ground_truth_labels, random_preds)
-    random_baseline_class <- random_baseline$class_metrics
+    random_preds_equal <- factor(
+      sample(class_levels, size = n_samples, prob = class_prop_equal, replace = TRUE),
+      levels = class_levels
+    )
+    
+    random_baseline_prev <- multiclass_class_metrics(ground_truth_labels, random_preds_prev)
+    random_baseline_class_prev <- random_baseline_prev$class_metrics
+    
+    random_baseline_equal <- multiclass_class_metrics(ground_truth_labels, random_preds_equal)
+    random_baseline_class_equal <- random_baseline_equal$class_metrics
     
     # Store class metrics
-    class_metrics[[i]] <- random_baseline_class
+    class_metrics_prev[[i]] <- random_baseline_class_prev
+    class_metrics_equal[[i]] <- random_baseline_class_equal
     }
     
   # Calculate average for each class and metric
-  class_metrics_combined <- do.call(rbind, class_metrics)
+  class_metrics_combined_prev <- do.call(rbind, class_metrics_prev)
+  class_metrics_combined_equal <- do.call(rbind, class_metrics_equal)
 
-  averages_df <- class_metrics_combined %>%
+  averages_df_prev <- class_metrics_combined_prev %>%
+    group_by(Class) %>%
+    summarise(
+      F1_Score = mean(F1_Score, na.rm = TRUE),
+      Precision = mean(Precision, na.rm = TRUE),
+      Recall = mean(Recall, na.rm = TRUE),
+      Accuracy = mean(Accuracy, na.rm = TRUE),
+      Prevalence = mean(Prevalence, na.rm = TRUE)
+    )
+  
+  averages_df_equal <- class_metrics_combined_equal %>%
     group_by(Class) %>%
     summarise(
       F1_Score = mean(F1_Score, na.rm = TRUE),
@@ -183,24 +206,34 @@ random_baseline_metrics <- function(ground_truth_labels, iterations = 100, model
     )
   
   if(model == "OCC" | model == "Binary"){
-    selected_metrics <- averages_df[!averages_df$Class == "Other", ]
+    selected_metrics_prev <- averages_df_prev[!averages_df_prev$Class == "Other", ]
+    selected_metrics_equal <- averages_df_equal[!averages_df_equal$Class == "Other", ]
     
   } else {
     # calculate the weighted average from the individual classes
-  selected_metrics <- averages_df %>%
-    summarize(across(c(F1_Score, Precision, Recall, Accuracy), ~ sum(.x * averages_df$Prevalence, na.rm = TRUE))) %>%
+  selected_metrics_prev <- averages_df_prev %>%
+    summarize(across(c(F1_Score, Precision, Recall, Accuracy), ~ sum(.x * averages_df_prev$Prevalence, na.rm = TRUE))) %>%
+    as.list()
+  
+  selected_metrics_equal <- averages_df_equal %>%
+    summarize(across(c(F1_Score, Precision, Recall, Accuracy), ~ sum(.x * averages_df_equal$Prevalence, na.rm = TRUE))) %>%
     as.list()
   }
   
   # Calculate summary statistics
   list(
     macro_summary = list(
-      F1_Score = selected_metrics$F1_Score,
-      Precision = selected_metrics$Precision,
-      Recall = selected_metrics$Recall,
-      Accuracy = selected_metrics$Accuracy
+      F1_Score_prev = selected_metrics_prev$F1_Score,
+      Precision_prev = selected_metrics_prev$Precision,
+      Recall_prev = selected_metrics_prev$Recall,
+      Accuracy_prev = selected_metrics_prev$Accuracy,
+      F1_Score_equal = selected_metrics_equal$F1_Score,
+      Precision_equal = selected_metrics_equal$Precision,
+      Recall_equal = selected_metrics_equal$Recall,
+      Accuracy_equal = selected_metrics_equal$Accuracy
     ),
-    class_summary = averages_df
+    class_summary_prev = averages_df_prev,
+    class_summary_equal = averages_df_equal
   )
 }
 
@@ -225,7 +258,8 @@ calculate_full_multi_performance <- function(ground_truth_labels, predictions, m
   # 3. Random baseline (randomly select in stratified proportion to true data)
   random_multiclass <- random_baseline_metrics(ground_truth_labels, iterations = 100, model)
     random_macro_summary <- random_multiclass$macro_summary
-    random_class_summary <- random_multiclass$class_summary
+    random_class_summary_prev <- random_multiclass$class_summary_prev
+    random_class_summary_equal <- random_multiclass$class_summary_equal
   
   # Compile results
   macro_results <- data.frame(
@@ -239,14 +273,18 @@ calculate_full_multi_performance <- function(ground_truth_labels, predictions, m
     Precision = weighted_metrics["Precision"],
     Recall = weighted_metrics["Recall"],
     Accuracy = weighted_metrics["Accuracy"],
-    Random_F1_Score = random_macro_summary$F1_Score,
-    Random_Precision = random_macro_summary$Precision,
-    Random_Recall = random_macro_summary$Recall,
-    Random_Accuracy = random_macro_summary$Accuracy,
     ZeroR_F1_Score = macro_metrics_zero$F1_Score,
     ZeroR_Precision = macro_metrics_zero$Precision,
     ZeroR_Recall = macro_metrics_zero$Recall,
-    ZeroR_Accuracy = macro_metrics_zero$Accuracy
+    ZeroR_Accuracy = macro_metrics_zero$Accuracy,
+    Random_F1_Score_prev = random_macro_summary$F1_Score_prev,
+    Random_Precision_prev = random_macro_summary$Precision_prev,
+    Random_Recall_prev = random_macro_summary$Recall_prev,
+    Random_Accuracy_prev = random_macro_summary$Accuracy_prev,
+    Random_F1_Score_equal = random_macro_summary$F1_Score_equal,
+    Random_Precision_equal = random_macro_summary$Precision_equal,
+    Random_Recall_equal = random_macro_summary$Recall_equal,
+    Random_Accuracy_equal = random_macro_summary$Accuracy_equal
   )
 
   activity_results_list <- list()
@@ -265,10 +303,15 @@ calculate_full_multi_performance <- function(ground_truth_labels, predictions, m
       Recall = class_metrics_df$Recall[class_metrics_df$Class == activity],
       Accuracy = class_metrics_df$Accuracy[class_metrics_df$Class == activity],
       
-      Random_F1_Score = random_class_summary$F1_Score[random_class_summary$Class == activity],
-      Random_Precision = random_class_summary$Precision[random_class_summary$Class == activity],
-      Random_Recall = random_class_summary$Recall[random_class_summary$Class == activity],
-      Random_Accuracy = random_class_summary$Accuracy[random_class_summary$Class == activity],
+      Random_F1_Score_prev = random_class_summary_prev$F1_Score[random_class_summary_prev$Class == activity],
+      Random_Precision_prev = random_class_summary_prev$Precision[random_class_summary_prev$Class == activity],
+      Random_Recall_prev = random_class_summary_prev$Recall[random_class_summary_prev$Class == activity],
+      Random_Accuracy_prev = random_class_summary_prev$Accuracy[random_class_summary_prev$Class == activity],
+      
+      Random_F1_Score_equal = random_class_summary_equal$F1_Score[random_class_summary_equal$Class == activity],
+      Random_Precision_equal = random_class_summary_equal$Precision[random_class_summary_equal$Class == activity],
+      Random_Recall_equal = random_class_summary_equal$Recall[random_class_summary_equal$Class == activity],
+      Random_Accuracy_equal = random_class_summary_equal$Accuracy[random_class_summary_equal$Class == activity],
       
       ZeroR_F1_Score = class_metrics_zero$F1_Score[class_metrics_zero$Class == activity],
       ZeroR_Precision = class_metrics_zero$Precision[class_metrics_zero$Class == activity],

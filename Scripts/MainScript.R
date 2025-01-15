@@ -55,7 +55,8 @@ p_load(
   MLmetrics,       # Machine learning metrics
   ranger,          # Fast random forests
   randomForest,    # normal random forest
-  reshape2,        # 
+  reshape2,        # melting
+  rpart,           # decision tree
   tree,            # decision tree 
   tsfeatures,      # Time series feature extraction
   tidyverse,       # Data manipulation and visualization

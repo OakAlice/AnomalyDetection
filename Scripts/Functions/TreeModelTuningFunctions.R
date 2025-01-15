@@ -335,7 +335,7 @@ BinaryModelTuningRF <- function(model, activity, feature_data,
 #'   \item{Pred}{Character vector. Selected feature names}
 #'
 multiclassModelTuningRF <- function(model, multiclass_data, 
-                                   n_trees, mtry, min_samples_leaf, max_depth, max_features,
+                                   min_samples_split, min_samples_leaf, max_depth,
                                    validation_proportion, balance, loops) {
   
   future_outcomes <- list()
@@ -397,19 +397,41 @@ multiclassModelTuningRF <- function(model, multiclass_data,
     message("Training model")
     flush.console()
     
-    trained_tree <- tryCatch({
+    tryCatch({
       class_weights <- table(selected_training_data$Activity)
       class_weights <- max(class_weights) / class_weights
+      weights_vector <- class_weights[selected_training_data$Activity]
       
-      ranger(
-        x = train_num, 
-        y = ground_truth_labels,
-        num.trees = n_trees,
-        mtry = mtry, 
-        min.node.size = min_samples_leaf, 
-        max.depth = max_depth,
-        class.weights = class_weights
+      # this is a decision tree version
+      trained_tree <- rpart(
+        formula = Activity ~ .,
+        data = as.data.frame(selected_training_data),
+        method = "class",  # Use "class" for classification
+        weights = weights_vector,
+        control = rpart.control(
+          maxdepth = max_depth,          # Maximum depth of the tree
+          minsplit = min_samples_split,  # Minimum number of observations for a split
+          minbucket = min_samples_leaf,  # Minimum number of observations in terminal nodes
+          cp = 0.01,                     # Complexity parameter for pruning
+          xval = 10                      # Number of cross-validations
+        )
       )
+      
+      # This is a random forest model # it performed too well
+      # trained_tree <- tryCatch({
+      #   class_weights <- table(selected_training_data$Activity)
+      #   class_weights <- max(class_weights) / class_weights
+      #   
+      #   ranger(
+      #     x = train_num, 
+      #     y = ground_truth_labels,
+      #     num.trees = n_trees,
+      #     mtry = mtry, 
+      #     min.node.size = min_samples_leaf, 
+      #     max.depth = max_depth,
+      #     class.weights = class_weights
+      #   )
+    
     }, error = function(e) {
       message("Error in model training: ", e$message)
       return(NULL)
@@ -426,8 +448,12 @@ multiclassModelTuningRF <- function(model, multiclass_data,
       truth_labels <- selected_validation_data$Activity
       numeric_pred_data <- as.data.table(selected_validation_data)[, !("Activity"), with = FALSE]
       
-      predictions <- predict(trained_tree, data = as.data.frame(numeric_pred_data))
-      prediction_labels <- predictions$predictions
+      # random forest
+      # predictions <- predict(trained_tree, data = as.data.frame(numeric_pred_data))
+      # prediction_labels <- predictions$predictions
+      
+      # decision tree version
+      prediction_labels <- predict(trained_tree, newdata = as.data.frame(numeric_pred_data), type = "class")
       
       if (length(prediction_labels) != length(truth_labels)) {
         stop(sprintf("Mismatch in lengths: predictions=%d, ground_truth=%d", 
@@ -438,6 +464,8 @@ multiclassModelTuningRF <- function(model, multiclass_data,
       unique_classes <- sort(unique(c(prediction_labels, truth_labels)))
       prediction_labels <- factor(prediction_labels, levels = unique_classes)
       ground_truth_labels <- factor(truth_labels, levels = unique_classes)
+      
+      # table(ground_truth_labels, prediction_labels)
       
       # Calculate metrics
       macro_multiclass_scores <- multiclass_class_metrics(ground_truth_labels, prediction_labels)

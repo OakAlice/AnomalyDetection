@@ -14,12 +14,10 @@ Binary_bounds <- list(
                     min_samples_split = c(10, 100)
                   )
 
-Multi_bounds <- list(
-        n_trees = c(100, 500),          # Standard range for random forests
-        mtry = c(5, 30),                # p is number of features
-        min_samples_leaf = c(1, 20),    # Can be smaller due to ensemble
-        max_depth = c(10, 30),          # Deeper trees work well in RF
-        max_features = c(0.2, 0.8)      # Traditional RF feature sampling
+Multi_bounds <- list(         
+        min_samples_split = c(10, 100),
+        min_samples_leaf = c(5, 50),
+        max_depth = c(10, 30) 
     )
 
 # Load in data ------------------------------------------------------------
@@ -191,16 +189,14 @@ if ("Multi" %in% model_type){
       
      elapsed_time <- system.time({
           results <- BayesianOptimization(
-            FUN = function(n_trees, mtry, min_samples_leaf, max_depth, max_features) {
+            FUN = function(min_samples_split, min_samples_leaf, max_depth) {
               multiclassModelTuningRF(
                 model = "Multi",
                 multiclass_data = multiclass_data,
                 
-                n_trees = n_trees, 
-                mtry = mtry, 
+                min_samples_split = min_samples_split,
                 min_samples_leaf = min_samples_leaf,
                 max_depth = max_depth,
-                max_features = max_features,
                 
                 validation_proportion = validation_proportion,
                 balance = balance,
@@ -228,8 +224,7 @@ if ("Multi" %in% model_type){
         elapsed = as.numeric(elapsed_time[3]),
         system = as.numeric(elapsed_time[2]),
         user = as.numeric(elapsed_time[1]),
-        n_trees = results$Best_Par["n_trees"],
-        mtry = results$Best_Par["mtry"],
+        min_samples_split = results$Best_Par["min_samples_split"],
         min_samples_leaf = results$Best_Par["min_samples_leaf"],
         max_depth = results$Best_Par["max_depth"],
         Best_Value = results$Best_Value,

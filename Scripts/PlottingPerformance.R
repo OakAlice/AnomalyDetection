@@ -10,7 +10,9 @@ combined_results <- combined_results %>% mutate(Activity = ifelse(Activity == "W
 # generate plot of perofrmance metrics
 absolute_performance(combined_results, dataset_name, base_path)
 zero_performance(combined_results, dataset_name, base_path)
-random_performance(combined_results, dataset_name, base_path)
+# random_performance(combined_results, dataset_name, base_path) # need to fix
+
+all_f1_plots(combined_results, dataset_name, base_path)
 
 full_multi(combined_results, dataset_name, base_path)
 

@@ -103,10 +103,14 @@ for(model in c("OCC", "Binary")){
       ZeroR_Precision = zero_rate_baseline$Precision,
       ZeroR_Recall = zero_rate_baseline$Recall,
       ZeroR_Accuracy = zero_rate_baseline$Accuracy,
-      Random_F1_Score = random_baseline$macro_summary$F1_Score,
-      Random_Precision = random_baseline$macro_summary$Precision,
-      Random_Recall = random_baseline$macro_summary$Recall,
-      Random_Accuracy = random_baseline$macro_summary$Accuracy
+      Random_F1_Score_prev = random_baseline$macro_summary$F1_Score_prev,
+      Random_Precision_prev = random_baseline$macro_summary$Precision_prev,
+      Random_Recall_prev = random_baseline$macro_summary$Recall_prev,
+      Random_Accuracy_prev = random_baseline$macro_summary$Accuracy_prev,
+      Random_F1_Score_equal = random_baseline$macro_summary$F1_Score_equal,
+      Random_Precision_equal = random_baseline$macro_summary$Precision_equal,
+      Random_Recall_equal = random_baseline$macro_summary$Recall_equal,
+      Random_Accuracy_equal = random_baseline$macro_summary$Accuracy_equal
     )
     
     test_results <- rbind(test_results, results)
@@ -206,10 +210,14 @@ combined_results_adjusted <- test_outcome %>%
          Zero_adj_Precision = Precision - ZeroR_Precision,
          Zero_adj_Recall = Recall - ZeroR_Recall,
          Zero_adj_Accuracy = Accuracy - ZeroR_Accuracy,
-         Rand_adj_F1_Score = F1_Score - Random_F1_Score,
-         Rand_adj_Precision = Precision - Random_Precision,
-         Rand_adj_Recall = Recall - Random_Recall,
-         Rand_adj_Accuracy = Accuracy - Random_Accuracy)
+         Rand_adj_F1_Score_prev = F1_Score - Random_F1_Score_prev,
+         Rand_adj_Precision_prev = Precision - Random_Precision_prev,
+         Rand_adj_Recall_prev = Recall - Random_Recall_prev,
+         Rand_adj_Accuracy_prev = Accuracy - Random_Accuracy_prev,
+         Rand_adj_F1_Score_equal = F1_Score - Random_F1_Score_equal,
+         Rand_adj_Precision_equal = Precision - Random_Precision_equal,
+         Rand_adj_Recall_equal = Recall - Random_Recall_equal,
+         Rand_adj_Accuracy_equal = Accuracy - Random_Accuracy_equal)
 
 fwrite(combined_results_adjusted, file.path(base_path, "Output", "Testing", paste0(dataset_name, "_", ML_method, "_complete_test_performance.csv")))
 

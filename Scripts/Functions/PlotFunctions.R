@@ -155,6 +155,148 @@ random_performance <- function(combined_results, dataset_name, base_path) {
 
 
 
+all_f1_plots <- function(combined_results, dataset_name, base_path) {
+  # Prepare the three different F1 score datasets
+  unadjusted <- combined_results %>%
+    select(Dataset, Model, Activity, F1_Score, Accuracy) %>%
+    mutate(Adjustment = "Unadjusted")
+  
+  random_adjusted_prev <- combined_results %>%
+    select(Dataset, Model, Activity, Rand_adj_F1_Score_prev, Rand_adj_Accuracy_prev) %>%
+    rename(F1_Score = Rand_adj_F1_Score_prev,
+           Accuracy = Rand_adj_Accuracy_prev) %>%
+    mutate(Adjustment = "Random-adjusted-prev")
+  
+  random_adjusted_equal <- combined_results %>%
+    select(Dataset, Model, Activity, Rand_adj_F1_Score_equal, Rand_adj_Accuracy_equal) %>%
+    rename(F1_Score = Rand_adj_F1_Score_equal,
+           Accuracy = Rand_adj_Accuracy_equal) %>%
+    mutate(Adjustment = "Random-adjusted-equal")
+  
+  zero_adjusted <- combined_results %>%
+    select(Dataset, Model, Activity, Zero_adj_F1_Score, Zero_adj_Accuracy) %>%
+    rename(F1_Score = Zero_adj_F1_Score,
+           Accuracy = Zero_adj_Accuracy) %>%
+    mutate(Adjustment = "Zero-adjusted")
+  
+  # Combine all datasets
+  behaviours <- unlist(unique(unadjusted$Activity[unadjusted$Model == "OtherActivity"]))
+  activity_levels <- if(dataset_name == "Vehkaoja_Dog") {
+    c("Macroaverage", "Walking", "Eating", "Lying Chest", "Shaking", "Other")
+  } else if(dataset_name == "Ladds_Seal") {
+    c("Macroaverage", "Swimming", "Chewing", "Still", "Facerub", "Other") 
+  } else {
+    stop("Unknown dataset name")
+  }
+  
+  all_data <- bind_rows(unadjusted, random_adjusted_prev, random_adjusted_equal, zero_adjusted) %>%
+    filter(Activity %in% c(behaviours)) %>%
+    mutate(Model = case_when(
+      Model == "OCC" ~ "1-class",
+      Model == "Binary" ~ "Binary", 
+      Model == "OCC_Ensemble" ~ "1-class ensemble",
+      Model == "Binary_Ensemble" ~ "Binary ensemble",
+      Model == "Activity" ~ "Full multi-class",
+      Model == "OtherActivity" ~ "Other multi-class",
+      Model == "GeneralisedActivity" ~ "Generalised multi-class",
+      TRUE ~ Model
+    )) %>%
+    mutate(
+      Activity = factor(Activity, levels = activity_levels),
+      Model = factor(Model, levels = c("1-class", "1-class ensemble", "Binary", "Binary ensemble", 
+                                     "Full multi-class", "Other multi-class", "Generalised multi-class")),
+      Adjustment = factor(Adjustment, levels = c("Unadjusted", "Zero-adjusted", "Random-adjusted-prev", "Random-adjusted-equal")),
+      is_na = is.na(F1_Score)
+    ) %>%
+    filter(Dataset == dataset_name)
+
+  
+  # Define colors and shapes
+  colours <- c("#A63A50", "#FFCF56", "#D4B2D8", "#3891A6", "#3BB273", "#031D44")
+  shapes <- c(15, 16, 17, 18, 20, 8)
+  
+  # Create plot
+  full_f1_plot <- ggplot(all_data, aes(x = Model, y = F1_Score, colour = Activity, shape = Activity)) +
+    geom_point(size = 5, na.rm = TRUE, alpha = 0.8) +
+    geom_point(
+      data = all_data %>% filter(is_na),
+      aes(y = -0.1),
+      size = 5,
+      alpha = 0.8
+    ) +
+    scale_color_manual(values = colours) +
+    scale_shape_manual(values = shapes) +
+    scale_y_continuous(
+      limits = c(-0.1, 1),
+      breaks = seq(0, 1, by = 0.2)
+    ) +
+    facet_wrap(. ~ Adjustment, ncol = 4) +
+    theme_minimal() +
+    labs(
+      x = "Model Type",
+      y = "F1 Score"
+    ) +
+    theme(
+      panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      panel.spacing = unit(2, "lines"),
+      plot.title = element_text(hjust = 0.5)
+    )
+  
+  full_accuracy_plot <- ggplot(all_data, aes(x = Model, y = Accuracy, colour = Activity, shape = Activity)) +
+    geom_point(size = 5, na.rm = TRUE, alpha = 0.8) +
+    geom_point(
+      data = all_data %>% filter(is_na),
+      aes(y = -0.1),
+      size = 5,
+      alpha = 0.8
+    ) +
+    scale_color_manual(values = colours) +
+    scale_shape_manual(values = shapes) +
+    scale_y_continuous(
+      limits = c(-0.1, 1),
+      breaks = seq(0, 1, by = 0.2)
+    ) +
+    facet_wrap(. ~ Adjustment, ncol = 4) +
+    theme_minimal() +
+    labs(
+      x = "Model Type",
+      y = "F1 Score"
+    ) +
+    theme(
+      panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      panel.spacing = unit(2, "lines"),
+      plot.title = element_text(hjust = 0.5)
+    )
+  
+  # Save plot
+  pdf(
+    file = file.path(base_path, "Output", "Plots", ML_method, paste0(dataset_name, "_all_f1_plot.pdf")),
+    width = 12,
+    height = 8
+  )
+  print(full_f1_plot)
+  dev.off()
+  
+  pdf(
+    file = file.path(base_path, "Output", "Plots", ML_method, paste0(dataset_name, "_all_accuracy_plot.pdf")),
+    width = 12,
+    height = 8
+  )
+  print(full_accuracy_plot)
+  dev.off()
+  
+  message("F1 score and accuracy comparison plots saved successfully.")
+  
+  # Return the plot invisibly
+  invisible(full_plot)
+}
+
 
 
 
