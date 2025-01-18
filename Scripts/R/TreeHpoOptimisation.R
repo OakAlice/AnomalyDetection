@@ -21,14 +21,14 @@ Multi_bounds <- list(
     )
 
 # Load in data ------------------------------------------------------------
-dichotomous_feature_data <- fread(file.path(base_path, "Data", "Feature_data", 
-                              paste0(dataset_name, "_other_features.csv"))) %>%
-                              select(-GeneralisedActivity, -OtherActivity) %>%
-                              as.data.table()
-
-multiclass_feature_data <- fread(file.path(base_path, "Data", "Feature_data", 
-                                paste0(dataset_name, "_other_features.csv"))) %>%
+  dichotomous_feature_data <- fread(file.path(base_path, "Data", "Feature_data", 
+                                paste0(dataset_name, "_", training_set, "_other_features.csv"))) %>%
+                                select(-GeneralisedActivity, -OtherActivity) %>%
                                 as.data.table()
+  
+  multiclass_feature_data <- fread(file.path(base_path, "Data", "Feature_data", 
+                                  paste0(dataset_name, "_", training_set, "_other_features.csv"))) %>%
+                                  as.data.table()
 
 
 # OCC model tuning (with Isolation Forest) --------------------------------
@@ -71,7 +71,8 @@ if ("OCC" %in% model_type){
       
       summarised_results <- data.frame(
         data_name = dataset_name,
-        model_type = model_type,
+        model_type = "OCC",
+        training_set = training_set,
         behaviour_or_activity = activity,
         elapsed = as.numeric(elapsed_time[3]),
         system = as.numeric(elapsed_time[2]),
@@ -93,13 +94,14 @@ if ("OCC" %in% model_type){
   save_results(
     results_stored, 
     file.path(base_path, "Output", "Tuning", ML_method,
-              paste0(dataset_name, "_OCC_hyperparmaters.csv")))
+              paste0(dataset_name, "_", training_set, "_OCC_hyperparmaters.csv")))
 }
   
 # Binary model tuning (with Decision Tree) --------------------------------
 results_stored <- list()
 if ("Binary" %in% model_type){
   for (activity in target_activities) {
+    # activity <- target_activities[1]
     print(paste("Tuning Binary model for activity:", activity))
     
     # Set up parallel processing
@@ -138,8 +140,9 @@ if ("Binary" %in% model_type){
     
     summarised_results <- data.frame(
       data_name = dataset_name,
-      model_type = model_type,
+      model_type = "Binary",
       behaviour_or_activity = activity,
+      training_set = training_set,
       elapsed = as.numeric(elapsed_time[3]),
       system = as.numeric(elapsed_time[2]),
       user = as.numeric(elapsed_time[1]),
@@ -161,7 +164,7 @@ if ("Binary" %in% model_type){
   save_results(
     results_stored, 
     file.path(base_path, "Output", "Tuning", ML_method,
-              paste0(dataset_name, "_Binary_hyperparmaters.csv")))
+              paste0(dataset_name, "_", training_set, "_Binary_hyperparmaters.csv")))
 }
 
 # Multiclass model tuning -------------------------------------------------
@@ -221,6 +224,7 @@ if ("Multi" %in% model_type){
         data_name = dataset_name,
         model_type = "Multi",
         behaviour_or_activity = behaviours,
+        training_set = training_set,
         elapsed = as.numeric(elapsed_time[3]),
         system = as.numeric(elapsed_time[2]),
         user = as.numeric(elapsed_time[1]),
@@ -233,13 +237,13 @@ if ("Multi" %in% model_type){
       
       # Save all multiclass results
     fwrite(results, file.path(base_path, "Output", "Tuning", ML_method,
-                                 paste0(dataset_name, "_Multi_", behaviours, "_hyperparmaters.csv")),  row.names = FALSE)
+                                 paste0(dataset_name, "_", training_set, "_Multi_", behaviours, "_hyperparmaters.csv")),  row.names = FALSE)
     
   }
 }
 
 # Read all multi files together ----------------------------------------
-tune_files <- list.files(file.path(base_path, "Output", "Tuning", ML_method), pattern = paste0(dataset_name, "_Multi_.*\\.csv$"), full.names = TRUE)
+tune_files <- list.files(file.path(base_path, "Output", "Tuning", ML_method), pattern = paste0(dataset_name,  "_", training_set, "_Multi_.*\\.csv$"), full.names = TRUE)
 multi_tuning <- rbindlist(
   lapply(tune_files, function(file) {
     df <- fread(file)
@@ -247,7 +251,7 @@ multi_tuning <- rbindlist(
   }),
   use.names = TRUE
 )
-fwrite(multi_tuning, file.path(base_path, "Output", "Tuning", ML_method, paste0(dataset_name, "_Multi_hyperparmaters.csv")))
+fwrite(multi_tuning, file.path(base_path, "Output", "Tuning", ML_method, paste0(dataset_name, "_", training_set, "_Multi_hyperparmaters.csv")))
 
 
 

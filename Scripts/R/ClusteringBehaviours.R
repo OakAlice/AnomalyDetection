@@ -1,9 +1,9 @@
 # Adding activity category columns ----------------------------------------
 
 for (condition in c("other", "test")) {
-  data <- fread(file.path(base_path, "Data/Feature_data", paste0(dataset_name, "_", condition, "_features.csv")))
+  data <- fread(file.path(base_path, "Data/Feature_data", paste0(dataset_name, "_", training_set, "_", condition, "_features.csv")))
   new_column_data <- renameColumns(data, dataset_name, target_activities)
-  fwrite(new_column_data, file.path(base_path, "Data/Feature_data", paste0(dataset_name, "_", condition, "_features.csv")))
+  fwrite(new_column_data, file.path(base_path, "Data/Feature_data", paste0(dataset_name, "_", training_set, "_", condition, "_features.csv")))
 }
 
 # add the columns to categroies
@@ -34,6 +34,18 @@ renameColumns <- function(data, dataset_name, target_activities) {
         )
       )
     )]
+    # 3 specific categories and a non-specific "other"
+    data[, OtherActivity := ifelse(Activity %in% target_activities, Activity, "Other")]
+  } else if (dataset_name == "Anguita_Human") {
+    # general categories
+    data[, GeneralisedActivity := fifelse( # nested ifelse
+      Activity %in% c("WALKING", "WALKING_UPSTAIRS", "WALKING_DOWNSTAIRS"), "WALKING",
+      fifelse(
+        Activity %in% c("SITTING", "LYING"), "SITTING",
+        fifelse(
+          Activity %in% c("STANDING"), "STANDING", NA_character_)
+        )
+      )]
     # 4 specific categories and a non-specific "other"
     data[, OtherActivity := ifelse(Activity %in% target_activities, Activity, "Other")]
   } else {

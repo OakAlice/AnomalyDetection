@@ -9,6 +9,7 @@
 
 # Ignore various other file types
 *.csv
+*.txt
 *.rds
 *.rda
 *.pdf

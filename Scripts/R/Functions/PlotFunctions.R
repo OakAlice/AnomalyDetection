@@ -58,9 +58,9 @@ process_dataset <- function(results_long, dataset_name) {
   )
 }
 
-save_plots <- function(full_plot, reduced_plot, dataset_name, base_path, suffix = "") {
+save_plots <- function(full_plot, reduced_plot, dataset_name, base_path, suffix = "", training_set) {
   pdf(
-    file = file.path(base_path, "Output", "Plots", ML_method, paste0(dataset_name, "_all_models_plot", suffix, ".pdf")),
+    file = file.path(base_path, "Output", "Plots", ML_method, paste0(dataset_name, "_", training_set, "_all_models_plot", suffix, ".pdf")),
     width = 12,
     height = 8
   )
@@ -78,7 +78,7 @@ save_plots <- function(full_plot, reduced_plot, dataset_name, base_path, suffix 
   message("Plots saved successfully.")
 }
 
-plot_and_save <- function(results_long, dataset_name, base_path, suffix = "") {
+plot_and_save <- function(results_long, dataset_name, base_path, suffix = "", training_set) {
   colours <- c("#A63A50", "#FFCF56", "#D4B2D8", "#3891A6", "#3BB273", "#031D44")
   shapes <- c(15, 16, 17, 18, 20, 8)
   
@@ -87,7 +87,7 @@ plot_and_save <- function(results_long, dataset_name, base_path, suffix = "") {
   full_plot <- create_base_plot(processed_data$full, colours, shapes)
   reduced_plot <- create_base_plot(processed_data$reduced, colours, shapes)
   
-  save_plots(full_plot, reduced_plot, dataset_name, base_path, suffix)
+  save_plots(full_plot, reduced_plot, dataset_name, base_path, suffix, training_set)
 }
 
 prepare_results <- function(combined_results) {
@@ -113,13 +113,13 @@ prepare_results <- function(combined_results) {
 
 # Main plotting functions -----------------------------------------------
 # absolute
-absolute_performance <- function(combined_results, dataset_name, base_path) {
+absolute_performance <- function(combined_results, dataset_name, base_path, training_set) {
   results_long <- prepare_results(combined_results)
-  plot_and_save(results_long, dataset_name, base_path)
+  plot_and_save(results_long, dataset_name, base_path, training_set = training_set)
 }
 
 # adjusted for the zero rate performance
-zero_performance <- function(combined_results, dataset_name, base_path) {
+zero_performance <- function(combined_results, dataset_name, base_path, training_set) {
   
   combined_results_zero <- combined_results %>%
     select(Dataset, Model, Activity, Zero_adj_F1_Score, Zero_adj_Precision, Zero_adj_Recall, Zero_adj_Accuracy) %>%
@@ -132,13 +132,13 @@ zero_performance <- function(combined_results, dataset_name, base_path) {
   results_long <- prepare_results(combined_results_zero)
   
   
-  plot_and_save(results_long, dataset_name, base_path, "_zero")
+  plot_and_save(results_long, dataset_name, base_path, "_zero", training_set)
 }
 
 
 
 # adjusted for random guessing performance
-random_performance <- function(combined_results, dataset_name, base_path) {
+random_performance <- function(combined_results, dataset_name, base_path, training_set) {
   
   combined_results_rand <- combined_results %>%
     select(Dataset, Model, Activity, Rand_adj_F1_Score, Rand_adj_Precision, Rand_adj_Recall, Rand_adj_Accuracy) %>%
@@ -150,12 +150,12 @@ random_performance <- function(combined_results, dataset_name, base_path) {
   
   results_long <- prepare_results(combined_results_rand)
   
-  plot_and_save(results_long, dataset_name, base_path, "_random")
+  plot_and_save(results_long, dataset_name, base_path, "_random", training_set)
 }
 
 
 
-all_f1_plots <- function(combined_results, dataset_name, base_path) {
+all_f1_plots <- function(combined_results, dataset_name, base_path, training_set) {
   # Prepare the three different F1 score datasets
   unadjusted <- combined_results %>%
     select(Dataset, Model, Activity, F1_Score, Accuracy) %>%
@@ -220,7 +220,7 @@ all_f1_plots <- function(combined_results, dataset_name, base_path) {
     geom_point(size = 5, na.rm = TRUE, alpha = 0.8) +
     geom_point(
       data = all_data %>% filter(is_na),
-      aes(y = -0.1),
+      aes(y = -0.5),
       size = 5,
       alpha = 0.8
     ) +
@@ -249,7 +249,7 @@ all_f1_plots <- function(combined_results, dataset_name, base_path) {
     geom_point(size = 5, na.rm = TRUE, alpha = 0.8) +
     geom_point(
       data = all_data %>% filter(is_na),
-      aes(y = -0.1),
+      aes(y = -0.5),
       size = 5,
       alpha = 0.8
     ) +
@@ -276,7 +276,7 @@ all_f1_plots <- function(combined_results, dataset_name, base_path) {
   
   # Save plot
   pdf(
-    file = file.path(base_path, "Output", "Plots", ML_method, paste0(dataset_name, "_all_f1_plot.pdf")),
+    file = file.path(base_path, "Output", "Plots", ML_method, paste0(dataset_name, "_", training_set, "_all_f1_plot.pdf")),
     width = 12,
     height = 8
   )
@@ -284,7 +284,7 @@ all_f1_plots <- function(combined_results, dataset_name, base_path) {
   dev.off()
   
   pdf(
-    file = file.path(base_path, "Output", "Plots", ML_method, paste0(dataset_name, "_all_accuracy_plot.pdf")),
+    file = file.path(base_path, "Output", "Plots", ML_method, paste0(dataset_name,"_", training_set, "_all_accuracy_plot.pdf")),
     width = 12,
     height = 8
   )
@@ -292,13 +292,8 @@ all_f1_plots <- function(combined_results, dataset_name, base_path) {
   dev.off()
   
   message("F1 score and accuracy comparison plots saved successfully.")
-  
-  # Return the plot invisibly
-  invisible(full_plot)
+
 }
-
-
-
 
 
 # plot all the bbehaviours from the full multiclass model

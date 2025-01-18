@@ -98,7 +98,6 @@ binary_F1 <- mean(unlist(binary_scores))
 
 
 # Print out the findings --------------------------------------------------
-print("multiclass F1 score: ", multiclass_F1)
-print("binary F1 score: ", binary_F1)
-
+paste0("multiclass F1 score: ", multiclass_F1)
+paste0("binary F1 score: ", binary_F1)
 

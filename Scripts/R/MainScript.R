@@ -8,7 +8,7 @@
 #| - Multi-class Classification
 
 # dataset_name <- "Vehkaoja_Dog"
-dataset_name <- "Ladds_Seal"
+dataset_name <- "Anguita_Human"
 base_path <- "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
 # base_path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
 
@@ -30,6 +30,12 @@ window_settings <- list(
     window_length = 1,
     overlap_percent = 50,
     target_activities = c("swimming", "still", "chewing", "facerub")
+  ),
+  Anguita_Human = list(
+    sample_rate = "not sure",
+    window_length = "not sure",
+    overlap_percent = "not sure",
+    target_activities = c("WALKING", "SITTING", "STANDING")
   )
 )
 
@@ -65,7 +71,9 @@ p_load(
 )
 
 # Global Variables -------------------------------------------------------
-ML_method <- "Tree" # or "SVM
+ML_method <- "SVM" # or "Tree"
+training_sets <- c("all", "some", "target") # this is the behaviours that appear in training set
+training_set <- c("all")
 all_axes <- c("Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z")
 label_columns <- c("Activity", "Time", "ID")
 test_proportion <- 0.2
@@ -90,29 +98,33 @@ invisible(lapply(function_files, function(file) {
 
 # Analysis Pipeline ----------------------------------------------------
 
-# 1. Split Data into Training and Test Sets
+# Split Data into Training and Test Sets
 source(file.path(base_path, "Scripts", "SplitTestData.R"))
 
-# 2. Data Exploration and Clustering
+# Data Exploration and Clustering
 source(file.path(base_path, "Scripts", "DataExploration.R"))
 
-# 3. Data Preprocessing, Feature Engineering, and re-clustering
+# Data Preprocessing, Feature Engineering, and re-clustering
 source(file.path(base_path, "Scripts", "Preprocessing.R"))
 source(file.path(base_path, "Scripts", "ClusteringBehaviours.R"))
 
-# 4. Hyperparameter Optimization
+# Remove different behaviours from the training set 
+source(file.path(base_path, "Scripts", "RemoveTrainingInformation.R"))
+
+
+# Hyperparameter Optimization
 # options for SVM and Tree based comparisons
 source(file.path(base_path, "Scripts", "SVMHpoOptimisation.R"))
 source(file.path(base_path, "Scripts", "TreeHpoOptimisation.R"))
 
-# 5. Generate optimal models
+# Generate optimal models
 source(file.path(base_path, "Scripts", "SVMTrainBestModels.R"))
 source(file.path(base_path, "Scripts", "TreeTrainBestModels.R"))
 
-# 6. Model Evaluation
+# Model Evaluation
 source(file.path(base_path, "Scripts", "SVMTestBestModels.R"))
 source(file.path(base_path, "Scripts", "TreeTestBestModels.R"))
 
-# 7. Results Visualization and Comparison
+# Results Visualization and Comparison
 source(file.path(base_path, "Scripts", "PlottingPerformance.R"))
 source(file.path(base_path, "Scripts", "PlotPredictions.R"))

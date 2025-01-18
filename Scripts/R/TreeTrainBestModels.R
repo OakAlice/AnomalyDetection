@@ -1,14 +1,14 @@
 # Training final models ---------------------------------------------------
 # Random Forest -----------------------------------------------------------
-training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_other_features.csv"))) %>%
+training_data <- fread(file.path(base_path, "Data", "Feature_data", paste0(dataset_name, "_", training_set, "_other_features.csv"))) %>%
   as.data.table()
 
 for (model in c("OCC", "Binary", "Multi")) {
     
-    # model <- "OCC"
+    # model <- "Multi"
     
     # Load hyperparameter file
-    hyperparam_file <- fread(file = file.path(base_path, "Output", "Tuning", ML_method, paste0(dataset_name, "_", model, "_hyperparmaters.csv")))
+    hyperparam_file <- fread(file = file.path(base_path, "Output", "Tuning", ML_method, paste0(dataset_name, "_", training_set, "_", model, "_hyperparmaters.csv")))
     
     for (i in seq_len(nrow(hyperparam_file))) {
       parameter_row <- hyperparam_file[i, ]
@@ -60,7 +60,7 @@ for (model in c("OCC", "Binary", "Multi")) {
       target_training_data <- cbind(numeric_training_data, Activity)
       target_training_data$Activity <- as.factor(target_training_data$Activity)
       
-      message("Training data prepared.")
+      message("Training data prepared. Beginning model training.")
       
       if (parameter_row$model_type == "OCC"){
         
@@ -92,19 +92,25 @@ for (model in c("OCC", "Binary", "Multi")) {
         
       } else if (parameter_row$model_type == "Multi"){
         
+        class_weights <- table(target_training_data$Activity)
+        class_weights <- max(class_weights) / class_weights
+        weights_vector <- class_weights[target_training_data$Activity]
+        
         trained_tree <- tryCatch({
-          class_weights <- table(target_training_data$Activity)
-          class_weights <- max(class_weights) / class_weights
-          
-          ranger(
-            x = numeric_training_data, 
-            y = as.factor(Activity),
-            num.trees = parameter_row$n_trees,
-            mtry = parameter_row$mtry, 
-            min.node.size = parameter_row$min_samples_leaf, 
-            max.depth = parameter_row$max_depth,
-            class.weights = class_weights
+         rpart(
+            formula = Activity ~ .,
+            data = as.data.frame(target_training_data),
+            method = "class",  # Use "class" for classification
+            weights = weights_vector,
+            control = rpart.control(
+              maxdepth = max_depth,       
+              minsplit = min_samples_split,
+              minbucket = min_samples_leaf,
+              cp = 0.01, 
+              xval = 10
+            )
           )
+          
         }, error = function(e) {
           message("Error in model training: ", e$message)
           return(NULL)
@@ -114,7 +120,7 @@ for (model in c("OCC", "Binary", "Multi")) {
       # Save the trained model
       model_path <- file.path(
         base_path, "Output", "Models", ML_method,
-        paste0(parameter_row$data_name, "_", model, "_", parameter_row$behaviour_or_activity, "_final_model.rda")
+        paste0(parameter_row$data_name, "_", training_set, "_", model, "_", parameter_row$behaviour_or_activity, "_final_model.rda")
       )
       save(trained_tree, file = model_path)
       message("Model saved")

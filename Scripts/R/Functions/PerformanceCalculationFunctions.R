@@ -90,9 +90,9 @@ prepare_test_data <- function(test_feature_data, selected_features, behaviour = 
   selected_data <- na.omit(as.data.table(selected_data))
   
   # For dichotomous models, convert to binary classification
-  if (!is.null(behaviour)) {
-    selected_data$Activity <- ifelse(selected_data$Activity == behaviour, behaviour, "Other")
-  }
+  # if (!is.null(behaviour)) {
+  #  selected_data$Activity <- ifelse(selected_data$Activity == behaviour, behaviour, "Other")
+  # }
   
   # Extract labels and metadata
   ground_truth_labels <- selected_data$Activity
@@ -260,6 +260,17 @@ calculate_full_multi_performance <- function(ground_truth_labels, predictions, m
     random_macro_summary <- random_multiclass$macro_summary
     random_class_summary_prev <- random_multiclass$class_summary_prev
     random_class_summary_equal <- random_multiclass$class_summary_equal
+    
+  # Calculate false positives per predicted class
+  confusion_matrix <- table(Predicted = predictions, Actual = ground_truth_labels)
+  false_positives <- sapply(rownames(confusion_matrix), function(class) {
+    # Sum all cases where we predicted this class (row) but actual (column) was different
+    sum(confusion_matrix[class, colnames(confusion_matrix) != class])
+  })
+  false_positives_df <- data.frame(
+    Class = names(false_positives),
+    FalsePositives = as.numeric(false_positives)
+  )
   
   # Compile results
   macro_results <- data.frame(
@@ -268,19 +279,23 @@ calculate_full_multi_performance <- function(ground_truth_labels, predictions, m
     Activity = "WeightedMacroAverage",
     
     Prevalence = NA,
+    FalsePositives = NA,
     
     F1_Score = weighted_metrics["F1_Score"],
     Precision = weighted_metrics["Precision"],
     Recall = weighted_metrics["Recall"],
     Accuracy = weighted_metrics["Accuracy"],
+    
     ZeroR_F1_Score = macro_metrics_zero$F1_Score,
     ZeroR_Precision = macro_metrics_zero$Precision,
     ZeroR_Recall = macro_metrics_zero$Recall,
     ZeroR_Accuracy = macro_metrics_zero$Accuracy,
+    
     Random_F1_Score_prev = random_macro_summary$F1_Score_prev,
     Random_Precision_prev = random_macro_summary$Precision_prev,
     Random_Recall_prev = random_macro_summary$Recall_prev,
     Random_Accuracy_prev = random_macro_summary$Accuracy_prev,
+    
     Random_F1_Score_equal = random_macro_summary$F1_Score_equal,
     Random_Precision_equal = random_macro_summary$Precision_equal,
     Random_Recall_equal = random_macro_summary$Recall_equal,
@@ -291,12 +306,21 @@ calculate_full_multi_performance <- function(ground_truth_labels, predictions, m
   # Loop through each unique activity
   for (activity in unique(ground_truth_labels)) {
     # Create dataframe for current activity
+    
+    
+    false_positive_activity <- with(false_positives_df, 
+                                    ifelse(is.null(FalsePositives[Class == activity]) || FalsePositives[Class == activity] == 0, 
+                                           0, 
+                                           FalsePositives[Class == activity])
+    )
+    
     activity_results_list[[activity]] <- data.frame(
       Dataset = dataset_name,
       Model = model,
       Activity = activity,
       
       Prevalence = class_metrics_df$Prevalence[class_metrics_df$Class == activity],
+      FalsePositives = false_positive_activity,
       
       F1_Score = class_metrics_df$F1_Score[class_metrics_df$Class == activity],
       Precision = class_metrics_df$Precision[class_metrics_df$Class == activity],

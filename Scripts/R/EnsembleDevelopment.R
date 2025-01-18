@@ -22,11 +22,12 @@ load_predictions <- function(pattern) {
 }
 
 # Process predictions -----------------------------------------------------
+# training_set <- "target"
 for (model in c("OCC", "Binary")){
   test_results <- data.frame()
-  print(model)
+  print(paste0("creating collective prediction for ", model, " with ", training_set, " data"))
   
-  data <- load_predictions(paste0(dataset_name, ".*_", model, "_.*\\.csv$"))
+  data <- load_predictions(paste0(dataset_name, "_", training_set, ".*_", model, "_.*\\.csv$"))
   data$model_activity <- str_to_title(data$model_activity)
   
   if (ML_method == "SVM"){
@@ -84,6 +85,8 @@ for (model in c("OCC", "Binary")){
     ) %>%
     ungroup()
   
+  data_wide_summarised$collective_prediction[is.na(data_wide_summarised$collective_prediction)]<- "Other"
+  
   # merge with the ground truth
   data_wide2 <- merge(data_wide_summarised, ground_truth_labels, by = c("Time", "ID"))
   
@@ -95,12 +98,16 @@ for (model in c("OCC", "Binary")){
     stop("Error: Predictions and ground truth labels have different lengths.")
   }
   
+  confusion <- table(collective_ground_truth, collective_predictions)
+  fwrite(confusion, file.path(base_path, "Output", "Testing", ML_method, "Confusion", paste(dataset_name, training_set, model, "_ensemble_confusion.csv", sep = "_")))
+  
   # Calculate per-class metrics and macro average
   test_results <- calculate_full_multi_performance(ground_truth_labels = collective_ground_truth, predictions = collective_predictions, model = paste0(model, "_Ensemble"))
-    
+  test_results <- cbind(test_results, training_set = rep(training_set, nrow(test_results)))
+  
   # save the ensemble results
-  fwrite(test_results, file.path(base_path, "Output", "Testing", ML_method, paste0(dataset_name, "_", model, "_ensemble_test_performance.csv")))
-  fwrite(data_wide, file.path(base_path, "Output", "Testing", ML_method, "Predictions", paste0(dataset_name, "_", model, "_ensemble_predictions.csv")))
+  fwrite(test_results, file.path(base_path, "Output", "Testing", ML_method, paste0(dataset_name, "_", training_set, "_", model, "_ensemble_test_performance.csv")))
+  fwrite(data_wide, file.path(base_path, "Output", "Testing", ML_method, "Predictions", paste0(dataset_name, "_", training_set, "_", model, "_ensemble_predictions.csv")))
 }
 
 
