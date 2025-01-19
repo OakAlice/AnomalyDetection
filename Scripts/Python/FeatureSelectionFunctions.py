@@ -4,7 +4,6 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from typing import List, Optional, Union
-import warnings
 
 
 def feature_selection(training_data: pd.DataFrame,
