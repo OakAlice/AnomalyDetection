@@ -22,86 +22,86 @@ for (training_set in training_sets){
     # Dichotomous Model tuning master call --------------------------------------
     # Can currently do binary and OCC, will expand to multi-class as well
 
-model_types <- c("OCC", "Binary")
-
-feature_data <- fread(
-  file.path(base_path, "Data", "Feature_data", 
-            paste0(dataset_name, "_other_features.csv"))
-) %>%
-  select(-GeneralisedActivity, -OtherActivity) %>%
-  as.data.table()
-
-results_stored <- list()
-
-    for (model in model_types){
-      for (activity in target_activities) {
-        tryCatch({
-          print(paste("Tuning", model, "model for activity:", activity, "from set", training_set))
-          
-          # Set up parallel processing
-          # plan(multisession, workers = availableCores() - 1)
-
-            # Perform Bayesian optimization
-            elapsed_time <- system.time({
-              results <- BayesianOptimization(
-                FUN = function(nu, gamma, kernel, number_features) {
-                  dichotomousModelTuningSVM(
-                    model = model,
-                    activity = activity,
-                    feature_data = feature_data,
-                    nu = nu,
-                    kernel = kernel,
-                    gamma = gamma,
-                    number_features = number_features,
-                    validation_proportion = validation_proportion,
-                    balance = balance
-                  )
-                },
-                bounds = bounds,
-                init_points = 5,
-                n_iter = 10,
-                acq = "ucb",
-                kappa = 2.576
-              )
+  model_types <- c("OCC", "Binary")
+  
+  feature_data <- fread(
+    file.path(base_path, "Data", "Feature_data", 
+              paste0(dataset_name, "_other_features.csv"))
+  ) %>%
+    select(-GeneralisedActivity, -OtherActivity) %>%
+    as.data.table()
+  
+  results_stored <- list()
+  
+      for (model in model_types){
+        for (activity in target_activities) {
+          tryCatch({
+            print(paste("Tuning", model, "model for activity:", activity, "from set", training_set))
+            
+            # Set up parallel processing
+            # plan(multisession, workers = availableCores() - 1)
+            
+            # optimise
+              elapsed_time <- system.time({
+                results <- BayesianOptimization(
+                  FUN = function(nu, gamma, kernel, number_features) {
+                    dichotomousModelTuningSVM(
+                      model = model,
+                      activity = activity,
+                      feature_data = feature_data,
+                      nu = nu,
+                      kernel = kernel,
+                      gamma = gamma,
+                      number_features = number_features,
+                      validation_proportion = validation_proportion,
+                      balance = balance
+                    )
+                  },
+                  bounds = bounds,
+                  init_points = 5,
+                  n_iter = 10,
+                  acq = "ucb",
+                  kappa = 2.576
+                )
+              })
+            
+            # Clean up and reset to sequential processing
+            gc()
+            # plan(sequential)
+            
+            # Store results for this activity
+            # rewrite this code to be better - i.e., handle ML method inside of function
+            result <- tryCatch({
+                save_best_params(
+                  data_name = as.character(dataset_name),
+                  model_type = as.character(model),
+                  activity = as.character(activity),
+                  elapsed_time = elapsed_time,
+                  results = results
+                )
+            }, error = function(e) {
+              message("Error in save_best_params: ", e$message)
+              return(NULL)
             })
-          
-          # Clean up and reset to sequential processing
-          gc()
-          # plan(sequential)
-          
-          # Store results for this activity
-          # rewrite this code to be better - i.e., handle ML method inside of function
-          result <- tryCatch({
-              save_best_params(
-                data_name = as.character(dataset_name),
-                model_type = as.character(model),
-                activity = as.character(activity),
-                elapsed_time = elapsed_time,
-                results = results
-              )
+            
+            # Add result to results_stored list if valid
+            if (!is.null(result)) {
+              results_stored[[activity]] <- result
+            } else {
+              message("Skipping activity ", activity, " due to error.")
+            }
+            
           }, error = function(e) {
-            message("Error in save_best_params: ", e$message)
-            return(NULL)
+            message(paste("Error processing activity:", activity, "for model:", model, "\nError message:", e$message))
+            # Continue to next activity
           })
-          
-          # Add result to results_stored list if valid
-          if (!is.null(result)) {
-            results_stored[[activity]] <- result
-          } else {
-            message("Skipping activity ", activity, " due to error.")
-          }
-          
-        }, error = function(e) {
-          message(paste("Error processing activity:", activity, "for model:", model, "\nError message:", e$message))
-          # Continue to next activity
-        })
+        }
+        
+        save_results(
+          results_stored, 
+          file.path(base_path, "Output", "Tuning", ML_method,
+                    paste0(dataset_name, "_", training_set, "_", model, "_hyperparmaters.csv")))
       }
-      
-      save_results(
-        results_stored, 
-        file.path(base_path, "Output", "Tuning", ML_method,
-                  paste0(dataset_name, "_", training_set, "_", model, "_hyperparmaters.csv")))
-    }
 
 # Multiclass model tuning -------------------------------------------------
   # Define different behaviour column groupings

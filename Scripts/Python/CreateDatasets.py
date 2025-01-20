@@ -17,7 +17,7 @@ def create_datasets(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_AC
         BEHAVIOUR_SETS (list): List of behaviour sets
     
     Returns:
-        dict: Dictionary containing the processed dataframes
+        saves both the target training data types as well as the cleaned test data
     """
 
     # read in the data from the right training data condition
@@ -30,35 +30,44 @@ def create_datasets(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_AC
     df_clean = df_clean.dropna().replace([np.inf, -np.inf], np.nan).dropna()
 
     # modify the data for the right model condition
-    behaviour_dfs = {}  # Dictionary to store all behavior dataframes
-    
     if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
+        # Create activity column once using numpy where
         for behaviour in TARGET_ACTIVITIES:
-            behaviour_dfs[behaviour] = df_clean.copy()
-            behaviour_dfs[behaviour]['Activity'] = df_clean['Activity'].apply(
-                lambda x: behaviour if x == behaviour else "Other"
-            )
-            # Save the dataset
-            save_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv")
-            behaviour_dfs[behaviour].to_csv(save_path, index=False)
-    else:
-        for behaviour in BEHAVIOUR_SETS:
-            behaviour_dfs[behaviour] = df_clean.copy()
-            if behaviour == "Activity":
-                # Keep the dataframe as is with all original activities
-                save_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_full.csv")
-            elif behaviour == "OtherActivity":
-                # Keep TARGET_ACTIVITIES as they are, make all others "Other"
-                behaviour_dfs[behaviour]['Activity'] = df_clean['Activity'].apply(
-                    lambda x: x if x in TARGET_ACTIVITIES else "Other"
-                )
-                save_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_other.csv")
+            activity_column = np.where(df_clean['Activity'] == behaviour, behaviour, "Other")
+            
+            behaviour_df = df_clean.copy(deep=False)
+            behaviour_df['Activity'] = activity_column
             
             # Save the dataset
-            behaviour_dfs[behaviour].to_csv(save_path, index=False)
+            save_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv")
+            behaviour_df.to_csv(save_path, index=False)
+    else:
+        for behaviour in BEHAVIOUR_SETS:
+            if behaviour == "Activity":
+                # Just save the original dataframe without copying
+                save_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_Activity.csv")
+                df_clean.to_csv(save_path, index=False)
+            elif behaviour == "OtherActivity":
+                # Use numpy where for vectorized operation
+                activity_column = np.where(df_clean['Activity'].isin(TARGET_ACTIVITIES), 
+                                        df_clean['Activity'], 
+                                        "Other")
+                
+                behaviour_df = df_clean.copy(deep=False)  # Create a shallow copy
+                behaviour_df['Activity'] = activity_column
+                
+                save_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_Other.csv")
+                behaviour_df.to_csv(save_path, index=False)
     
-    # return the dataframes and keep for later
-    return behaviour_dfs
+    # clean and save the test set as well
+    input_path_test = Path(BASE_PATH) / "Data" / "Feature_data" / f"{DATASET_NAME}_test_features.csv"
+    df_test = pd.read_csv(input_path_test)
+    df_clean = df_test[clean_columns]
+    df_test_clean = df_clean.dropna().replace([np.inf, -np.inf], np.nan).dropna()
+
+    # save this
+    save_test_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_test_features_cleaned.csv")
+    df_test_clean.to_csv(save_test_path, index=False)
 
 if __name__ == "__main__":
     create_datasets(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SETS)
