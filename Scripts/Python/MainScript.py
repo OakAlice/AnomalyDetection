@@ -18,9 +18,9 @@ BASE_PATH = "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/Anomaly
 
 # run variables
 ML_METHOD = "SVM"  # or "Tree"
-MODEL_TYPE = "Binary" # "Binary", "Multi", "OneClass"
-BEHAVIOUR_SETS = ["Activity", "OtherActivity"]
-BEHAVIOUR_SET = "Activity"
+MODEL_TYPE = "Multi" # "Binary", "Multi", "OneClass"
+BEHAVIOUR_SETS = ["Activity", "Other"]
+BEHAVIOUR_SET = "Other"
 TRAINING_SETS = ["all", "some", "target"]  # amount of behaviors that appear in training set
 TRAINING_SET = "all"
 
@@ -37,12 +37,6 @@ window_settings = {
         "window_length": 1,
         "overlap_percent": 50,
         "target_activities": ["swimming", "still", "chewing", "facerub"]
-    },
-    "Anguita_Human": {
-        "sample_rate": None,  # not sure
-        "window_length": None,  # not sure
-        "overlap_percent": None,  # not sure
-        "target_activities": ["WALKING", "SITTING", "STANDING"]
     }
 }
 

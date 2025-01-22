@@ -1,4 +1,4 @@
-from MainScript import BASE_PATH, ML_METHOD, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME, BEHAVIOUR_SET
+from MainScript import BASE_PATH, BEHAVIOUR_SET, ML_METHOD, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME
 from joblib import load
 from pathlib import Path
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 def make_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
                  behaviour, model, scaler, X, y, ID, Time):
 
+    print(f"\nMaking predictions...")
     # make predictions
     X_scaled = scaler.transform(X)  # Scale test data in the same way
     predictions = model.predict(X_scaled)
@@ -92,7 +93,7 @@ def merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_
     else:
         print("No prediction files were loaded to merge")
 
-def calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES):
+def calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET):
     print("\nCalculating performance metrics...")
     try:
         # calculate AUC, F1, Precision, Recall, and Accuracy for each behaviour
@@ -148,15 +149,20 @@ def calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAIN
         plt.title('Confusion Matrix')
         plt.ylabel('True Label')
         plt.xlabel('Predicted Label')
+
+        # save raw confusion matrix data and plot
+        cm_df = pd.DataFrame(full_cm, index = full_labels, columns = full_labels)
         
-        # Save confusion matrix plot
-        cm_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_confusion_matrix.png")
+        if MODEL_TYPE.lower() == 'multi':
+            cm_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_confusion_matrix.png")
+            cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_confusion_matrix.csv"))
+        else:
+            cm_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_confusion_matrix.png")
+            cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_confusion_matrix.csv"))
+
+        
         plt.savefig(cm_path, bbox_inches='tight', dpi=300)
         plt.close()
-        
-        # save raw confusion matrix data
-        cm_df = pd.DataFrame(full_cm, index = full_labels, columns = full_labels)
-        cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_confusion_matrix.csv"))
 
         # Get classification report for per-class metrics
         report_dict = classification_report(y_true, y_pred, zero_division=0, output_dict=True, labels=labels)
@@ -209,11 +215,23 @@ def calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAIN
             }
         }
 
-def test_SVM(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES):
+def test_SVM(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, behaviour_param=None):
+    print(f"behaviour_param is {behaviour_param}")
+
+    """
+    Test SVM models with either TARGET_ACTIVITIES or BEHAVIOUR_SETS
+    
+    Args:
+        BASE_PATH: Base path for the project
+        DATASET_NAME: Name of the dataset
+        TRAINING_SET: Training set identifier
+        MODEL_TYPE: Type of model ('binary', 'oneclass', or 'multiclass')
+        behaviour_param: Either TARGET_ACTIVITIES list or BEHAVIOUR_SETS list
+    """
     print(f"\nStarting SVM testing for {DATASET_NAME} with {MODEL_TYPE} configuration...")
     
     # load in and prepare the test data
-    print(f"Loading test data from {DATASET_NAME}_test_features_cleaned.csv...")
+    print(f"Loading test data from {DATASET_NAME}_test_features_cleaned.csv")
     file_path = Path(BASE_PATH) / "Data" / "Split_data" / f"{DATASET_NAME}_test_features_cleaned.csv"
     df = pd.read_csv(file_path)
         
@@ -223,7 +241,7 @@ def test_SVM(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIE
     Time = df['Time']
     
     if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
-        for behaviour in TARGET_ACTIVITIES:
+        for behaviour in behaviour_param:
             print(f"\nTesting model for {behaviour}...")
             # load in the optimal model
             model_path = Path(f"{BASE_PATH}/Output/Models/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
@@ -238,26 +256,26 @@ def test_SVM(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIE
         print("\nMerging predictions from all behavior models...")
         multiclass_predictions = merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES)
     else:
-        print("\nProcessing multiclass model...")
-        model_path = Path(f"{BASE_PATH}/Output/Models/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_model.joblib")
+        print(f"Beginning predictions for multiclass {behaviour_param}...")
+        model_path = Path(f"{BASE_PATH}/Output/Models/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour_param}_model.joblib")
         saved_data = load(model_path)
         model = saved_data['model']
         scaler = saved_data['scaler']
 
         multiclass_predictions = make_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                                    behaviour, model, scaler, X, y, ID, Time)
+                                                    behaviour_param, model, scaler, X, y, ID, Time)
 
     print("\nCalculating final performance metrics...")
-    metrics_dict = calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES)
+    metrics_dict = calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)
 
     return(metrics_dict)
 
 if __name__ == "__main__":
-    print("Starting model testing pipeline...")
     try:
-        if MODEL_TYPE == 'multiclass':
-            metrics_dict = test_SVM(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BEHAVIOUR_SET)
-        else:
+        if MODEL_TYPE.lower() == 'multi':
+            print(f"Beginning testing for Multiclass")
+            metrics_dict = test_SVM(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, behaviour_param = BEHAVIOUR_SET)
+        else: # for the binary and oneclass models
             predictions_file = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_all_predictions_merged.csv")
             if predictions_file.exists():
                 print(f"Loading existing predictions from {predictions_file}")
@@ -265,7 +283,7 @@ if __name__ == "__main__":
                 metrics_dict = calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES)
             else:
                 print("No existing predictions found. Running full model testing...")
-                metrics_dict = test_SVM(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES)
+                metrics_dict = test_SVM(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, behaviour_param = TARGET_ACTIVITIES)
         
         if metrics_dict:  # Check if metrics_dict is not None
             print("\nSaving final metrics...")
@@ -273,7 +291,11 @@ if __name__ == "__main__":
             metrics_df = pd.DataFrame.from_dict(metrics_dict, orient='index')
             
             # Save metrics
-            metrics_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_metrics.csv")
+            if MODEL_TYPE.lower() == 'multi':
+                metrics_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_metrics.csv")
+            else:
+                metrics_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_metrics.csv")
+            
             metrics_df.to_csv(metrics_path)
             print(f"Results saved to {metrics_path}")
         else:

@@ -53,7 +53,7 @@ def create_datasets(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_AC
                                         df_clean['Activity'], 
                                         "Other")
                 
-                behaviour_df = df_clean.copy(deep=False)  # Create a shallow copy
+                behaviour_df = df_clean.copy(deep=False)
                 behaviour_df['Activity'] = activity_column
                 
                 save_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_Other.csv")

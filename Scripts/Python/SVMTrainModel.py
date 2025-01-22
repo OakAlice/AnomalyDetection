@@ -1,6 +1,6 @@
 # Train the optimal model
 
-from MainScript import BASE_PATH, ML_METHOD, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME
+from MainScript import BASE_PATH, BEHAVIOUR_SETS, ML_METHOD, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME
 from sklearn.svm import SVC, OneClassSVM
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix
@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
-def train_svm(df, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BASE_PATH, TARGET_ACTIVITIES, best_params, behaviour):
+def train_svm(df, MODEL_TYPE, best_params, behaviour):
     """
     Train a single SVM model based on the specified type and previously identified best parameters
     
@@ -27,7 +27,7 @@ def train_svm(df, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BASE_PATH, TARGET_ACTI
     Returns:
         dict: Dictionary containing the model and scaler
     """
-    print(f"\nTraining {MODEL_TYPE} SVM for {behaviour}...")
+    print(f"\nTraining {MODEL_TYPE} SVM for {behaviour or set}...")
     
     # Prepare features
     X = df.drop(columns=['Activity', 'ID'])
@@ -114,30 +114,39 @@ def save_model(model, scaler, file_path):
     }, file_path)
     print(f"Model saved to {file_path}")
 
-def train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE):
+def train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None, BEHAVIOUR_SETS = None):
     # Load best parameters from CSV
     best_params = load_best_params(Path(f"{BASE_PATH}/Output/Tuning/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_hyperparmaters.csv"))
     
-    for behaviour in TARGET_ACTIVITIES:
-        # Train optimal binary and multiclass models - including saving to 'Models' folder
-        print(f"Training optimal {MODEL_TYPE} {behaviour} SVM model...")
-        # Load data
-        df = pd.read_csv(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv"))
-    
-        model_info = train_svm(
-            df,
-            DATASET_NAME,
-            TRAINING_SET,
-            MODEL_TYPE,
-            BASE_PATH,
-            TARGET_ACTIVITIES,
-            best_params,
-            behaviour
-        )
-        model = model_info['model']
-        scaler = model_info['scaler']
-        model_path = Path(f"{BASE_PATH}/Output/Models/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
-        save_model(model, scaler, model_path)
+    if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
+        for behaviour in TARGET_ACTIVITIES:
+            print(f"Training optimal {MODEL_TYPE} {behaviour} SVM model...")
+            df = pd.read_csv(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv"))
+        
+            model_info = train_svm(
+                df,
+                MODEL_TYPE,
+                best_params,
+                behaviour
+            )
+            model_path = Path(f"{BASE_PATH}/Output/Models/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
+            model = model_info['model']
+            scaler = model_info['scaler']
+            save_model(model, scaler, model_path)
+    else:
+        for set in BEHAVIOUR_SETS:
+            print(f"Training optimal {MODEL_TYPE} {set} SVM model...")
+            df = pd.read_csv(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{set}.csv"))
+            model_info = train_svm(
+                df,
+                MODEL_TYPE,
+                best_params,
+                behaviour = set
+            )
+            model_path = Path(f"{BASE_PATH}/Output/Models/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{set}_model.joblib")
+            model = model_info['model']
+            scaler = model_info['scaler']
+            save_model(model, scaler, model_path)
 
 if __name__ == "__main__":
-    train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE)
+    train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SETS)
