@@ -100,6 +100,9 @@ def calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAIN
         y_pred = multiclass_predictions['Predicted_Label']
         labels = sorted(list(set(y_true) | set(y_pred)))
 
+        full_cm = confusion_matrix(y_true, y_pred, labels=labels)
+        full_labels = sorted(list(set(y_true) | set(y_pred)))
+
         print(f"model type: {MODEL_TYPE}")
         if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
             # for binary and oneclass, change so everything not in target activities is "Other"
@@ -108,7 +111,7 @@ def calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAIN
             # Only use target activities and "Other" for labels
             labels = sorted(TARGET_ACTIVITIES + ['Other'])
 
-        # Calculate and save confusion matrix
+        # Calculate a reduced confusion matrix
         cm = confusion_matrix(y_true, y_pred, labels=labels)
         
         # Create custom color mask for confusion matrix
@@ -152,7 +155,7 @@ def calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAIN
         plt.close()
         
         # save raw confusion matrix data
-        cm_df = pd.DataFrame(cm, index=labels, columns=labels)
+        cm_df = pd.DataFrame(full_cm, index = full_labels, columns = full_labels)
         cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_confusion_matrix.csv"))
 
         # Get classification report for per-class metrics
