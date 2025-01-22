@@ -20,6 +20,7 @@ BASE_PATH = "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/Anomaly
 ML_METHOD = "SVM"  # or "Tree"
 MODEL_TYPE = "Binary" # "Binary", "Multi", "OneClass"
 BEHAVIOUR_SETS = ["Activity", "OtherActivity"]
+BEHAVIOUR_SET = "Activity"
 TRAINING_SETS = ["all", "some", "target"]  # amount of behaviors that appear in training set
 TRAINING_SET = "all"
 
