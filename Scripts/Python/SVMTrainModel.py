@@ -1,6 +1,6 @@
 # Train the optimal model
 
-from MainScript import BASE_PATH, BEHAVIOUR_SETS, ML_METHOD, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME
+from MainScript import BASE_PATH, BEHAVIOUR_SET, ML_METHOD, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME
 from sklearn.svm import SVC, OneClassSVM
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix
@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
-def train_svm(df, MODEL_TYPE, best_params, behaviour):
+def train_svm(df, MODEL_TYPE, kernel, nu, gamma, behaviour):
     """
     Train a single SVM model based on the specified type and previously identified best parameters
     
@@ -36,35 +36,44 @@ def train_svm(df, MODEL_TYPE, best_params, behaviour):
     # Scale features
     scaler = StandardScaler()
     X = scaler.fit_transform(X)
-    
+
+    # Add class_weight parameter to handle imbalance
     if MODEL_TYPE.lower() == 'binary':
-        # Add class_weight parameter to handle imbalance
         n_other = sum(y == 'Other')
         n_target = sum(y == behaviour)
         class_weights = {
             behaviour: n_other / len(y),
             'Other': n_target / len(y)
         }
+    elif MODEL_TYPE.lower() == 'multi':
+        # Calculate class weights for all unique classes
+        unique_classes = y.unique()
+        n_samples = len(y)
+        class_weights = {}
         
-        # Update parameters with class weights
-        params = best_params[behaviour].copy()
-        params['class_weight'] = class_weights
-        
-        model = SVC(**params)
+        for cls in unique_classes:
+            n_cls = sum(y == cls)
+            # Weight is inversely proportional to class frequency
+            class_weights[cls] = n_samples / (len(unique_classes) * n_cls)
+    
+    if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'multi':
+        model = SVC(
+            C=nu, 
+            kernel=kernel, 
+            gamma=gamma, 
+            class_weight=class_weights,
+            probability=True  # Enable probability estimates
+        )
         model.fit(X, y)
         
-    elif MODEL_TYPE.lower() == 'oneclass':
+    else:
         # For one-class, only use normal class for training
         normal_idx = y == behaviour
         X_train = X[normal_idx]
         
         # Train model
-        model = OneClassSVM(**best_params[behaviour])
+        model = OneClassSVM(nu = nu, kernel =kernel, gamma = gamma)
         model.fit(X_train)
-        
-    else:  # multiclass
-        model = SVC(**best_params[behaviour])
-        model.fit(X, y)
 
     return {'model': model, 'scaler': scaler}
 
@@ -114,7 +123,7 @@ def save_model(model, scaler, file_path):
     }, file_path)
     print(f"Model saved to {file_path}")
 
-def train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None, BEHAVIOUR_SETS = None):
+def train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None, BEHAVIOUR_SET = None):
     # Load best parameters from CSV
     best_params = load_best_params(Path(f"{BASE_PATH}/Output/Tuning/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_hyperparmaters.csv"))
     
@@ -123,10 +132,16 @@ def train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_T
             print(f"Training optimal {MODEL_TYPE} {behaviour} SVM model...")
             df = pd.read_csv(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv"))
         
+            kernel = best_params[behaviour]['kernel']
+            nu = best_params[behaviour]['C']
+            gamma = best_params[behaviour]['gamma']
+
             model_info = train_svm(
                 df,
                 MODEL_TYPE,
-                best_params,
+                kernel,
+                nu,
+                gamma,
                 behaviour
             )
             model_path = Path(f"{BASE_PATH}/Output/Models/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
@@ -134,19 +149,25 @@ def train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_T
             scaler = model_info['scaler']
             save_model(model, scaler, model_path)
     else:
-        for set in BEHAVIOUR_SETS:
-            print(f"Training optimal {MODEL_TYPE} {set} SVM model...")
-            df = pd.read_csv(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{set}.csv"))
-            model_info = train_svm(
-                df,
-                MODEL_TYPE,
-                best_params,
-                behaviour = set
-            )
-            model_path = Path(f"{BASE_PATH}/Output/Models/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{set}_model.joblib")
-            model = model_info['model']
-            scaler = model_info['scaler']
-            save_model(model, scaler, model_path)
+        print(f"Training optimal {MODEL_TYPE} {BEHAVIOUR_SET} SVM model...")
+        df = pd.read_csv(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}.csv"))
+           
+        kernel = best_params[BEHAVIOUR_SET]['kernel']
+        nu = best_params[BEHAVIOUR_SET]['C']
+        gamma = best_params[BEHAVIOUR_SET]['gamma']
+           
+        model_info = train_svm(
+            df,
+            MODEL_TYPE,
+            kernel,
+            nu,
+            gamma,
+            behaviour = BEHAVIOUR_SET
+        )
+        model_path = Path(f"{BASE_PATH}/Output/Models/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_model.joblib")
+        model = model_info['model']
+        scaler = model_info['scaler']
+        save_model(model, scaler, model_path)
 
 if __name__ == "__main__":
-    train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SETS)
+    train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)

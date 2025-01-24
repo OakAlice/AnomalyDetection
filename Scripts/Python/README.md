@@ -1,5 +1,8 @@
 Jack wrote this for me so I can set it up again
 
+In command window: where python
+Then use that path...
+
 # To create the local virtualenv
 C:\Users\oaw001\AppData\Local\Programs\Python\Python312\python.exe -m pip install virtualenv
 C:\Users\oaw001\AppData\Local\Programs\Python\Python312\python.exe -m virtualenv .venv 

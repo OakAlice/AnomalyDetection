@@ -1,137 +1,16 @@
-from MainScript import BASE_PATH, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME
+from MainScript import BASE_PATH, BEHAVIOUR_SET, BEHAVIOUR_SETS, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME
 from sklearn.svm import SVC, OneClassSVM
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GroupKFold
+from sklearn.metrics import roc_auc_score
+from skopt import BayesSearchCV
+from skopt.space import Real, Categorical
 import pandas as pd
 import numpy as np
 from pathlib import Path
 from SVMTrainModel import train_svm
-
-def train_test_svm(DATASET_NAME, TRAINING_SET, MODEL_TYPE, BASE_PATH, TARGET_ACTIVITIES, best_params):
-    """
-    Train and test SVM models based on the specified type and previously identified best parameters
-    
-    Args:
-        dataset_name (str): Name of the dataset
-        training_set (str): Training set identifier
-        model_type (str): 'oneclass', 'binary', or 'multiclass'
-        base_path (str): Base path for data
-        target_activities (list): List of target activities
-        best_params (dict): Dictionary of best parameters from optimization
-    """
-    results = {}
-    
-    try:
-        for behaviour in TARGET_ACTIVITIES:
-            data_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv")
-            df = pd.read_csv(data_path)
-                
-            model_info = train_svm(
-                df,
-                DATASET_NAME,
-                TRAINING_SET,
-                MODEL_TYPE,
-                BASE_PATH,
-                TARGET_ACTIVITIES,
-                best_params,
-                behaviour
-            )
-            model = model_info['model']
-            scaler = model_info['scaler']
-
-
-
-            print(f"\n{'='*50}")
-            print(f"Processing {MODEL_TYPE} SVM for {behaviour}...")
-            
-            try:
-                # Load data
-                data_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv")
-                print(f"Loading data from: {data_path}")
-                df = pd.read_csv(data_path)
-                print(f"Data loaded successfully. Shape: {df.shape}")
-                
-                # Prepare features
-                X = df.drop(columns=['Activity', 'ID'])
-                y = df['Activity']
-                
-                print("Scaling features...")
-                scaler = StandardScaler()
-                X = scaler.fit_transform(X)
-                
-                if MODEL_TYPE.lower() == 'oneclass':
-                    print("Processing one-class SVM...")
-                    normal_idx = y == behaviour
-                    X_train = X[normal_idx]
-                    X_test = X
-                    y_test = y
-                    print(f"Training data shape: {X_train.shape}")
-                    
-                    model = OneClassSVM(**best_params[behaviour])
-                    print("Training model...")
-                    model.fit(X_train)
-                    
-                    y_pred = model.predict(X_test)
-                    y_pred = np.where(y_pred == 1, behaviour, "Other")
-                    
-                else:
-                    print("Processing binary/multiclass SVM...")
-                    groups = df['ID']
-                    unique_groups = groups.unique()
-                    train_groups, test_groups = train_test_split(unique_groups, test_size=0.2, random_state=42)
-                    
-                    train_idx = groups.isin(train_groups)
-                    test_idx = groups.isin(test_groups)
-                    
-                    X_train, X_test = X[train_idx], X[test_idx]
-                    y_train, y_test = y[train_idx], y[test_idx]
-                    print(f"Train set shape: {X_train.shape}, Test set shape: {X_test.shape}")
-                    
-                    model = SVC(**best_params[behaviour])
-                    print("Training model...")
-                    model.fit(X_train, y_train)
-                    
-                    y_pred = model.predict(X_test)
-                
-                print("\nEvaluation Results:")
-                print("\nClassification Report:")
-                print(classification_report(y_test, y_pred))
-                
-                print("\nConfusion Matrix:")
-                conf_matrix = confusion_matrix(y_test, y_pred)
-                print(conf_matrix)
-                
-                # Store results and save predictions
-                try:
-                    results[behaviour] = {
-                        'classification_report': classification_report(y_test, y_pred, output_dict=True),
-                        'confusion_matrix': conf_matrix,
-                        'model': model,
-                        'scaler': scaler
-                    }
-                    
-                    results_df = pd.DataFrame({
-                        'True_Label': y_test,
-                        'Predicted_Label': y_pred
-                    })
-                    
-                    pred_path = Path(f"{BASE_PATH}/Output/Testing/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_predictions.csv")
-                    results_df.to_csv(pred_path, index=False)
-                    print(f"Predictions saved to: {pred_path}")
-                    
-                except Exception as e:
-                    print(f"Error saving results for {behaviour}: {str(e)}")
-                
-            except Exception as e:
-                print(f"Error processing behavior {behaviour}: {str(e)}")
-                continue
-                
-    except Exception as e:
-        print(f"Fatal error in train_test_svm: {str(e)}")
-        raise
-        
-    return results
+import time
 
 def save_results_to_csv(results, dataset_name, training_set, model_type, base_path):
     """
@@ -183,30 +62,145 @@ def load_best_params(csv_path: str) -> dict:
     
     return best_params
 
-def main():
+def get_weighted_auc(y_true, y_pred, sample_weight=None):
+    """Calculate weighted average AUC for multiclass"""
+    # Convert inputs to numpy arrays if they aren't already
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    
+    classes = np.unique(y_true)
+    n_classes = len(classes)
+    
+    # Calculate binary AUC for each class
+    auc_scores = []
+    weights = []
+    for cls in classes:
+        # Create binary labels
+        y_true_binary = np.array(y_true == cls).astype(int)
+        y_pred_binary = np.array(y_pred == cls).astype(int)
+        
+        # Get class weight
+        class_samples = np.sum(y_true_binary)
+        weights.append(class_samples)
+        
+        try:
+            auc = roc_auc_score(y_true_binary, y_pred_binary)
+            auc_scores.append(auc)
+        except:
+            auc_scores.append(0.0)
+    
+    # Calculate weighted average
+    weights = np.array(weights) / np.sum(weights)
+    weighted_auc = np.average(auc_scores, weights=weights)
+    return weighted_auc
+
+def save_optimization_results(results_dict, dataset_name, training_set, model_type, base_path):
+    """
+    Save optimization results to CSV
+    """
+    # Convert results to DataFrame
+    results_df = pd.DataFrame.from_dict(results_dict, orient='index')
+    results_df['behaviour'] = results_df.index
+    results_df = results_df[['behaviour', 'kernel', 'C', 'gamma', 'best_auc', 'elapsed_time']]
+    
+    # Save to CSV
+    output_path = Path(f"{base_path}/Results/{dataset_name}_{training_set}_{model_type}_optimization_results.csv")
+    results_df.to_csv(output_path, index=False)
+    print(f"Optimization results saved to {output_path}")
+
+def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET):
     try:
         print("Starting SVM training and testing process...")
+        optimization_results = {}
         
-        # Load best parameters
-        params_path = Path(f"{BASE_PATH}/Output/Tuning/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_hyperparameters.csv")
-        print(f"Loading parameters from: {params_path}")
-        best_params = load_best_params(params_path)
-        print("Parameters loaded successfully:")
-        print(best_params)
+        # Define the parameter search space
+        param_space = {
+            'kernel': Categorical(['rbf', 'linear', 'poly', 'sigmoid']),
+            'C': Real(1e-3, 1e3, prior='log-uniform'),
+            'gamma': Real(1e-3, 1e3, prior='log-uniform')
+        }
 
-        # Train and test binary SVM
-        print("\nStarting SVM training...")
-        binary_results = train_test_svm(
-            DATASET_NAME=DATASET_NAME,
-            TRAINING_SET=TRAINING_SET,
-            MODEL_TYPE=MODEL_TYPE,
-            BASE_PATH=BASE_PATH,
-            TARGET_ACTIVITIES=TARGET_ACTIVITIES,
-            best_params=best_params
-        )
-        
-        print("\nSaving final results...")
-        save_results_to_csv(binary_results, DATASET_NAME, TRAINING_SET, 'binary', BASE_PATH)
+        if MODEL_TYPE.lower() == 'multi':
+            df = pd.read_csv(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}.csv"))
+            
+            # Prepare data
+            X = df.drop(['Activity', 'ID'], axis=1)
+            y = df['Activity']
+            groups = df['ID']  # For group-based CV splitting
+
+            group_kfold = GroupKFold(n_splits=3)
+
+            base_svm = SVC(probability=True, random_state=42)
+
+            # Initialize BayesSearchCV
+            print(f"Beginning optimisation for multiclass SVM model")
+            opt = BayesSearchCV(
+                base_svm,
+                param_space,
+                n_iter=20,  # Number of parameter settings that are sampled
+                cv=group_kfold.split(X, y, groups),
+                scoring=get_weighted_auc,
+                n_jobs=-1,
+                random_state=42,
+                verbose=2
+            )
+
+            # Fit the optimizer
+            start_time = time.time()
+            opt.fit(X, y, groups=groups)
+            elapsed_time = time.time() - start_time
+
+            optimization_results[BEHAVIOUR_SET] = {
+                'kernel': opt.best_params_['kernel'],
+                'C': opt.best_params_['C'],
+                'gamma': opt.best_params_['gamma'],
+                'best_auc': opt.best_score_,
+                'elapsed_time': elapsed_time
+            }
+
+        else:
+            for behaviour in TARGET_ACTIVITIES:
+                print(f"Beginning optimisation for {MODEL_TYPE} {behaviour} SVM model...")
+                df = pd.read_csv(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv"))
+                
+                # Prepare data
+                X = df.drop(['Activity', 'ID'], axis=1)
+                y = np.where(df['Activity'] == behaviour, behaviour, 'Other') # binary labelling
+                groups = df['ID']
+
+                # Initialize GroupKFold
+                group_kfold = GroupKFold(n_splits=3)
+
+                # Initialize SVM model
+                base_svm = SVC(probability=True, random_state=42)
+
+                # Initialize BayesSearchCV
+                opt = BayesSearchCV(
+                    base_svm,
+                    param_space,
+                    n_iter=20,
+                    cv=group_kfold.split(X, y, groups),
+                    scoring='roc_auc',  # For binary classification
+                    n_jobs=-1,
+                    random_state=42,
+                    verbose=2
+                )
+
+                # Fit the optimizer
+                start_time = time.time()
+                opt.fit(X, y, groups=groups)
+                elapsed_time = time.time() - start_time
+
+                optimization_results[behaviour] = {
+                    'kernel': opt.best_params_['kernel'],
+                    'C': opt.best_params_['C'],
+                    'gamma': opt.best_params_['gamma'],
+                    'best_auc': opt.best_score_,
+                    'elapsed_time': elapsed_time
+                }
+
+        print("\nSaving optimization results...")
+        save_optimization_results(optimization_results, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BASE_PATH)
         print("Process completed successfully!")
         
     except Exception as e:
@@ -214,5 +208,5 @@ def main():
         raise
 
 if __name__ == "__main__":
-    main()
+    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)
 
