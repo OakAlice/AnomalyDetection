@@ -125,7 +125,8 @@ def save_model(model, scaler, file_path):
 
 def train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None, BEHAVIOUR_SET = None):
     # Load best parameters from CSV
-    best_params = load_best_params(Path(f"{BASE_PATH}/Output/Tuning/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_hyperparmaters.csv"))
+    best_params = load_best_params(Path(f"{BASE_PATH}/Output/Tuning/{ML_METHOD}/{DATASET_NAME}_all_{MODEL_TYPE}_hyperparmaters.csv"))
+    # best_params = load_best_params(Path(f"{BASE_PATH}/Output/Tuning/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_hyperparmaters.csv"))
     
     if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
         for behaviour in TARGET_ACTIVITIES:

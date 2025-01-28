@@ -13,16 +13,16 @@ import os
 
 # Configuration
 DATASET_NAME = "Vehkaoja_Dog"
-BASE_PATH = "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
-# BASE_PATH = "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
+# BASE_PATH = "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
+BASE_PATH = "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
 
 # run variables
-ML_METHOD = "SVM"  # or "Tree"
+ML_METHOD = "SVM"
 MODEL_TYPE = "Binary" # "Binary", "Multi", "OneClass"
 THRESHOLDING = False # False or number like 0.5 
 BEHAVIOUR_SETS = ["Activity", "Other", "Generalised"]
 BEHAVIOUR_SET = "Other" # 'Activity', 'Generalised'
-TRAINING_SET = "all" # 'some', 'target'
+TRAINING_SET = "some" # 'all', 'some', 'target'
 
 # Window settings for each dataset
 window_settings = {
