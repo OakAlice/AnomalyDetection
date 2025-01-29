@@ -72,9 +72,10 @@ def create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MO
     else:
         for behaviour in BEHAVIOUR_SETS:
             if behaviour == "Activity":
-                # Just save the original dataframe without copying
+                # Save the original dataframe
                 save_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_Activity.csv")
-            elif behaviour == "OtherActivity":
+                df_clean.to_csv(save_path, index=False)
+            elif behaviour == "Other":
                 # Use numpy where for vectorized operation
                 activity_column = np.where(df_clean['Activity'].isin(TARGET_ACTIVITIES), 
                                         df_clean['Activity'], 

@@ -2,13 +2,16 @@ from MainScript import BASE_PATH, BEHAVIOUR_SET, BEHAVIOUR_SETS, ML_METHOD, MODE
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import GroupKFold
-from sklearn.metrics import roc_auc_score, make_scorer
-from skopt import BayesSearchCV
+from sklearn.metrics import roc_auc_score
 from skopt.space import Real, Categorical
+from skopt.optimizer import Optimizer
+from skopt.utils import use_named_args
 import pandas as pd
 import numpy as np
 from pathlib import Path
 import time
+import matplotlib.pyplot as plt
+import os
 
 def save_results(results, dataset_name, training_set, model_type, base_path, ml_method):
     """Save optimization results to CSV"""
@@ -16,7 +19,14 @@ def save_results(results, dataset_name, training_set, model_type, base_path, ml_
         results_df = pd.DataFrame.from_dict(results, orient='index')
         results_df['behaviour'] = results_df.index
         
-        columns = ['behaviour', 'kernel', 'C', 'gamma', 'best_auc', 'elapsed_time']
+        # Add context information to each row
+        results_df['dataset_name'] = dataset_name
+        results_df['training_set'] = training_set
+        results_df['model_type'] = model_type
+        results_df['ml_method'] = ml_method
+        
+        columns = ['dataset_name', 'training_set', 'model_type', 'ml_method', 
+                  'behaviour', 'kernel', 'C', 'gamma', 'best_auc', 'elapsed_time']
         results_df = results_df[columns] if len(results_df.columns) > 0 else pd.DataFrame(columns=columns)
         
         output_path = Path(f"{base_path}/Output/Tuning/{ml_method}/{dataset_name}_{training_set}_{model_type}_optimisation_results.csv")
@@ -25,6 +35,56 @@ def save_results(results, dataset_name, training_set, model_type, base_path, ml_
         
     except Exception as e:
         print(f"Error saving results: {str(e)}")
+
+def optimize_svm(X, y, groups):
+    """Optimize SVM hyperparameters using Bayesian optimization"""
+    space = [
+        Real(0.01, 1000, name='C', prior='log-uniform'),
+        Real(0.001, 100, name='gamma', prior='log-uniform'),
+        Categorical(['linear', 'rbf', 'poly'], name='kernel')
+    ]
+    
+    @use_named_args(space)
+    def objective(**params):
+        svm = SVC(probability=True, class_weight='balanced', 
+                  cache_size=1000, **params)
+        
+        cv = GroupKFold(n_splits=3)
+        scores = []
+        
+        for train_idx, test_idx in cv.split(X, y, groups):
+            X_train, X_test = X[train_idx], X[test_idx]
+            y_train, y_test = y[train_idx], y[test_idx]
+            
+            svm.fit(X_train, y_train)
+            y_pred_proba = svm.predict_proba(X_test)[:, 1]
+            score = roc_auc_score(y_test, y_pred_proba)
+            scores.append(score)
+            
+        return -np.mean(scores)  # Negative because we want to maximize
+    
+    optimizer = Optimizer(space)
+    best_score = float('inf')
+    best_params = None
+    n_iterations = 10
+    
+    for i in range(n_iterations):
+        print(f"\nIteration {i+1}/{n_iterations}")
+        
+        next_x = optimizer.ask()
+        score = objective(next_x)
+        optimizer.tell(next_x, score)
+        
+        if score < best_score:
+            best_score = score
+            best_params = dict(zip(['C', 'gamma', 'kernel'], next_x))
+            print(f"New best score: {-best_score:.4f}")
+            print(f"New best params: {best_params}")
+        
+        print(f"Current score: {-score:.4f}")
+        print(f"Current params: {dict(zip(['C', 'gamma', 'kernel'], next_x))}")
+    
+    return best_params, -best_score
 
 def main(base_path, dataset_name, training_set, model_type, target_activities, behaviour_set):
     """Main optimization function"""
@@ -41,154 +101,57 @@ def main(base_path, dataset_name, training_set, model_type, target_activities, b
             y = df['Activity']
             groups = df['ID']
             
-            # Setup SVM
-            class_weights = {cls: len(y)/(len(np.unique(y)) * sum(y == cls)) for cls in np.unique(y)}
-            svm = SVC(probability=True, class_weight=class_weights, cache_size=1000)
+            print("\nProcessing multiclass optimization...")
+            print(f"Total samples: {len(y)}")
+            print(f"Unique groups: {len(np.unique(groups))}")
+            print(f"Class distribution: {np.bincount(y)}")
             
-            # Use standard ROC AUC for multiclass
-            scorer = make_scorer(roc_auc_score, needs_proba=True, multi_class='ovr')
-            
-            # Optimize
-            opt = BayesSearchCV(
-                svm,
-                {
-                    'kernel': Categorical(['linear', 'rbf', 'poly']),
-                    'C': Real(0.01, 100, prior='log-uniform'),
-                    'gamma': Real(1e-4, 1, prior='log-uniform'),
-                },
-                n_iter=10,
-                cv=GroupKFold(n_splits=3).split(X, y, groups),
-                scoring=scorer,
-                n_jobs=-1,
-                verbose=2
-            )
-            
-            def on_step(optim_result):
-                """Callback to monitor optimization progress"""
-                n_iter = len(optim_result.x_iters)
-                score = optim_result.fun
-                print(f"\nIteration {n_iter}:")
-                print(f"Current parameters: {dict(zip(opt.optimizer.space.dimension_names, optim_result.x_iters[-1]))}")
-                print(f"Current score: {score}")
-                return True
-
             start_time = time.time()
-            opt.fit(X, y, groups=groups, callback=[on_step])
+            best_params, best_score = optimize_svm(X, y, groups)
+            elapsed_time = time.time() - start_time
             
             optimization_results[behaviour_set] = {
-                'kernel': opt.best_params_['kernel'],
-                'C': opt.best_params_['C'],
-                'gamma': opt.best_params_['gamma'],
-                'best_auc': opt.best_score_,
-                'elapsed_time': time.time() - start_time
+                'kernel': best_params['kernel'],
+                'C': best_params['C'],
+                'gamma': best_params['gamma'],
+                'best_auc': best_score,
+                'elapsed_time': elapsed_time
             }
 
         # Handle binary case
         else:
-            for behaviour in TARGET_ACTIVITIES:
+            for behaviour in target_activities:
                 try:
-                    print(f"Optimizing {MODEL_TYPE} SVM model for {behaviour}...")
-                    df = pd.read_csv(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv"))
+                    print(f"\nProcessing {behaviour}...")
+                    df = pd.read_csv(Path(f"{base_path}/Data/Split_data/{dataset_name}_{training_set}_{model_type}_{behaviour}.csv"))
+                    df = df.groupby(['Activity', 'ID']).head(100)
                     
-                    # downsampling the datase to 1000 samples per class... requires knowing the orignal class per "other" Activity
-                    # i dont have this information, so, for now, I just have to hope for the best
-                    df = df.groupby(['Activity', 'ID']).head(100) 
-
-                    # Prepare data
-                    X = df.drop(['Activity', 'ID'], axis=1)
-                    X = scaler.fit_transform(X)
+                    X = scaler.fit_transform(df.drop(['Activity', 'ID'], axis=1))
                     y = np.where(df['Activity'] == behaviour, 1, 0)
                     groups = df['ID']
-
-                    # Check group distribution
-                    print(f"\nProcessing {behaviour}:")
+                    
                     print(f"Total samples: {len(y)}")
                     print(f"Unique groups: {len(np.unique(groups))}")
                     print(f"Class distribution: {np.bincount(y)}")
                     
-                    # Ensure minimum samples per class in each group
-                    group_class_counts = df.groupby(['ID', 'Activity']).size().unstack(fill_value=0)
-                    valid_groups = group_class_counts[(group_class_counts[behaviour] > 0) & 
-                                                    (group_class_counts.drop(behaviour, axis=1).sum(axis=1) > 0)].index
-
-                    if len(valid_groups) < 3:  # We need at least 3 groups for 3-fold CV
-                        print(f"Not enough groups with both classes for {behaviour}. Skipping...")
-                        continue
-
-                    # Filter data to only include valid groups
-                    mask = df['ID'].isin(valid_groups)
-                    X = X[mask]
-                    y = y[mask]
-                    groups = groups[mask]
-
-                    print(f"Valid groups after filtering: {len(np.unique(groups))}")
-                    print(f"Samples after filtering: {len(y)}")
-                    print(f"Class distribution after filtering: {np.bincount(y)}")
-
-                    # Create CV splits to verify
-                    group_kfold = GroupKFold(n_splits=3)
-                    cv_splits = list(group_kfold.split(X, y, groups))
-                    print(f"Number of CV splits: {len(cv_splits)}")
-                    
-                    for i, (train_idx, test_idx) in enumerate(cv_splits):
-                        print(f"\nSplit {i+1}:")
-                        print(f"Train size: {len(train_idx)}, Test size: {len(test_idx)}")
-                        print(f"Train class dist: {np.bincount(y[train_idx])}")
-                        print(f"Test class dist: {np.bincount(y[test_idx])}")
-
-                    # Setup SVM with proper CV
-                    svm = SVC(probability=True, class_weight='balanced', cache_size=1000)
-                    
-                    def on_step(optim_result):
-                        """Callback to monitor optimization progress"""
-                        n_iter = len(optim_result.x_iters)
-                        score = optim_result.fun
-                        print(f"\nIteration {n_iter}:")
-                        print(f"Current parameters: {optim_result.x_iters[-1]}")
-                        print(f"Current score: {score}")
-                        return True
-                    
-                    # Optimize with verified CV splits
-                    opt = BayesSearchCV(
-                        svm,
-                        {
-                            'kernel': Categorical(['linear', 'rbf', 'poly']),
-                            'C': Real(0.01, 100, prior='log-uniform'),
-                            'gamma': Real(1e-4, 1, prior='log-uniform'),
-                        },
-                        n_iter=50,
-                        cv=GroupKFold(n_splits=3),
-                        scoring='roc_auc',
-                        n_jobs=-1,
-                        random_state=hash(behaviour) % 1000,
-                        verbose=2
-                    )
-
                     start_time = time.time()
-                    try:
-                        opt.fit(X, y, groups=groups, callback=[on_step])
-                        elapsed_time = time.time() - start_time
-                        
-                        # Store the results for this behavior
-                        optimization_results[behaviour] = {
-                            'kernel': opt.best_params_['kernel'],
-                            'C': opt.best_params_['C'],
-                            'gamma': opt.best_params_['gamma'],
-                            'best_auc': opt.best_score_,
-                            'elapsed_time': elapsed_time
-                        }
-                        
-                        print(f"Best score: {opt.best_score_:.4f}, Best params: {opt.best_params_}")
-                        
-                    except Exception as e:
-                        print(f"Optimization error for {behaviour}: {str(e)}")
-                        continue
+                    best_params, best_score = optimize_svm(X, y, groups)
+                    elapsed_time = time.time() - start_time
+                    
+                    optimization_results[behaviour] = {
+                        'kernel': best_params['kernel'],
+                        'C': best_params['C'],
+                        'gamma': best_params['gamma'],
+                        'best_auc': best_score,
+                        'elapsed_time': elapsed_time
+                    }
                     
                 except Exception as e:
                     print(f"Error processing {behaviour}: {str(e)}")
                     continue
-        save_results(optimization_results, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BASE_PATH, ML_METHOD)
-        print("Optimization completed successfully!")
+        
+        save_results(optimization_results, dataset_name, training_set, model_type, base_path, 'SVM')
+        print("\nOptimization completed successfully!")
         
     except Exception as e:
         print(f"Fatal error in main function: {str(e)}")
