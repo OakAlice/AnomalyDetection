@@ -18,11 +18,11 @@ BASE_PATH = "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDete
 
 # run variables
 ML_METHOD = "SVM"
-MODEL_TYPE = "Binary" # "Binary", "Multi", "OneClass"
+MODEL_TYPE = "OneClass" # "Binary", "Multi", "OneClass"
 THRESHOLDING = False # False or number like 0.5 
 BEHAVIOUR_SETS = ["Activity", "Other", "Generalised"]
-BEHAVIOUR_SET = "Other" # 'Activity', 'Generalised'
-TRAINING_SET = "some" # 'all', 'some', 'target'
+BEHAVIOUR_SET = "Activity" # 'Activity', 'Generalised'
+TRAINING_SET = "target" # 'all', 'some', 'target'
 
 # Window settings for each dataset
 window_settings = {

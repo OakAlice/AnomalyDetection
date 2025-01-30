@@ -13,7 +13,7 @@ import time
 import matplotlib.pyplot as plt
 import os
 
-def save_results(results, dataset_name, training_set, model_type, base_path, ml_method):
+def save_results(results, dataset_name, training_set, model_type, base_path, behaviour_set, ml_method):
     """Save optimization results to CSV"""
     try:
         results_df = pd.DataFrame.from_dict(results, orient='index')
@@ -29,7 +29,11 @@ def save_results(results, dataset_name, training_set, model_type, base_path, ml_
                   'behaviour', 'kernel', 'C', 'gamma', 'best_auc', 'elapsed_time']
         results_df = results_df[columns] if len(results_df.columns) > 0 else pd.DataFrame(columns=columns)
         
-        output_path = Path(f"{base_path}/Output/Tuning/{ml_method}/{dataset_name}_{training_set}_{model_type}_optimisation_results.csv")
+        if model_type.lower() == 'multi':
+            output_path = Path(f"{base_path}/Output/Tuning/{ml_method}/{dataset_name}_{training_set}_{model_type}_{behaviour_set}_optimisation_results.csv")
+        else:
+            output_path = Path(f"{base_path}/Output/Tuning/{ml_method}/{dataset_name}_{training_set}_{model_type}_optimisation_results.csv")
+        
         output_path.parent.mkdir(parents=True, exist_ok=True)
         results_df.to_csv(output_path, index=False)
         
@@ -52,13 +56,24 @@ def optimize_svm(X, y, groups):
         cv = GroupKFold(n_splits=3)
         scores = []
         
-        for train_idx, test_idx in cv.split(X, y, groups):
-            X_train, X_test = X[train_idx], X[test_idx]
-            y_train, y_test = y[train_idx], y[test_idx]
+        # Convert to numpy arrays if they aren't already
+        X_array = np.array(X)
+        y_array = np.array(y)
+        groups_array = np.array(groups)
+        
+        for train_idx, test_idx in cv.split(X_array, y_array, groups_array):
+            X_train, X_test = X_array[train_idx], X_array[test_idx]
+            y_train, y_test = y_array[train_idx], y_array[test_idx]
             
             svm.fit(X_train, y_train)
-            y_pred_proba = svm.predict_proba(X_test)[:, 1]
-            score = roc_auc_score(y_test, y_pred_proba)
+            y_pred_proba = svm.predict_proba(X_test)
+            
+            # For multiclass, use weighted average of ROC AUC
+            if len(np.unique(y)) > 2:
+                score = roc_auc_score(y_test, y_pred_proba, multi_class='ovr')
+            else:
+                score = roc_auc_score(y_test, y_pred_proba[:, 1])
+            
             scores.append(score)
             
         return -np.mean(scores)  # Negative because we want to maximize
@@ -95,7 +110,7 @@ def main(base_path, dataset_name, training_set, model_type, target_activities, b
         # Handle multiclass case
         if model_type.lower() == 'multi':
             df = pd.read_csv(Path(f"{base_path}/Data/Split_data/{dataset_name}_{training_set}_{model_type}_{behaviour_set}.csv"))
-            df = df.groupby(['Activity', 'ID']).head(1000)
+            df = df.groupby(['Activity', 'ID']).head(500)
             
             X = scaler.fit_transform(df.drop(['Activity', 'ID'], axis=1))
             y = df['Activity']
@@ -104,7 +119,6 @@ def main(base_path, dataset_name, training_set, model_type, target_activities, b
             print("\nProcessing multiclass optimization...")
             print(f"Total samples: {len(y)}")
             print(f"Unique groups: {len(np.unique(groups))}")
-            print(f"Class distribution: {np.bincount(y)}")
             
             start_time = time.time()
             best_params, best_score = optimize_svm(X, y, groups)
@@ -150,7 +164,7 @@ def main(base_path, dataset_name, training_set, model_type, target_activities, b
                     print(f"Error processing {behaviour}: {str(e)}")
                     continue
         
-        save_results(optimization_results, dataset_name, training_set, model_type, base_path, 'SVM')
+        save_results(optimization_results, dataset_name, training_set, model_type, base_path, behaviour_set, 'SVM')
         print("\nOptimization completed successfully!")
         
     except Exception as e:

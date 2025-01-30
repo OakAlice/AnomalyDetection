@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 def predict_single_model(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
                      behaviour, model, scaler, X, y, ID, Time):
     """
-    Make predictions for a single model and save results
+    Make predictions for a single model and save resultsError calculating performance metrics
     
     Args:
         BASE_PATH (str): Base path for saving outputs
@@ -28,6 +28,24 @@ def predict_single_model(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL
         Time (Series): Time values
     """
     print(f"\nMaking predictions...")
+    
+    # Get the feature names used during training from the scaler
+    scaler_features = scaler.feature_names_in_
+    
+    # Ensure X has the same features in the same order as used during training
+    missing_features = set(scaler_features) - set(X.columns)
+    extra_features = set(X.columns) - set(scaler_features)
+    
+    if missing_features or extra_features:
+        print(f"Warning: Feature mismatch detected")
+        if missing_features:
+            print(f"Missing features: {missing_features}")
+        if extra_features:
+            print(f"Extra features: {extra_features}")
+        
+        # Select only the features used during training, in the same order
+        X = X[scaler_features]
+    
     # make predictions
     X_scaled = scaler.transform(X)  # Scale test data in the same way
     predictions = model.predict(X_scaled)
@@ -240,7 +258,6 @@ def generate_heatmap_confusion_matrix(cm, labels, TARGET_ACTIVITIES, cm_path):
 def calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHODLING):
     print("\nCalculating performance metrics...")
 
-    print(multiclass_predictions.head())
     try:
         if THRESHODLING is not False: # any number other than False
             if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
@@ -249,20 +266,25 @@ def calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAIN
                 multiclass_predictions = multiclass_predictions[multiclass_predictions['Best_Probability'] >= THRESHODLING]
             else:
                 # for multiclass, we just select whether it was above the threshold
+                print(list(multiclass_predictions.columns))
+
                 multiclass_predictions['Predicted_Label'] = np.where(
-                    multiclass_predictions['Probability'] >= THRESHODLING,
-                    multiclass_predictions['Best_Probability'],
-                    'Other'
+                        # if the highest probability is greater than the threshold, then use that prediction
+                        # otherwise, use 'Other'
+                        multiclass_predictions['Probability'] >= THRESHODLING,
+                        multiclass_predictions['Best_Probability'],
+                        'Other'
                 )
-        
-        print(multiclass_predictions.head())
-           
+                 
         # calculate AUC, F1, Precision, Recall, and Accuracy for each behaviour
         y_true = multiclass_predictions['True_Label']
         y_pred = multiclass_predictions['Predicted_Label']
         labels = sorted(list(set(y_true) | set(y_pred)))
 
         full_cm = confusion_matrix(y_true, y_pred, labels=labels)
+
+        print(full_cm)
+
         full_labels = sorted(list(set(y_true) | set(y_pred)))
 
         print(f"model type: {MODEL_TYPE}")
@@ -401,9 +423,10 @@ def make_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, behaviou
 
         multiclass_predictions = predict_single_model(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
                                                     behaviour_param, model, scaler, X, y, ID, Time)
-        # Get the class name by removing 'Probability_' prefix from the column name with highest probability
-        multiclass_predictions['Best_Probability'] = multiclass_predictions[[col for col in multiclass_predictions.columns if 'Probability_' in col]].idxmax(axis=1).str.replace('Probability_', '')
-        multiclass_predictions['Probability'] = multiclass_predictions[[col for col in multiclass_predictions.columns if 'Probability_' in col]].max(axis=1)
+        # Get the actual predicted class with highest probability
+        prob_cols = [col for col in multiclass_predictions.columns if 'Probability_' in col]
+        multiclass_predictions['Probability'] = multiclass_predictions[prob_cols].max(axis=1)
+        multiclass_predictions['Best_Probability'] = multiclass_predictions['Predicted_Label']
 
     return(multiclass_predictions)
 
@@ -416,7 +439,9 @@ if __name__ == "__main__":
             if not predictions_file.exists():
                 print(f"Beginning preictions for Multiclass")
                 multiclass_predictions = make_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, behaviour_param = BEHAVIOUR_SET)
-            
+                # save it
+                multiclass_predictions.to_csv(predictions_file)
+
             print("\nCalculating final performance metrics.")
             multiclass_predictions = pd.read_csv(predictions_file)
             metrics_dict = calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
