@@ -14,15 +14,11 @@ BASE_PATH = "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/Anomaly
 # BASE_PATH = "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
         
 # run variables
-DATASET_NAME = "Ferdinandy_Dog" # "Vehkaoja_Dog", "Ladds_Seal", "Ferdinandy_Dog"
-MODEL_TYPE = "Binary" # "Binary", "Multi", "OneClass"
+DATASET_NAME = "Vehkaoja_Dog" # "Vehkaoja_Dog", "Ladds_Seal", "Ferdinandy_Dog"
+MODEL_TYPE = "Multi" # "Binary", "Multi", "OneClass"
 THRESHOLDING = False # False or 0.5 
-BEHAVIOUR_SET = "Other" # 'Activity' or 'Other'
+BEHAVIOUR_SET = "Activity" # 'Activity' or 'Other'
 TRAINING_SET = "all" # 'all', 'some', 'target'
-
-# Global Variables
-TEST_PROPORTION = 0.2
-VALIDATION_PROPORTION = 0.2
 
 target_activities = {
     "Vehkaoja_Dog": ["Walking", "Eating", "Shaking", "Lying chest"],
@@ -42,14 +38,16 @@ def main():
     # from Scripts.Python import CreateDatasets
     #CreateDatasets.main()
 
-    from Scripts.Python import HpoOptimisation
-    HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)
+    for TRAINING_SET in ['all', 'some', 'target']:
+        for MODEL_TYPE in ['binary', 'oneclass', 'multi']:
+                from Scripts.Python import HpoOptimisation
+                HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)
 
     # from Scripts.Python import TrainModel
     # TrainModel.main()
     
     # from Scripts.Python import TestModel
-    TestModel.main()
+    # TestModel.main()
 
     # test the optimal models
     # exec(open(os.path.join(BASE_PATH, "Scripts", "Python", "TestModel.py")).read())

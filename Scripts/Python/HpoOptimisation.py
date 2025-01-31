@@ -163,7 +163,7 @@ def main(base_path, dataset_name, training_set, model_type, target_activities, b
                     print(f"Error processing {behaviour}: {str(e)}")
                     continue
         
-        save_results(optimization_results, dataset_name, training_set, model_type, base_path, behaviour_set, 'SVM')
+        save_results(optimization_results, dataset_name, training_set, model_type, base_path, behaviour_set)
         print("\nOptimization completed successfully!")
         
     except Exception as e:
