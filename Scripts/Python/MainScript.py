@@ -9,40 +9,50 @@ It compares SVM and Random Forest based systems for:
 - Multi-class Classification
 """
 
-import os
-
-# Configuration
-DATASET_NAME = "Ferdinandy_Dog"
+# define the variables
 BASE_PATH = "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
 # BASE_PATH = "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
-
+        
 # run variables
+DATASET_NAME = "Ferdinandy_Dog" # "Vehkaoja_Dog", "Ladds_Seal", "Ferdinandy_Dog"
 MODEL_TYPE = "Binary" # "Binary", "Multi", "OneClass"
-THRESHOLDING = False # False or number like 0.5 
-BEHAVIOUR_SETS = ["Activity", "Other", "Generalised"]
-BEHAVIOUR_SET = "Other" # 'Activity', 'Generalised'
+THRESHOLDING = False # False or 0.5 
+BEHAVIOUR_SET = "Other" # 'Activity' or 'Other'
 TRAINING_SET = "all" # 'all', 'some', 'target'
 
-# Window settings for each dataset
-window_settings = {
-    "Vehkaoja_Dog": {
-        "target_activities": ["Walking", "Eating", "Shaking", "Lying chest"]
-    },
-    "Ladds_Seal": {
-        "target_activities": ["swimming", "still", "chewing", "facerub"]
-    },
-    "Ferdinandy_Dog": {
-        "target_activities": ["walk", "eat", "lay"] # only 3 target activities
-    }
-}
-
-# Extract settings for current dataset
-settings = window_settings[DATASET_NAME]
-TARGET_ACTIVITIES = settings["target_activities"]
-
 # Global Variables
-ALL_AXES = ["Accelerometer.X", "Accelerometer.Y", "Accelerometer.Z"]
-LABEL_COLUMNS = ["Activity", "Time", "ID"]
 TEST_PROPORTION = 0.2
 VALIDATION_PROPORTION = 0.2
-BALANCE = "stratified_balance"
+
+target_activities = {
+    "Vehkaoja_Dog": ["Walking", "Eating", "Shaking", "Lying chest"],
+    "Ladds_Seal": ["swimming", "still", "chewing", "facerub"],
+    "Ferdinandy_Dog": ["walk", "eat", "lay"]  # only 3 target activities
+    }
+TARGET_ACTIVITIES = target_activities[DATASET_NAME]
+
+def main():
+    # Import and run the create_datasets module
+    import sys
+    import os
+    
+    # Add the project root directory to Python path
+    sys.path.append(BASE_PATH)
+    
+    # from Scripts.Python import CreateDatasets
+    #CreateDatasets.main()
+
+    from Scripts.Python import HpoOptimisation
+    HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)
+
+    # from Scripts.Python import TrainModel
+    # TrainModel.main()
+    
+    # from Scripts.Python import TestModel
+    TestModel.main()
+
+    # test the optimal models
+    # exec(open(os.path.join(BASE_PATH, "Scripts", "Python", "TestModel.py")).read())
+
+if __name__ == "__main__":
+    main()

@@ -430,6 +430,7 @@ def make_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, behaviou
     return(multiclass_predictions)
 
 if __name__ == "__main__":
+    BEHAVIOUR_SETS = ["Activity", "Other"]
     try:
         if MODEL_TYPE.lower() == 'multi':
             predictions_file = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_predictions.csv")
