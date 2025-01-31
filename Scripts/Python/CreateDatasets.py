@@ -78,6 +78,8 @@ def create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MO
         for behaviour in TARGET_ACTIVITIES:
             print(f"processing data for {behaviour}")
             activity_column = np.where(df_clean['Activity'] == behaviour, behaviour, "Other")
+
+            print(activity_column)
             
             behaviour_df = df_clean.copy(deep=False)
             behaviour_df['Activity'] = activity_column
@@ -114,7 +116,7 @@ def split_test_data(BASE_PATH, DATASET_NAME):
     else:
         # Load the full dataset
         features_path = Path(BASE_PATH) / "Data" / "Feature_data" / f"{DATASET_NAME}_features.csv"
-        df_full = pd.read_csv(features_path)
+        df_full = pd.read_csv(features_path, low_memory=False)
         
         # Select all data from 20% of individuals for testing
         unique_ids = df_full['ID'].unique()

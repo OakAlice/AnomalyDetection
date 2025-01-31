@@ -10,15 +10,15 @@ It compares SVM and Random Forest based systems for:
 """
 
 # define the variables
-BASE_PATH = "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
-# BASE_PATH = "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
+# BASE_PATH = "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection"
+BASE_PATH = "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection"
         
 # run variables
 DATASET_NAME = "Ferdinandy_Dog" # "Vehkaoja_Dog", "Ladds_Seal", "Ferdinandy_Dog"
-MODEL_TYPE = "Binary" # "Binary", "Multi", "OneClass"
+MODEL_TYPE = "multi" # "binary", "multi", "oneclass"
 THRESHOLDING = False # False or 0.5 
 BEHAVIOUR_SET = "Other" # 'Activity' or 'Other'
-TRAINING_SET = "all" # 'all', 'some', 'target'
+TRAINING_SET = "some" # 'all', 'some', 'target'
 
 # Global Variables
 TEST_PROPORTION = 0.2
@@ -49,7 +49,7 @@ def main():
     # TrainModel.main()
     
     # from Scripts.Python import TestModel
-    TestModel.main()
+    # TestModel.main()
 
     # test the optimal models
     # exec(open(os.path.join(BASE_PATH, "Scripts", "Python", "TestModel.py")).read())
