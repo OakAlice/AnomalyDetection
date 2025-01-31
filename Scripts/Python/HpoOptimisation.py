@@ -1,4 +1,4 @@
-from MainScript import BASE_PATH, BEHAVIOUR_SET, BEHAVIOUR_SETS, ML_METHOD, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME
+from MainScript import BASE_PATH, BEHAVIOUR_SET, BEHAVIOUR_SETS, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import GroupKFold
@@ -13,7 +13,7 @@ import time
 import matplotlib.pyplot as plt
 import os
 
-def save_results(results, dataset_name, training_set, model_type, base_path, behaviour_set, ml_method):
+def save_results(results, dataset_name, training_set, model_type, base_path, behaviour_set):
     """Save optimization results to CSV"""
     try:
         results_df = pd.DataFrame.from_dict(results, orient='index')
@@ -23,16 +23,15 @@ def save_results(results, dataset_name, training_set, model_type, base_path, beh
         results_df['dataset_name'] = dataset_name
         results_df['training_set'] = training_set
         results_df['model_type'] = model_type
-        results_df['ml_method'] = ml_method
         
-        columns = ['dataset_name', 'training_set', 'model_type', 'ml_method', 
+        columns = ['dataset_name', 'training_set', 'model_type', 
                   'behaviour', 'kernel', 'C', 'gamma', 'best_auc', 'elapsed_time']
         results_df = results_df[columns] if len(results_df.columns) > 0 else pd.DataFrame(columns=columns)
         
         if model_type.lower() == 'multi':
-            output_path = Path(f"{base_path}/Output/Tuning/{ml_method}/{dataset_name}_{training_set}_{model_type}_{behaviour_set}_optimisation_results.csv")
+            output_path = Path(f"{base_path}/Output/Tuning/{dataset_name}_{training_set}_{model_type}_{behaviour_set}_optimisation_results.csv")
         else:
-            output_path = Path(f"{base_path}/Output/Tuning/{ml_method}/{dataset_name}_{training_set}_{model_type}_optimisation_results.csv")
+            output_path = Path(f"{base_path}/Output/Tuning/{dataset_name}_{training_set}_{model_type}_optimisation_results.csv")
         
         output_path.parent.mkdir(parents=True, exist_ok=True)
         results_df.to_csv(output_path, index=False)
@@ -81,7 +80,7 @@ def optimize_svm(X, y, groups):
     optimizer = Optimizer(space)
     best_score = float('inf')
     best_params = None
-    n_iterations = 10
+    n_iterations = 5
     
     for i in range(n_iterations):
         print(f"\nIteration {i+1}/{n_iterations}")
@@ -171,7 +170,7 @@ def main(base_path, dataset_name, training_set, model_type, target_activities, b
         print(f"Fatal error in main function: {str(e)}")
         raise
 
-def generate_learning_curves(BASE_PATH, DATASET_NAME, TRAINING_SET, ML_METHOD, TARGET_ACTIVITIES):
+def generate_learning_curves(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES):
     try:
         print("\nGenerating learning curve...")
         behaviour = TARGET_ACTIVITIES[0] 
@@ -249,7 +248,7 @@ def generate_learning_curves(BASE_PATH, DATASET_NAME, TRAINING_SET, ML_METHOD, T
         plt.grid(True)
             
         # Create directory if it doesn't exist
-        output_dir = os.path.join(BASE_PATH, 'Output', 'Tuning', ML_METHOD)
+        output_dir = os.path.join(BASE_PATH, 'Output', 'Tuning')
         os.makedirs(output_dir, exist_ok=True)
         
         # Save plot

@@ -1,6 +1,6 @@
 # Train the optimal model
 
-from MainScript import BASE_PATH, BEHAVIOUR_SET, ML_METHOD, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME
+from MainScript import BASE_PATH, BEHAVIOUR_SET, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME
 from sklearn.svm import SVC, OneClassSVM
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix
@@ -123,10 +123,10 @@ def save_model(model, scaler, file_path):
     }, file_path)
     print(f"Model saved to {file_path}")
 
-def train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None, BEHAVIOUR_SET = None):
+def train_and_save_SVM(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None, BEHAVIOUR_SET = None):
     # Load best parameters from CSV
-    best_params = load_best_params(Path(f"{BASE_PATH}/Output/Tuning/{ML_METHOD}/{DATASET_NAME}_all_{MODEL_TYPE}_hyperparmaters.csv"))
-    # best_params = load_best_params(Path(f"{BASE_PATH}/Output/Tuning/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_hyperparmaters.csv"))
+    best_params = load_best_params(Path(f"{BASE_PATH}/Output/Tuning/{DATASET_NAME}_all_{MODEL_TYPE}_hyperparmaters.csv"))
+    # best_params = load_best_params(Path(f"{BASE_PATH}/Output/Tuning/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_hyperparmaters.csv"))
     
     if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
         for behaviour in TARGET_ACTIVITIES:
@@ -145,7 +145,7 @@ def train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_T
                 gamma,
                 behaviour
             )
-            model_path = Path(f"{BASE_PATH}/Output/Models/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
+            model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
             model = model_info['model']
             scaler = model_info['scaler']
             save_model(model, scaler, model_path)
@@ -165,10 +165,10 @@ def train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_T
             gamma,
             behaviour = BEHAVIOUR_SET
         )
-        model_path = Path(f"{BASE_PATH}/Output/Models/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_model.joblib")
+        model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_model.joblib")
         model = model_info['model']
         scaler = model_info['scaler']
         save_model(model, scaler, model_path)
 
 if __name__ == "__main__":
-    train_and_save_SVM(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)
+    train_and_save_SVM(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)

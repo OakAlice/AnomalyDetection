@@ -9,9 +9,20 @@ def remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES):
     Highly custom function for removing speciifc behaviours from the datasets.
     To create the Open Set Test conditions.
     """
-
     input_path = Path(BASE_PATH) / "Data" / "Feature_data" / f"{DATASET_NAME}_other_features.csv"
-    df = pd.read_csv(input_path)
+    # Add low_memory=False to avoid DtypeWarning
+    df = pd.read_csv(input_path, low_memory=False)
+
+    # Define metadata columns explicitly and ensure rest are numeric
+    metadata_columns = ['Activity', 'ID', 'Time']
+    numeric_columns = df.columns.difference(metadata_columns)
+    # Convert only columns that are actually numeric
+    for col in numeric_columns:
+        try:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        except:
+            print(f"Could not convert column {col} to numeric")
+            numeric_columns = numeric_columns.drop(col)
 
     if TRAINING_SET == 'some':
         # remove the uncommon behaviours
@@ -20,7 +31,7 @@ def remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES):
         # Select top 50% of activities by frequency
         n_activities = len(counts)
         common_activities = counts.index[:n_activities//2].tolist()
-        
+            
         # Combine common activities with target activities and remove duplicates
         common_activities = list(set(common_activities + TARGET_ACTIVITIES))
 
@@ -51,10 +62,15 @@ def create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MO
     Returns:
         saves both the target training data types as well as the cleaned test data
     """
-
-    # clean the dataset
-    df_clean = df[clean_columns]
-    df_clean = df_clean.dropna().replace([np.inf, -np.inf], np.nan).dropna()
+    # Define metadata columns to preserve
+    metadata_columns = ['ID', 'Time'] # activity already in there
+    
+    # Add metadata columns to clean_columns
+    all_columns = list(clean_columns) + metadata_columns
+    
+    # clean the dataset but keep metadata
+    df_clean = df[all_columns]
+    df_clean = df_clean.dropna(subset=clean_columns).replace([np.inf, -np.inf], np.nan).dropna(subset=clean_columns)
 
     # modify the data for the right model condition
     if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
@@ -90,22 +106,28 @@ def create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MO
     return(clean_columns)
 
 if __name__ == "__main__":
-    df = remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES)
-    save_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_other_features_subset.csv")
-    df.to_csv(save_path, index=False)
+    for TRAINING_SET in ['all', 'some', 'target']:
+        for MODEL_TYPE in ['binary', 'oneclass', 'multi']:
+            df = remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES)
+            save_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_other_features_subset.csv")
+            df.to_csv(save_path, index=False)
     
-    clean_columns = clean_training_data(training_data=df, corr_threshold = 0.9)
-    # next function will create and save the dataframes]
-    create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SETS)
-    
-    # clean and save the test set as well, unless it has already been done
-    file_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_test_features_cleaned.csv")
-    if file_path.exists is False:
-        
-        input_path_test = Path(BASE_PATH) / "Data" / "Feature_data" / f"{DATASET_NAME}_test_features.csv"
-        df_test = pd.read_csv(input_path_test)
-        df_clean = df_test[clean_columns]
-        df_test_clean = df_clean.dropna().replace([np.inf, -np.inf], np.nan).dropna()
+            clean_columns = clean_training_data(training_data=df, corr_threshold = 0.9)
+            # next function will create and save the dataframes]
+            create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SETS)
+            
+            # clean and save the test set as well, unless it has already been done
+            file_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_test_features_cleaned.csv")
+            if not file_path.exists():
+                input_path_test = Path(BASE_PATH) / "Data" / "Feature_data" / f"{DATASET_NAME}_test_features.csv"
+                df_test = pd.read_csv(input_path_test)
+                
+                # Add metadata columns to clean_columns for test data
+                metadata_columns = ['ID', 'Time']
+                all_columns = list(clean_columns) + metadata_columns
+                
+                df_clean = df_test[all_columns]
+                df_test_clean = df_clean.dropna(subset=clean_columns).replace([np.inf, -np.inf], np.nan).dropna(subset=clean_columns)
 
-        # save this
-        df_test_clean.to_csv(file_path, index=False)
+                # save this
+                df_test_clean.to_csv(file_path, index=False)

@@ -1,4 +1,4 @@
-from MainScript import BASE_PATH, BEHAVIOUR_SET, ML_METHOD, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME, THRESHOLDING
+from MainScript import BASE_PATH, BEHAVIOUR_SET, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME, THRESHOLDING
 from joblib import load
 from pathlib import Path
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
@@ -8,14 +8,13 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 # test the model
-def predict_single_model(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+def predict_single_model(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
                      behaviour, model, scaler, X, y, ID, Time):
     """
     Make predictions for a single model and save resultsError calculating performance metrics
     
     Args:
         BASE_PATH (str): Base path for saving outputs
-        ML_METHOD (str): Name of the machine learning method (e.g., 'SVM')
         DATASET_NAME (str): Name of the dataset
         TRAINING_SET (str): Training set identifier
         MODEL_TYPE (str): Type of model ('binary', 'oneclass', or 'multi')
@@ -101,7 +100,7 @@ def predict_single_model(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL
     # Combine predictions with probabilities
     results_df = pd.concat([results_df, prob_df], axis=1)
 
-    results_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_predictions.csv"),
+    results_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_predictions.csv"),
                 index=False)
     
     return results_df
@@ -113,7 +112,7 @@ def merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_
             
     for behaviour in TARGET_ACTIVITIES:
         try:
-            predictions_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_predictions.csv")                 
+            predictions_path = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_predictions.csv")                 
             predictions_df = pd.read_csv(predictions_path)
             
             # Convert -1/1 to Other/behaviour
@@ -196,7 +195,7 @@ def merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_
         merged_predictions.rename(columns={true_label_col: 'True_Label'}, inplace=True)
 
         # Save merged predictions
-        merged_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_all_predictions_merged.csv")
+        merged_path = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_all_predictions_merged.csv")
         merged_predictions.to_csv(merged_path, index=False)
 
         return merged_predictions
@@ -255,7 +254,7 @@ def generate_heatmap_confusion_matrix(cm, labels, TARGET_ACTIVITIES, cm_path):
     plt.savefig(cm_path, bbox_inches='tight', dpi=300)
     plt.close()
 
-def calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHODLING):
+def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHODLING):
     print("\nCalculating performance metrics...")
 
     try:
@@ -299,14 +298,14 @@ def calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAIN
         cm = confusion_matrix(y_true, y_pred, labels=labels)
         if MODEL_TYPE.lower() == 'multi':
             if THRESHODLING is not False:
-                cm_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_threshold_confusion_matrix.png")
+                cm_path = Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_threshold_confusion_matrix.png")
             else:
-               cm_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_confusion_matrix.png") 
+               cm_path = Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_confusion_matrix.png") 
         else:
             if THRESHODLING is not False:
-                cm_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_threshold_confusion_matrix.png")
+                cm_path = Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_threshold_confusion_matrix.png")
             else:
-                cm_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_NOthreshold_confusion_matrix.png")
+                cm_path = Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_NOthreshold_confusion_matrix.png")
            
         generate_heatmap_confusion_matrix(cm, labels, TARGET_ACTIVITIES, cm_path)
 
@@ -314,14 +313,14 @@ def calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAIN
         cm_df = pd.DataFrame(full_cm, index = full_labels, columns = full_labels)
         if MODEL_TYPE.lower() == 'multi':
             if THRESHODLING is not False:
-                cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_threshold_confusion_matrix.csv"))
+                cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_threshold_confusion_matrix.csv"))
             else:
-               cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_confusion_matrix.csv")) 
+               cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_confusion_matrix.csv")) 
         else:
             if THRESHODLING is not False:
-                cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_threshold_confusion_matrix.csv"))
+                cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_threshold_confusion_matrix.csv"))
             else:
-                cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_NOthreshold_confusion_matrix.csv"))
+                cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_NOthreshold_confusion_matrix.csv"))
             
         # Get classification report for per-class metrics
         report_dict = classification_report(y_true, y_pred, zero_division=0, output_dict=True, labels=labels)
@@ -403,25 +402,25 @@ def make_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, behaviou
         for behaviour in behaviour_param:
             print(f"\nTesting model for {behaviour}...")
             # load in the optimal model
-            model_path = Path(f"{BASE_PATH}/Output/Models/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
+            model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
             saved_data = load(model_path)
             model = saved_data['model']
             scaler = saved_data['scaler']
 
             # test the model, make and save the predictions
-            multiclass_predictions = predict_single_model(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+            multiclass_predictions = predict_single_model(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
                                                     behaviour, model, scaler, X, y, ID, Time)
 
         print("\nMerging predictions from all behavior models...")
         multiclass_predictions = merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES)
     else:
         print(f"Beginning predictions for multiclass {behaviour_param}...")
-        model_path = Path(f"{BASE_PATH}/Output/Models/{ML_METHOD}/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour_param}_model.joblib")
+        model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour_param}_model.joblib")
         saved_data = load(model_path)
         model = saved_data['model']
         scaler = saved_data['scaler']
 
-        multiclass_predictions = predict_single_model(BASE_PATH, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+        multiclass_predictions = predict_single_model(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
                                                     behaviour_param, model, scaler, X, y, ID, Time)
         # Get the actual predicted class with highest probability
         prob_cols = [col for col in multiclass_predictions.columns if 'Probability_' in col]
@@ -433,7 +432,7 @@ def make_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, behaviou
 if __name__ == "__main__":
     try:
         if MODEL_TYPE.lower() == 'multi':
-            predictions_file = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_predictions.csv")
+            predictions_file = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_predictions.csv")
             print(f"predictions_file is {predictions_file}")
 
             if not predictions_file.exists():
@@ -444,10 +443,10 @@ if __name__ == "__main__":
 
             print("\nCalculating final performance metrics.")
             multiclass_predictions = pd.read_csv(predictions_file)
-            metrics_dict = calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
+            metrics_dict = calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
             
         else: # for the binary and oneclass models
-            predictions_file = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_all_predictions_merged.csv")
+            predictions_file = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_all_predictions_merged.csv")
             print(f"predictions_file is {predictions_file}")
             if not predictions_file.exists():
                 print("No existing predictions found. Running full model testing...")
@@ -455,7 +454,7 @@ if __name__ == "__main__":
             else:
                 multiclass_predictions = pd.read_csv(predictions_file)
             
-            metrics_dict = calculate_performance(multiclass_predictions, ML_METHOD, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
+            metrics_dict = calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
             
         # load in the predictions
 
@@ -467,14 +466,14 @@ if __name__ == "__main__":
             # Save metrics
             if MODEL_TYPE.lower() == 'multi':
                 if THRESHOLDING is not False:
-                    metrics_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_threshold_metrics.csv")
+                    metrics_path = Path(f"{BASE_PATH}/Output/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_threshold_metrics.csv")
                 else:
-                    metrics_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_metrics.csv")
+                    metrics_path = Path(f"{BASE_PATH}/Output/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_metrics.csv")
             else:
                 if THRESHOLDING is not False:
-                    metrics_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_threshold_metrics.csv")
+                    metrics_path = Path(f"{BASE_PATH}/Output/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_threshold_metrics.csv")
                 else:
-                    metrics_path = Path(f"{BASE_PATH}/Output/Testing/{ML_METHOD}/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_NOthreshold_metrics.csv")
+                    metrics_path = Path(f"{BASE_PATH}/Output/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_NOthreshold_metrics.csv")
                 
             
             metrics_df.to_csv(metrics_path)
