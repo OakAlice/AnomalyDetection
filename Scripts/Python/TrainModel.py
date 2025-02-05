@@ -1,6 +1,6 @@
 # Train the optimal model
 
-from MainScript import BASE_PATH, BEHAVIOUR_SET, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME
+from MainScript import BASE_PATH, BEHAVIOUR_SET, TARGET_ACTIVITIES, DATASET_NAME # MODEL_TYPE, TRAINING_SET
 from sklearn.svm import SVC, OneClassSVM
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix
@@ -9,6 +9,8 @@ from joblib import dump
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import glob
+import os
 
 def train_svm(df, MODEL_TYPE, kernel, nu, gamma, behaviour):
     """
@@ -40,7 +42,9 @@ def train_svm(df, MODEL_TYPE, kernel, nu, gamma, behaviour):
     # Add class_weight parameter to handle imbalance
     if MODEL_TYPE.lower() == 'binary':
         n_other = sum(y == 'Other')
+        print(f"N-other: {n_other}")
         n_target = sum(y == behaviour)
+        print(f"N-target: {n_target}")
         class_weights = {
             behaviour: n_other / len(y),
             'Other': n_target / len(y)
@@ -64,6 +68,7 @@ def train_svm(df, MODEL_TYPE, kernel, nu, gamma, behaviour):
             class_weight=class_weights,
             probability=True  # Enable probability estimates
         )
+        print("beginning to fit model")
         model.fit(X, y)
         
     else:
@@ -72,37 +77,14 @@ def train_svm(df, MODEL_TYPE, kernel, nu, gamma, behaviour):
         X_train = X[normal_idx]
         
         # Train model
-        model = OneClassSVM(nu = nu, kernel =kernel, gamma = gamma)
+        model = OneClassSVM(
+            nu=min(0.99, 1/nu),  # for the oneclass, the nu has to be between 0 -1 so have to convert
+            kernel=kernel,
+            gamma=gamma
+        )
         model.fit(X_train)
 
     return {'model': model, 'scaler': scaler}
-
-def load_best_params(csv_path: str) -> dict:
-    """
-    Load best parameters from CSV and convert to format needed for SVM training
-    
-    Args:
-        csv_path: Path to CSV file containing best parameters
-    
-    Returns:
-        Dictionary of best parameters for each behavior
-    """
-    # Read the CSV file
-    params_df = pd.read_csv(csv_path)
-
-    print(params_df)
-    
-    # Convert DataFrame to dictionary format needed for SVM
-    best_params = {}
-    for _, row in params_df.iterrows():
-        behavior = row['behaviour_or_activity']
-        best_params[behavior] = {
-            'kernel': row['kernel'], 
-            'gamma': row['gamma'],
-            'C': row['nu']
-        }
-    
-    return best_params
 
 def save_model(model, scaler, file_path):
     """
@@ -123,19 +105,56 @@ def save_model(model, scaler, file_path):
     }, file_path)
     print(f"Model saved to {file_path}")
 
-def train_and_save_SVM(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None, BEHAVIOUR_SET = None):
-    # Load best parameters from CSV
-    best_params = load_best_params(Path(f"{BASE_PATH}/Output/Tuning/{DATASET_NAME}_all_{MODEL_TYPE}_hyperparmaters.csv"))
-    # best_params = load_best_params(Path(f"{BASE_PATH}/Output/Tuning/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_hyperparmaters.csv"))
+
+def find_matching_file(path_pattern):
+    # Convert Path object to string for glob
+    path_pattern = str(path_pattern)
     
+    # Find the file case-insensitively
+    matching_files = glob.glob(path_pattern, recursive=True)
+
+    # If no exact match found, try case-insensitive search
+    if not matching_files:
+        directory = os.path.dirname(path_pattern)
+        filename = os.path.basename(path_pattern)
+        for file in os.listdir(directory):
+            if file.lower() == filename.lower():
+                matching_files = [os.path.join(directory, file)]
+                break
+
+    # Read the file
+    if matching_files:
+        print(matching_files)
+        df = pd.read_csv(matching_files[0])  # Added [0] to get the first match
+    else:
+        raise FileNotFoundError(f"No matching file found for pattern: {path_pattern}")
+
+    return df
+
+def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None, BEHAVIOUR_SET = None):
+    
+    print(f"training for {DATASET_NAME}, {TRAINING_SET}, {MODEL_TYPE}, and, if multi, then {BEHAVIOUR_SET}")
+
+    # load the hyperparameters
+    parameters_path = f"{BASE_PATH}/Output/Tuning/Combined_optimisation_results.csv"
+    params = pd.read_csv(parameters_path)
+    relevant_params = params[
+        (params['dataset_name'] == DATASET_NAME) & 
+        (params['training_set'] == TRAINING_SET) & 
+        (params['model_type'] == MODEL_TYPE)
+    ]
+
     if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
         for behaviour in TARGET_ACTIVITIES:
-            print(f"Training optimal {MODEL_TYPE} {behaviour} SVM model...")
-            df = pd.read_csv(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv"))
+
+            df = find_matching_file(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv"))
         
-            kernel = best_params[behaviour]['kernel']
-            nu = best_params[behaviour]['C']
-            gamma = best_params[behaviour]['gamma']
+            behaviour_params = relevant_params[relevant_params['behaviour'] == behaviour]
+            kernel = behaviour_params['kernel'].iloc[0]
+            nu = float(behaviour_params['C'].iloc[0])
+            gamma = float(behaviour_params['gamma'].iloc[0])
+
+            print(behaviour_params)
 
             model_info = train_svm(
                 df,
@@ -145,17 +164,23 @@ def train_and_save_SVM(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET
                 gamma,
                 behaviour
             )
+
             model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
             model = model_info['model']
             scaler = model_info['scaler']
             save_model(model, scaler, model_path)
     else:
-        print(f"Training optimal {MODEL_TYPE} {BEHAVIOUR_SET} SVM model...")
-        df = pd.read_csv(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}.csv"))
-           
-        kernel = best_params[BEHAVIOUR_SET]['kernel']
-        nu = best_params[BEHAVIOUR_SET]['C']
-        gamma = best_params[BEHAVIOUR_SET]['gamma']
+        df = find_matching_file(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}.csv"))
+
+        model_params = relevant_params[relevant_params['behaviour'] == BEHAVIOUR_SET]
+        print(model_params)
+
+        kernel = model_params['kernel'].iloc[0]
+        print(kernel)
+        nu = float(model_params['C'].iloc[0])
+        print(nu)
+        gamma = float(model_params['gamma'].iloc[0])
+        print(gamma)
            
         model_info = train_svm(
             df,
@@ -171,4 +196,4 @@ def train_and_save_SVM(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET
         save_model(model, scaler, model_path)
 
 if __name__ == "__main__":
-    train_and_save_SVM(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)
+    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)

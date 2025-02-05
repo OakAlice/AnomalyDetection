@@ -1,4 +1,4 @@
-from MainScript import BASE_PATH, BEHAVIOUR_SET, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME, THRESHOLDING
+from MainScript import BASE_PATH, THRESHOLDING
 from joblib import load
 from pathlib import Path
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
@@ -106,7 +106,7 @@ def predict_single_model(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE,
     return results_df
 
 # merge the predictions from the individual models
-def merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None, BEHAVIOUR_SET = None):
+def merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None):
     print("\nMerging individual model prediction results...")
     all_predictions = []
             
@@ -114,9 +114,12 @@ def merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_
         try:
             predictions_path = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_predictions.csv")                 
             predictions_df = pd.read_csv(predictions_path)
+
+            print(predictions_df.head())
             
-            # Convert -1/1 to Other/behaviour
-            predictions_df['Predicted_Label'] = predictions_df['Predicted_Label'].map({-1: 'Other', 1: behaviour})
+            if MODEL_TYPE.lower() == 'oneclass':
+                # Convert -1/1 to Other/behaviour
+                predictions_df['Predicted_Label'] = predictions_df['Predicted_Label'].map({-1: 'Other', 1: behaviour})
             
             # Rename columns to include behaviour name
             predictions_df = predictions_df.rename(columns={
@@ -390,7 +393,7 @@ def make_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, behaviou
     
     # load in and prepare the test data
     print(f"Loading test data from {DATASET_NAME}_test_features_cleaned.csv")
-    file_path = Path(BASE_PATH) / "Data" / "Split_data" / f"{DATASET_NAME}_test_features_cleaned.csv"
+    file_path = Path(BASE_PATH) / "Data" / "Split_data" / f"{DATASET_NAME}_test.csv"
     df = pd.read_csv(file_path)
         
     X = df.drop(columns=['Activity', 'ID'])
@@ -412,7 +415,7 @@ def make_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, behaviou
                                                     behaviour, model, scaler, X, y, ID, Time)
 
         print("\nMerging predictions from all behavior models...")
-        multiclass_predictions = merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES)
+        multiclass_predictions = merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES=behaviour_param)
     else:
         print(f"Beginning predictions for multiclass {behaviour_param}...")
         model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour_param}_model.joblib")
@@ -429,8 +432,10 @@ def make_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, behaviou
 
     return(multiclass_predictions)
 
-if __name__ == "__main__":
-    BEHAVIOUR_SETS = ["Activity", "Other"]
+
+def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING):
+    # BEHAVIOUR_SETS = ["Activity", "Other"]
+
     try:
         if MODEL_TYPE.lower() == 'multi':
             predictions_file = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_predictions.csv")
@@ -449,16 +454,25 @@ if __name__ == "__main__":
         else: # for the binary and oneclass models
             predictions_file = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_all_predictions_merged.csv")
             print(f"predictions_file is {predictions_file}")
+            
             if not predictions_file.exists():
-                print("No existing predictions found. Running full model testing...")
-                multiclass_predictions = make_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, behaviour_param = TARGET_ACTIVITIES)
+                print("No existing predictions found")
+                individual_predictions_file = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{TARGET_ACTIVITIES[1]}_predictions.csv")
+                print(individual_predictions_file)
+                
+                if individual_predictions_file.exists():
+                    print('merging predictions again')
+                    multiclass_predictions = merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES)
+                else:
+                    print("Running full model testing...")
+                    multiclass_predictions = make_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, behaviour_param = TARGET_ACTIVITIES)
+            
             else:
                 multiclass_predictions = pd.read_csv(predictions_file)
             
             metrics_dict = calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
             
         # load in the predictions
-
         if metrics_dict:  # Check if metrics_dict is not None
             print("\nSaving final metrics...")
             # Convert to DataFrame
@@ -484,3 +498,6 @@ if __name__ == "__main__":
             
     except Exception as e:
         print(f"An error occurred during execution: {str(e)}")
+
+if __name__ == "__main__":
+    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)

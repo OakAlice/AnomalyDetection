@@ -6,9 +6,11 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from MainScript import BASE_PATH, DATASET_NAME, TARGET_ACTIVITIES
 
-def plot_comparison(combined_metrics, TARGET_ACTIVITIES, BASE_PATH):
+def plot_comparison(combined_metrics, DATASET_NAME, TARGET_ACTIVITIES, BASE_PATH):
         # Define my main colour palette for main 6 behaviours
         base_colors = ["#A63A50", "#FFCF56", "#D4B2D8", "#3891A6", "#3BB273", "#031D44"]
+
+        print("Unique model types:", combined_metrics['model_type'].unique())
         
         # Filter for just the behaviours of interest
         TARGET_ACTIVITIES = TARGET_ACTIVITIES + ['weighted_avg'] + ['Other']  # Convert to list concatenation
@@ -36,8 +38,8 @@ def plot_comparison(combined_metrics, TARGET_ACTIVITIES, BASE_PATH):
                                 value_name='value')
 
         # Define the order for model_type
-        model_order = ['OneClass', 'Binary', 'Multi_Other_NOthreshold', 
-                      'Multi_Activity_threshold', 'Multi_Activity_NOthreshold']
+        model_order = ['oneclass', 'binary', 'multi_Other_NOthreshold', 
+                      'multi_Activity_threshold', 'multi_Activity_NOthreshold']
         
         # Create faceted plot
         g = sns.FacetGrid(melted_metrics, 
@@ -89,18 +91,17 @@ def plot_comparison(combined_metrics, TARGET_ACTIVITIES, BASE_PATH):
         plt.tight_layout()
 
         # Save the plot
-        plot_path = Path(f"{BASE_PATH}/Output/Testing/Plots/condition_comparison.png")
+        plot_path = Path(f"{BASE_PATH}/Output/Testing/Plots/{DATASET_NAME}_condition_comparison.png")
         plot_path.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(plot_path, bbox_inches='tight', dpi=300)
         plt.close()
 
-def combine_metrics(combined_metrics_path):
+def combine_metrics(combined_metrics_path, DATASET_NAME):
     if combined_metrics_path.exists():
         combined_metrics = pd.read_csv(combined_metrics_path)
-    else:
-        metrics_files = Path(f"{BASE_PATH}/Output/Testing/Metrics/").glob("*.csv")
-            
-        metrics_files = Path(f"{BASE_PATH}/Output/Testing/Metrics/").glob("*.csv")
+    else:            
+        metrics_files = Path(f"{BASE_PATH}/Output/Testing/Metrics/").glob(f"{DATASET_NAME}*.csv")
+        
         all_metrics = []
         for file in metrics_files:
             metrics = pd.read_csv(file)
@@ -112,7 +113,7 @@ def combine_metrics(combined_metrics_path):
             metrics['dataset'] = filename_parts[0] 
             metrics['training_set'] = filename_parts[2]
             metrics['model_type'] = filename_parts[3]
-            if filename_parts[3] == "Multi":
+            if filename_parts[3].lower() == "multi":
                 metrics['model_type'] = f"{filename_parts[3]}_{filename_parts[4]}_{filename_parts[5].replace('_metrics.csv', '')}"
             else:
                 metrics['thresholding'] = filename_parts[4].replace('_metrics.csv', '')
@@ -127,7 +128,7 @@ def combine_metrics(combined_metrics_path):
 
     return(combined_metrics)
 
-def combine_confusion_matrices(BASE_PATH):
+def combine_confusion_matrices(BASE_PATH, DATASET_NAME):
     confusion_matrices_path = Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/")
     
     # Define the expected layout
@@ -143,9 +144,10 @@ def combine_confusion_matrices(BASE_PATH):
     for i, training_set in enumerate(training_sets):
         for j, model_type in enumerate(model_types):
             # Find the matching file
-            pattern = f"*_{training_set}_{model_type}_*.png"
+            pattern = f"{DATASET_NAME}*_{training_set}_{model_type}_*.png"
             matching_files = list(confusion_matrices_path.glob(pattern))
             
+
             if matching_files:
                 # Read and display the confusion matrix
                 conf_matrix = plt.imread(matching_files[0])
@@ -164,21 +166,24 @@ def combine_confusion_matrices(BASE_PATH):
     
     # Adjust layout and save
     plt.tight_layout()
-    save_path = Path(f"{BASE_PATH}/Output/Testing/Plots/combined_confusion_matrices.png")
+    save_path = Path(f"{BASE_PATH}/Output/Testing/Plots/{DATASET_NAME}combined_confusion_matrices.png")
     plt.savefig(save_path, bbox_inches='tight', dpi=300)
     plt.close()
 
-if __name__ == "__main__":
+def main(BASE_PATH, DATASET_NAME, TARGET_ACTIVITIES):
     # load in the metrics for each condition
     combined_metrics_path = Path(f"{BASE_PATH}/Output/Testing/{DATASET_NAME}_all_metrics.csv")
 
     print("combining the metrics")
-    combined_metrics = combine_metrics(combined_metrics_path)
+    combined_metrics = combine_metrics(combined_metrics_path, DATASET_NAME)
     
     print("beginning dot plots")
-    plot_comparison(combined_metrics, TARGET_ACTIVITIES, BASE_PATH)
+    plot_comparison(combined_metrics, DATASET_NAME, TARGET_ACTIVITIES, BASE_PATH)
 
     print("beginning confusion matrix plots")
-    combine_confusion_matrices(BASE_PATH)
+    combine_confusion_matrices(BASE_PATH, DATASET_NAME)
 
     print("done")
+
+if __name__ == "__main__":
+    main(BASE_PATH, DATASET_NAME, TARGET_ACTIVITIES)

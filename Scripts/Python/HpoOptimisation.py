@@ -1,4 +1,4 @@
-from MainScript import BASE_PATH, BEHAVIOUR_SET, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, DATASET_NAME
+from MainScript import BASE_PATH, DATASET_NAME # BEHAVIOUR_SET, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, 
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import GroupKFold
@@ -33,6 +33,7 @@ def save_results(results, dataset_name, training_set, model_type, base_path, beh
         else:
             output_path = Path(f"{base_path}/Output/Tuning/{dataset_name}_{training_set}_{model_type}_optimisation_results.csv")
         
+        print(f"saved to {output_path}")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         results_df.to_csv(output_path, index=False)
         
@@ -262,6 +263,45 @@ def generate_learning_curves(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIV
     except Exception as e:
         print(f"Error in optimization: {str(e)}")
         raise
+
+def append_files(BASE_PATH):
+    path = f"{BASE_PATH}/Output/Tuning"
+    
+    # Get all CSV files in the directory
+    all_files = [f for f in os.listdir(path) if f.endswith('_optimisation_results.csv')]
+    
+    if not all_files:
+        print("No optimization results files found.")
+        return
+    
+    # Read and combine all CSV files
+    dfs = []
+    for filename in all_files:
+        file_path = os.path.join(path, filename)
+        try:
+            df = pd.read_csv(file_path)
+            dfs.append(df)
+        except Exception as e:
+            print(f"Error reading {filename}: {str(e)}")
+            continue
+    
+    if not dfs:
+        print("No valid files could be read.")
+        return
+    
+    # Combine all dataframes
+    combined_df = pd.concat(dfs, ignore_index=True)
+
+    # modify the column types
+    combined_df['C'] = combined_df['C'].astype(float)
+    combined_df['gamma'] = combined_df['gamma'].astype(float)
+    combined_df['best_auc'] = combined_df['best_auc'].astype(float)
+    combined_df['elapsed_time'] = combined_df['elapsed_time'].astype(float)
+    
+    # Save combined results
+    output_path = os.path.join(path, 'Combined_optimisation_results.csv')
+    combined_df.to_csv(output_path, index=False)
+    print(f"Combined results saved to: {output_path}")
 
 if __name__ == "__main__":
     main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)
