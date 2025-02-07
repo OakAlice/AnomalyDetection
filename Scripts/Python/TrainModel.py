@@ -148,7 +148,14 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
         for behaviour in TARGET_ACTIVITIES:
 
             df = find_matching_file(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv"))
-        
+            if DATASET_NAME == "Vehkaoja_Dog" and MODEL_TYPE == "binary" and behaviour == "Walking":
+                print(f"unique activities: {df['Activity'].unique()}")
+                print(f"unique ids: {df['ID'].unique()}")
+                # Take up to 200 samples per group, or all available if fewer
+                df = df.groupby(['ID', 'Activity']).apply(
+                    lambda x: x.sample(n=min(len(x), 200), replace=False)
+                ).reset_index(drop=True)
+
             behaviour_params = relevant_params[relevant_params['behaviour'] == behaviour]
             kernel = behaviour_params['kernel'].iloc[0]
             nu = float(behaviour_params['C'].iloc[0])

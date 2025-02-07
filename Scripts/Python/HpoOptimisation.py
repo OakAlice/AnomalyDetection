@@ -13,7 +13,7 @@ import time
 import matplotlib.pyplot as plt
 import os
 
-def save_results(results, dataset_name, training_set, model_type, base_path, behaviour_set):
+def save_results(results, dataset_name, training_set, model_type, base_path, behaviour_set, thresholding):
     """Save optimization results to CSV"""
     try:
         results_df = pd.DataFrame.from_dict(results, orient='index')
@@ -29,10 +29,14 @@ def save_results(results, dataset_name, training_set, model_type, base_path, beh
         results_df = results_df[columns] if len(results_df.columns) > 0 else pd.DataFrame(columns=columns)
         
         if model_type.lower() == 'multi':
-            output_path = Path(f"{base_path}/Output/Tuning/{dataset_name}_{training_set}_{model_type}_{behaviour_set}_optimisation_results.csv")
+            if thresholding is not None:
+                output_path = Path(f"{base_path}/Output/Tuning/{dataset_name}_{training_set}_{model_type}_{behaviour_set}_threshold_optimisation_results.csv")
+            else:
+                output_path = Path(f"{base_path}/Output/Tuning/{dataset_name}_{training_set}_{model_type}_{behaviour_set}_NOthreshold_optimisation_results.csv")
         else:
             output_path = Path(f"{base_path}/Output/Tuning/{dataset_name}_{training_set}_{model_type}_optimisation_results.csv")
         
+
         print(f"saved to {output_path}")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         results_df.to_csv(output_path, index=False)
@@ -40,7 +44,7 @@ def save_results(results, dataset_name, training_set, model_type, base_path, beh
     except Exception as e:
         print(f"Error saving results: {str(e)}")
 
-def optimize_svm(X, y, groups):
+def optimize_svm(X, y, groups, thresholding):
     """Optimize SVM hyperparameters using Bayesian optimization"""
     space = [
         Real(0.01, 1000, name='C', prior='log-uniform'),
@@ -68,11 +72,33 @@ def optimize_svm(X, y, groups):
             svm.fit(X_train, y_train)
             y_pred_proba = svm.predict_proba(X_test)
             
-            # For multiclass, use weighted average of ROC AUC
-            if len(np.unique(y)) > 2:
-                score = roc_auc_score(y_test, y_pred_proba, multi_class='ovr')
+            # Apply thresholding if specified
+            if thresholding is not None:
+                if len(np.unique(y)) == 2:  # Binary case
+                    # Create mask for predictions above threshold
+                    mask = y_pred_proba[:, 1] >= thresholding
+                    if np.sum(mask) > 0 and len(np.unique(y_test[mask])) > 1:
+                        y_test_filtered = y_test[mask]
+                        y_pred_proba_filtered = y_pred_proba[mask]
+                        score = roc_auc_score(y_test_filtered, y_pred_proba_filtered[:, 1])
+                    else:
+                        score = 0
+                else:  # Multiclass case
+                    # Get predictions where max probability is above threshold
+                    max_probs = np.max(y_pred_proba, axis=1)
+                    mask = max_probs >= thresholding
+                    if np.sum(mask) > 0 and len(np.unique(y_test[mask])) > 1:
+                        y_test_filtered = y_test[mask]
+                        y_pred_proba_filtered = y_pred_proba[mask]
+                        score = roc_auc_score(y_test_filtered, y_pred_proba_filtered, multi_class='ovr')
+                    else:
+                        score = 0
             else:
-                score = roc_auc_score(y_test, y_pred_proba[:, 1])
+                # Original scoring logic
+                if len(np.unique(y)) > 2:
+                    score = roc_auc_score(y_test, y_pred_proba, multi_class='ovr')
+                else:
+                    score = roc_auc_score(y_test, y_pred_proba[:, 1])
             
             scores.append(score)
             
@@ -101,7 +127,7 @@ def optimize_svm(X, y, groups):
     
     return best_params, -best_score
 
-def main(base_path, dataset_name, training_set, model_type, target_activities, behaviour_set):
+def main(base_path, dataset_name, training_set, model_type, target_activities, behaviour_set, thresholding):
     """Main optimization function"""
     try:
         optimization_results = {}
@@ -121,7 +147,7 @@ def main(base_path, dataset_name, training_set, model_type, target_activities, b
             print(f"Unique groups: {len(np.unique(groups))}")
             
             start_time = time.time()
-            best_params, best_score = optimize_svm(X, y, groups)
+            best_params, best_score = optimize_svm(X, y, groups, thresholding)
             elapsed_time = time.time() - start_time
             
             optimization_results[behaviour_set] = {
@@ -149,7 +175,7 @@ def main(base_path, dataset_name, training_set, model_type, target_activities, b
                     print(f"Class distribution: {np.bincount(y)}")
                     
                     start_time = time.time()
-                    best_params, best_score = optimize_svm(X, y, groups)
+                    best_params, best_score = optimize_svm(X, y, groups, thresholding)
                     elapsed_time = time.time() - start_time
                     
                     optimization_results[behaviour] = {
@@ -164,7 +190,7 @@ def main(base_path, dataset_name, training_set, model_type, target_activities, b
                     print(f"Error processing {behaviour}: {str(e)}")
                     continue
         
-        save_results(optimization_results, dataset_name, training_set, model_type, base_path, behaviour_set)
+        save_results(optimization_results, dataset_name, training_set, model_type, base_path, behaviour_set, thresholding)
         print("\nOptimization completed successfully!")
         
     except Exception as e:
@@ -304,5 +330,5 @@ def append_files(BASE_PATH):
     print(f"Combined results saved to: {output_path}")
 
 if __name__ == "__main__":
-    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)
+    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
 

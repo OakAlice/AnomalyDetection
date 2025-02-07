@@ -392,7 +392,7 @@ def make_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, behaviou
     print(f"\nStarting SVM testing for {DATASET_NAME} with {MODEL_TYPE} configuration...")
     
     # load in and prepare the test data
-    print(f"Loading test data from {DATASET_NAME}_test_features_cleaned.csv")
+    print(f"Loading test data from {DATASET_NAME}_test.csv")
     file_path = Path(BASE_PATH) / "Data" / "Split_data" / f"{DATASET_NAME}_test.csv"
     df = pd.read_csv(file_path)
         

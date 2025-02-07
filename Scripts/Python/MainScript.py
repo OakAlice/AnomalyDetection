@@ -42,30 +42,31 @@ def main():
     # Add the project root directory to Python path
     sys.path.append(BASE_PATH)
     
-    #             HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)
+    # HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)
     # HpoOptimisation.append_files(BASE_PATH)
 
-    # for DATASET_NAME in ['Ferdinandy_Dog']:
-    #     TARGET_ACTIVITIES = target_activities[DATASET_NAME]
-    #     for MODEL_TYPE in ['binary', 'oneclass', 'multi']:
-    #         for TRAINING_SET in ['some', 'target', 'all']:
+    # print("beginning the last binary model")
+    # TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = ["Walking"], BEHAVIOUR_SET = None)
 
-    #             if TRAINING_SET == 'all' and MODEL_TYPE == 'binary':
-    #                 continue # skip the condition I haven't trained yet.
-
-    #             if MODEL_TYPE.lower() == 'multi':
-    #                 for BEHAVIOUR_SET in ['Activity', 'Other']:
-    #                     # TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)
-
-    #                     TestModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
-    #             else:
-    #                 # TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET = None)
-
-    #                 TestModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET = None, THRESHOLDING = THRESHOLDING)
+    # print("testing all the binary models")
+    # TARGET_ACTIVITIES = target_activities[DATASET_NAME]
+    # TestModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET = None, THRESHOLDING = False)
     
-    for DATASET_NAME in ['Ferdinandy_Dog', "Vehkaoja_Dog"]:
-        TARGET_ACTIVITIES = target_activities[DATASET_NAME]
-        CompareConditions.main(BASE_PATH, DATASET_NAME, TARGET_ACTIVITIES)
+    print("now tuning the activity models with a threshold to 0.5")
+    for DATASET_NAME in ['Ferdinandy_Dog', 'Vehkaoja_Dog']:
+        for TRAINING_SET in ['target', 'some', 'all']:
+            MODEL_TYPE = 'multi'
+            BEHAVIOUR_SET = 'Activity'
+            THRESHOLDING = 0.5
+        
+            HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
+            HpoOptimisation.append_files(BASE_PATH)
+
+
+
+    # for DATASET_NAME in ['Ferdinandy_Dog', "Vehkaoja_Dog"]:
+    #     TARGET_ACTIVITIES = target_activities[DATASET_NAME]
+    #     CompareConditions.main(BASE_PATH, DATASET_NAME, TARGET_ACTIVITIES)
 
 if __name__ == "__main__":
     main()
