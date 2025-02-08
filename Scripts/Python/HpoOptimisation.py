@@ -306,9 +306,15 @@ def append_files(BASE_PATH):
         file_path = os.path.join(path, filename)
         try:
             df = pd.read_csv(file_path)
+            # Check if 'threshold' appears anywhere in the filename (case-insensitive)
+            if 'threshold' in filename.lower() and 'nothreshold' not in filename.lower():
+                df['thresholding'] = True
+            else:
+                df['thresholding'] = False
             dfs.append(df)
         except Exception as e:
             print(f"Error reading {filename}: {str(e)}")
+
             continue
     
     if not dfs:

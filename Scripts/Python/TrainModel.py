@@ -131,18 +131,36 @@ def find_matching_file(path_pattern):
 
     return df
 
-def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None, BEHAVIOUR_SET = None):
-    
-    print(f"training for {DATASET_NAME}, {TRAINING_SET}, {MODEL_TYPE}, and, if multi, then {BEHAVIOUR_SET}")
+def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None, BEHAVIOUR_SET = None, THRESHOLDING = None):
 
     # load the hyperparameters
     parameters_path = f"{BASE_PATH}/Output/Tuning/Combined_optimisation_results.csv"
     params = pd.read_csv(parameters_path)
+    
+    # Add debug prints to check the filtering conditions
+    print("\nFiltering conditions:")
+    print(f"Dataset name: {DATASET_NAME}")
+    print(f"Training set: {TRAINING_SET}")
+    print(f"Model type: {MODEL_TYPE}")
+    print(f"Thresholding: {THRESHOLDING}")
+    
     relevant_params = params[
         (params['dataset_name'] == DATASET_NAME) & 
         (params['training_set'] == TRAINING_SET) & 
-        (params['model_type'] == MODEL_TYPE)
+        (params['model_type'] == MODEL_TYPE) &
+        (params['thresholding'] == THRESHOLDING)
     ]
+    
+    # Add debug print to check filtered results
+    print(f"\nNumber of matching parameter rows: {len(relevant_params)}")
+    if len(relevant_params) == 0:
+
+        print("\nAvailable values in parameters file:")
+        print(f"Dataset names: {params['dataset_name'].unique()}")
+        print(f"Training sets: {params['training_set'].unique()}")
+        print(f"Model types: {params['model_type'].unique()}")
+        print(f"Thresholding values: {params['thresholding'].unique()}")
+        raise ValueError("No matching parameters found in the optimization results file")
 
     if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
         for behaviour in TARGET_ACTIVITIES:
@@ -180,15 +198,18 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
         df = find_matching_file(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}.csv"))
 
         model_params = relevant_params[relevant_params['behaviour'] == BEHAVIOUR_SET]
+        print(f"\nParameters for behaviour set {BEHAVIOUR_SET}:")
         print(model_params)
+        
+        if len(model_params) == 0:
+            print(f"\nAvailable behaviours in filtered params:")
+            print(relevant_params['behaviour'].unique())
+            raise ValueError(f"No parameters found for behaviour set: {BEHAVIOUR_SET}")
 
         kernel = model_params['kernel'].iloc[0]
-        print(kernel)
         nu = float(model_params['C'].iloc[0])
-        print(nu)
         gamma = float(model_params['gamma'].iloc[0])
-        print(gamma)
-           
+        
         model_info = train_svm(
             df,
             MODEL_TYPE,
@@ -197,10 +218,10 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
             gamma,
             behaviour = BEHAVIOUR_SET
         )
-        model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_model.joblib")
+        model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_{THRESHOLDING}_model.joblib")
         model = model_info['model']
         scaler = model_info['scaler']
         save_model(model, scaler, model_path)
 
 if __name__ == "__main__":
-    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)
+    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)

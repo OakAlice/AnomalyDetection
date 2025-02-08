@@ -41,32 +41,53 @@ def main():
     
     # Add the project root directory to Python path
     sys.path.append(BASE_PATH)
-    
-    # HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET)
+
     # HpoOptimisation.append_files(BASE_PATH)
 
-    # print("beginning the last binary model")
-    # TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = ["Walking"], BEHAVIOUR_SET = None)
+    CompareConditions.plot_auc_comparison(BASE_PATH)
 
-    # print("testing all the binary models")
-    # TARGET_ACTIVITIES = target_activities[DATASET_NAME]
-    # TestModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET = None, THRESHOLDING = False)
+    # and then do the final model run
+    DATASET_NAME = "Vehkaoja_Dog"
+    TARGET_ACTIVITIES = target_activities[DATASET_NAME]
+    TRAINING_SET = 'some'
+    MODEL_TYPE = 'multi'
+    BEHAVIOUR_SET = 'Other'
+    THRESHOLDING = False
+
+    TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING = False)
+    TestModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+                   TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
     
-    print("now tuning the activity models with a threshold to 0.5")
-    for DATASET_NAME in ['Ferdinandy_Dog', 'Vehkaoja_Dog']:
-        for TRAINING_SET in ['target', 'some', 'all']:
-            MODEL_TYPE = 'multi'
-            BEHAVIOUR_SET = 'Activity'
-            THRESHOLDING = 0.5
-        
-            HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
-            HpoOptimisation.append_files(BASE_PATH)
 
+    
+    #             #HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
 
-
+    #             #HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
+    #             #TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
+                
+    #             # Define test configurations based on MODEL_TYPE
+    #             test_configs = []
+    #             if MODEL_TYPE == 'multi':
+    #                 test_configs = [
+    #                     ('Activity', 0.5),
+    #                     ('Activity', False),
+    #                     ('Other', False)
+    #                 ]
+    #             else:
+    #                 test_configs = [('Activity', False)]
+                
+    #             # Run tests for each configuration
+    #             for BEHAVIOUR_SET, THRESHOLDING in test_configs:
+    #                 TestModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+    #                              TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
+    
     # for DATASET_NAME in ['Ferdinandy_Dog', "Vehkaoja_Dog"]:
     #     TARGET_ACTIVITIES = target_activities[DATASET_NAME]
     #     CompareConditions.main(BASE_PATH, DATASET_NAME, TARGET_ACTIVITIES)
+
+    # Call the plotting function after the comparison loop
+    CompareConditions.plot_auc_comparison(BASE_PATH)
+    CompareConditions.elapsed_time(BASE_PATH)
 
 if __name__ == "__main__":
     main()

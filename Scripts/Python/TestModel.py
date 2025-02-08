@@ -326,9 +326,9 @@ def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MO
                 cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_NOthreshold_confusion_matrix.csv"))
             
         # Get classification report for per-class metrics
-        report_dict = classification_report(y_true, y_pred, zero_division=0, output_dict=True, labels=labels)
+        report_dict = classification_report(y_true, y_pred, zero_division=0, output_dict=True, labels=labels)  # Remove sample_weight here
 
-        # Convert probabilities for ROC curve calculation
+        # Calculate weighted metrics manually for the weighted average
         metrics_dict = {}
         for label in labels:
             # Create binary labels for current class
@@ -340,7 +340,7 @@ def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MO
                 auc = roc_auc_score(y_true_binary, y_pred_binary)
             except Exception as e:
                 print(f"Warning: Could not calculate AUC for {label}: {str(e)}")
-                auc = 0  # Set to 0 instead of None for failed AUC calculations
+                auc = 0
             
             # Store metrics for this class
             metrics_dict[label] = {
@@ -351,14 +351,18 @@ def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MO
                 'Support': report_dict[label]['support']
             }
         
-        # Add weighted averages
-        valid_aucs = [m['AUC'] for m in metrics_dict.values() if m['AUC'] is not None and m['AUC'] > 0]
+        # Calculate true weighted averages based on class support # so it wont just be the macro
+        total_support = sum(metrics_dict[label]['Support'] for label in labels)
         metrics_dict['weighted_avg'] = {
-            'AUC': np.mean(valid_aucs) if valid_aucs else 0,
-            'F1': report_dict['weighted avg']['f1-score'],
-            'Precision': report_dict['weighted avg']['precision'],
-            'Recall': report_dict['weighted avg']['recall'],
-            'Support': report_dict['weighted avg']['support']
+            'AUC': sum(metrics_dict[label]['AUC'] * metrics_dict[label]['Support'] 
+                      for label in labels) / total_support,
+            'F1': sum(metrics_dict[label]['F1'] * metrics_dict[label]['Support'] 
+                     for label in labels) / total_support,
+            'Precision': sum(metrics_dict[label]['Precision'] * metrics_dict[label]['Support'] 
+                           for label in labels) / total_support,
+            'Recall': sum(metrics_dict[label]['Recall'] * metrics_dict[label]['Support'] 
+                         for label in labels) / total_support,
+            'Support': total_support
         }
         
         return metrics_dict
