@@ -196,6 +196,11 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
             save_model(model, scaler, model_path)
     else:
         df = find_matching_file(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}.csv"))
+        
+        df = df.groupby(['ID', 'Activity']).apply(
+                    lambda x: x.sample(n=min(len(x), 200), replace=False)
+                ).reset_index(drop=True)
+        
 
         model_params = relevant_params[relevant_params['behaviour'] == BEHAVIOUR_SET]
         print(f"\nParameters for behaviour set {BEHAVIOUR_SET}:")
@@ -218,7 +223,12 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
             gamma,
             behaviour = BEHAVIOUR_SET
         )
-        model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_{THRESHOLDING}_model.joblib")
+        if BEHAVIOUR_SET == 'Activity' and THRESHOLDING is not False:
+            threshold = 'threshold'
+            model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_{threshold}_model.joblib")
+        elif BEHAVIOUR_SET == 'Activity' and THRESHOLDING is False:
+            threshold = 'NOthreshold'
+            model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_{threshold}_model.joblib")
         model = model_info['model']
         scaler = model_info['scaler']
         save_model(model, scaler, model_path)

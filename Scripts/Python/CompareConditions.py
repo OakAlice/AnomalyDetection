@@ -16,16 +16,8 @@ def plot_comparison(combined_metrics, DATASET_NAME, TARGET_ACTIVITIES, BASE_PATH
         behaviours = combined_metrics['behaviour'].unique()
         print(behaviours)
         
-        # Generate random colours for the other behaviours
-        if len(behaviours) > len(base_colors):
-            additional_colors = [f"#{np.random.randint(0, 0xFFFFFF):06x}" 
-                               for _ in range(len(behaviours) - len(base_colors))]
-            color_palette = base_colors + additional_colors
-        else:
-            color_palette = base_colors[:len(behaviours)]
-        
-        # Create color dictionary
-        colour_dict = dict(zip(behaviours, color_palette))
+        # Create colour dictionary
+        colour_dict = dict(zip(behaviours, base_colors))
         
         # Melt the dataframe to get metrics in long format
         metrics_to_plot = ['F1', 'AUC', 'Precision', 'Recall']
@@ -34,10 +26,6 @@ def plot_comparison(combined_metrics, DATASET_NAME, TARGET_ACTIVITIES, BASE_PATH
                                 value_vars=metrics_to_plot,
                                 var_name='metric',
                                 value_name='value')
-        
-        # Convert AUC values of 0.5 to 0 to show they werent predicted at all
-        melted_metrics.loc[(melted_metrics['metric'] == 'AUC') & 
-                          (melted_metrics['value'] == 0.5), 'value'] = 0
 
         # Define the order for model_type
         model_order = ['multi_Activity_NOthreshold', 'oneclass', 'binary', 'multi_Other', 
@@ -178,14 +166,10 @@ def plot_auc_comparison(base_path):
     for ax in g.axes.flat:
         # Set y-axis limits without negative space
         ax.set_ylim(0.45, 1.0)  # Starting from 0.45 to show 0.5 values clearly
-        ax.axhline(y=0.5, color='gray', linestyle='-', alpha=0.3)
+        ax.axhline(y=0, color='gray', linestyle='-', alpha=0.3)
         
         # Remove break lines and negative space shading
         # (removing the ax.plot and ax.axhspan calls)
-        
-        # Adjust y-ticks to show regular scale
-        ax.set_yticks([0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
-        ax.set_yticklabels(['0.5', '0.6', '0.7', '0.8', '0.9', '1.0'])
         
         plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
         ax.tick_params(axis='x', labelrotation=45)
@@ -284,6 +268,7 @@ def combine_metrics(combined_metrics_path, DATASET_NAME):
         
         combined_metrics = pd.concat(all_metrics, ignore_index=True)
         combined_metrics.to_csv(combined_metrics_path, index=False)
+        print(f"combined_metrics {combined_metrics}")
 
     return(combined_metrics)
 
@@ -332,13 +317,11 @@ def combine_confusion_matrices(BASE_PATH, DATASET_NAME):
 def main(BASE_PATH, DATASET_NAME, TARGET_ACTIVITIES):
     # load in the metrics for each condition
     combined_metrics_path = Path(f"{BASE_PATH}/Output/Testing/{DATASET_NAME}_all_metrics.csv")
-
     print("combining the metrics")
     combined_metrics = combine_metrics(combined_metrics_path, DATASET_NAME)
     
     print("beginning dot plots")
     plot_comparison(combined_metrics, DATASET_NAME, TARGET_ACTIVITIES, BASE_PATH)
-
     print("beginning confusion matrix plots")
     combine_confusion_matrices(BASE_PATH, DATASET_NAME)
 

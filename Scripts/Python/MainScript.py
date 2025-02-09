@@ -44,8 +44,6 @@ def main():
 
     # HpoOptimisation.append_files(BASE_PATH)
 
-    CompareConditions.plot_auc_comparison(BASE_PATH)
-
     # and then do the final model run
     DATASET_NAME = "Vehkaoja_Dog"
     TARGET_ACTIVITIES = target_activities[DATASET_NAME]
@@ -54,9 +52,9 @@ def main():
     BEHAVIOUR_SET = 'Other'
     THRESHOLDING = False
 
-    TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING = False)
-    TestModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                   TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
+    # TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING = False)
+    # TestModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+    #               TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
     
 
     
@@ -83,9 +81,13 @@ def main():
     
     # for DATASET_NAME in ['Ferdinandy_Dog', "Vehkaoja_Dog"]:
     #     TARGET_ACTIVITIES = target_activities[DATASET_NAME]
+    
+    # First run the comparisons to generate data
+    # for DATASET_NAME in ['Vehkaoja_Dog', 'Ferdinandy_Dog']:
+    #     TARGET_ACTIVITIES = target_activities[DATASET_NAME]
     #     CompareConditions.main(BASE_PATH, DATASET_NAME, TARGET_ACTIVITIES)
 
-    # Call the plotting function after the comparison loop
+    # Then plot the results after data has been generated
     CompareConditions.plot_auc_comparison(BASE_PATH)
     CompareConditions.elapsed_time(BASE_PATH)
 
