@@ -63,20 +63,15 @@ def plot_comparison(combined_metrics, DATASET_NAME, TARGET_ACTIVITIES, BASE_PATH
 
         # Rotate x-axis labels for better readability and add column titles
         for ax in g.axes.flat:
-            # Set y-axis limits and add break line
-            ax.set_ylim(-0.1, 1.0)
-            ax.axhline(y=0, color='gray', linestyle='-', alpha=0.3)
-            ax.axhspan(-0.1, 0, color='lightgray', alpha=0.2)
+            # Set y-axis limits from 0 to 1 (removing negative space)
+            ax.set_ylim(0, 1.0)
             
-            # Add break lines to indicate discontinuity
-            kwargs = dict(transform=ax.transData, color='gray', clip_on=False)
-            d = .015
-            ax.plot((-d, +d), (-0.05, -0.02), **kwargs)
-            ax.plot((-d, +d), (-0.03, 0.0), **kwargs)
+            # Remove break lines and negative space shading
+            # (removing the ax.axhline, ax.axhspan, and ax.plot calls)
             
-            # Adjust y-ticks
-            ax.set_yticks([-0.05, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
-            ax.set_yticklabels(['Not\nPredicted', '0.5', '0.6', '0.7', '0.8', '0.9', '1.0'])
+            # Adjust y-ticks to show regular scale
+            ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
+            ax.set_yticklabels(['0.0', '0.2', '0.4', '0.6', '0.8', '1.0'])
             
             plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
             ax.tick_params(axis='x', labelrotation=45)
@@ -164,12 +159,12 @@ def plot_auc_comparison(base_path):
     
     # Customize plot appearance
     for ax in g.axes.flat:
-        # Set y-axis limits without negative space
-        ax.set_ylim(0.45, 1.0)  # Starting from 0.45 to show 0.5 values clearly
-        ax.axhline(y=0, color='gray', linestyle='-', alpha=0.3)
+        # Set y-axis limits to show full range from 0 to 1
+        ax.set_ylim(0, 1.0)
         
-        # Remove break lines and negative space shading
-        # (removing the ax.plot and ax.axhspan calls)
+        # Add y-ticks at regular intervals
+        ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
+        ax.set_yticklabels(['0.0', '0.2', '0.4', '0.6', '0.8', '1.0'])
         
         plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
         ax.tick_params(axis='x', labelrotation=45)
