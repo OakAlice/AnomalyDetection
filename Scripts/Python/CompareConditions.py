@@ -7,14 +7,15 @@ from pathlib import Path
 from MainScript import BASE_PATH, DATASET_NAME, TARGET_ACTIVITIES
 
 def plot_comparison(combined_metrics, DATASET_NAME, TARGET_ACTIVITIES, BASE_PATH):
+        # remove error from the combined_metrics
+        combined_metrics = combined_metrics[combined_metrics['behaviour'] != 'error']
+
         base_colors = ["#A63A50", "#FFCF56", "#D4B2D8", "#3891A6", "#3BB273", "#031D44", 
                       "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFB347", "#7D5BA6", 
                       "#FF8C94", "#86A8E7", "#D4A5A5", "#9ED9CC", "#FFE156", "#8B4513"]
-
-        print("Unique model types:", combined_metrics['model_type'].unique())
         
         behaviours = combined_metrics['behaviour'].unique()
-        print(behaviours)
+        behaviours = [b for b in behaviours if b != 'weighted_avg'] # remove average
         
         # Create colour dictionary
         colour_dict = dict(zip(behaviours, base_colors))
@@ -57,7 +58,7 @@ def plot_comparison(combined_metrics, DATASET_NAME, TARGET_ACTIVITIES, BASE_PATH
             x='model_type',
             y='value',
             hue='behaviour',
-            palette=colour_dict,
+            palette=['black'],
             s=200,
             marker='*'))
 
@@ -313,10 +314,15 @@ def main(BASE_PATH, DATASET_NAME, TARGET_ACTIVITIES):
     # load in the metrics for each condition
     combined_metrics_path = Path(f"{BASE_PATH}/Output/Testing/{DATASET_NAME}_all_metrics.csv")
     print("combining the metrics")
-    combined_metrics = combine_metrics(combined_metrics_path, DATASET_NAME)
+    if combined_metrics_path.exists():
+        print("already generated")
+        combined_metrics = pd.read_csv(combined_metrics_path)
+    else:
+        combined_metrics = combine_metrics(combined_metrics_path, DATASET_NAME)
     
     print("beginning dot plots")
     plot_comparison(combined_metrics, DATASET_NAME, TARGET_ACTIVITIES, BASE_PATH)
+
     print("beginning confusion matrix plots")
     combine_confusion_matrices(BASE_PATH, DATASET_NAME)
 

@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 
 # merge the predictions from the individual models
-def merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None):
+def merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES=None):
     print("\nMerging individual model prediction results...")
     all_predictions = []
             
@@ -19,92 +19,84 @@ def merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_
             predictions_df = pd.read_csv(predictions_path)
             
             if MODEL_TYPE.lower() == 'oneclass':
-                # Convert -1/1 to Other/behaviour
-                predictions_df['Predicted_Label'] = predictions_df['Predicted_Label'].map({-1: 'Other', 1: behaviour})
-            
-            # Rename columns to include behaviour name
-            predictions_df = predictions_df.rename(columns={
-                'True_Label': f'True_Label_{behaviour}',
-                'Predicted_Label': f'Predicted_Label_{behaviour}'
-            })
-            
-            # Rename probability columns if they exist
-            prob_cols = [col for col in predictions_df.columns if 'Probability' in col]
-            for col in prob_cols:
+                # Rename columns to include the behaviour name for one-class models
                 predictions_df = predictions_df.rename(columns={
-                    col: f'{col}_{behaviour}'
+                    'Predicted_Label': f'Predicted_{behaviour}',
+                    'Probability': f'Probability_{behaviour}'
                 })
-            
+            elif MODEL_TYPE.lower() == 'binary':
+                # For binary models, select only the desired columns and rename the predicted label
+                predictions_df = predictions_df[['ID', 'Time', 'True_Label', 'Predicted_Label', f'Probability_{behaviour}']]
+                predictions_df = predictions_df.rename(columns={'Predicted_Label': f'Predicted_{behaviour}'})
+        
             all_predictions.append(predictions_df)
                 
         except Exception as e:
             print(f"Error loading predictions for {behaviour}: {str(e)}")
             continue
             
-    # Merge all prediction dataframes on ID and Time
-    if all_predictions:
-        print("\nMerging all prediction files...")
-        merged_predictions = all_predictions[0]
-        for df in all_predictions[1:]:
-            merged_predictions = pd.merge(
-                merged_predictions, 
-                df,
-                on=['ID', 'Time'],
-                how='outer'
-            )
+    if not all_predictions:
+        print("No prediction files were loaded to merge")
+        return None
 
-        # deal with conflicts in the collaboration models
-        def get_best_prediction(row):
-            best_prob = 0
-            best_pred = 'Other'
-            
-            # Check each behaviour's prediction and probability
-            for behaviour in TARGET_ACTIVITIES:
-                pred_col = f'Predicted_Label_{behaviour}'
-                
-                # Get probability based on model type
-                if MODEL_TYPE.lower() == 'oneclass':
-                    prob_col = f'Probability_{behaviour}'
-                    prob = row[prob_col] if prob_col in row else 0
-                else:
-                    # For binary/multiclass, get probability for the predicted class
-                    pred = row[pred_col]
-                    prob_col = f'Probability_{pred}_{behaviour}'
-                    prob = row[prob_col] if prob_col in row else 0
-                
-                # If this prediction is not 'Other' and has higher probability
-                if row[pred_col] != 'Other' and prob > best_prob:
-                    best_prob = prob
-                    best_pred = row[pred_col]
-            
-            return pd.Series({
-                'Predicted_Label': best_pred,
-                'Best_Probability': best_prob
-            })
+    # Start with a copy of the first predictions dataframe (using its True_Label)
+    merged_predictions = all_predictions[0].copy()
+    # For every subsequent prediction dataframe, drop the True_Label column to avoid duplication
+    for df in all_predictions[1:]:
+        if 'True_Label' in df.columns:
+            df = df.drop(columns=['True_Label'])
+        merged_predictions = pd.merge(
+            merged_predictions, 
+            df,
+            on=['ID', 'Time'],
+            how='outer'
+        )
 
-        # Apply the function across all prediction columns
-        prediction_probs = merged_predictions.apply(get_best_prediction, axis=1)
+    # Updated helper function: iterate through each target behaviour and choose the one with the highest probability.
+    def get_best_prediction(row):
+        best_prob = 0
+        best_pred = 'Other'
         
-        # Add the combined predictions and probabilities to the merged dataframe
-        merged_predictions['Predicted_Label'] = prediction_probs['Predicted_Label']
-        merged_predictions['Best_Probability'] = prediction_probs['Best_Probability']
+        # Loop through each behaviour and update if a higher probability is found.
+        for behaviour in TARGET_ACTIVITIES:
+            prob_col = f'Probability_{behaviour}'
+            pred_col = f'Predicted_{behaviour}'
+            prob = row[prob_col] if (prob_col in row and not pd.isnull(row[prob_col])) else 0
+            if prob > best_prob:
+                best_prob = prob
+                best_pred = row[pred_col] if pred_col in row else 'Other'
+        return pd.Series({
+            'Predicted_Label': best_pred,
+            'Best_Probability': best_prob
+        })
 
-        # select the columns we want to keep (now including original predictions)
-        true_label_col = [col for col in merged_predictions.columns if 'True_Label_' in col][0]  # Get first True_Label column
-        pred_cols = [col for col in merged_predictions.columns if 'Predicted_Label_' in col]
-        prob_cols = [col for col in merged_predictions.columns if 'Probability_' in col]
-        
-        columns_to_keep = ['ID', 'Time', true_label_col, 'Predicted_Label', 'Best_Probability'] + pred_cols + prob_cols
-        merged_predictions = merged_predictions[columns_to_keep]
+    # Apply the function to determine the final prediction and its probability.
+    prediction_probs = merged_predictions.apply(get_best_prediction, axis=1)
+    merged_predictions['Predicted_Label'] = prediction_probs['Predicted_Label']
+    merged_predictions['Best_Probability'] = prediction_probs['Best_Probability']
+
+    # Ensure that we have the true label column. If a column named "True_Label" exists, use it;
+    # otherwise fall back to the first column that contains "True_Label" in its name.
+    if 'True_Label' in merged_predictions.columns:
+        true_label_col = 'True_Label'
+    else:
+        true_label_candidates = [col for col in merged_predictions.columns if 'True_Label_' in col]
+        true_label_col = true_label_candidates[0] if true_label_candidates else 'True_Label'
+
+    # Gather individual prediction and probability columns for reference.
+    pred_cols = [col for col in merged_predictions.columns if col.startswith('Predicted_') and col != 'Predicted_Label']
+    prob_cols = [col for col in merged_predictions.columns if col.startswith('Probability_')]
+    
+    columns_to_keep = ['ID', 'Time', true_label_col, 'Predicted_Label', 'Best_Probability'] + pred_cols + prob_cols
+    merged_predictions = merged_predictions[columns_to_keep]
+    if true_label_col != 'True_Label':
         merged_predictions.rename(columns={true_label_col: 'True_Label'}, inplace=True)
 
-        # Save merged predictions
-        merged_path = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_all_predictions_merged.csv")
-        merged_predictions.to_csv(merged_path, index=False)
+    # Save the merged predictions
+    merged_path = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_all_predictions_merged.csv")
+    merged_predictions.to_csv(merged_path, index=False)
 
-        return merged_predictions
-    else:
-        print("No prediction files were loaded to merge")
+    return merged_predictions
 
 def generate_heatmap_confusion_matrix(cm, labels, TARGET_ACTIVITIES, cm_path):
     # Create custom color mask for confusion matrix
@@ -202,15 +194,13 @@ def generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_S
     else:
             cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_confusion_matrix.csv"))
         
-def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHODLING):
+def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING):
     y_true = multiclass_predictions['True_Label']
     y_pred = multiclass_predictions['Predicted_Label']
     labels = sorted(list(set(y_true) | set(y_pred)))
     
     # Get classification report for per-class metrics
     report_dict = classification_report(y_true, y_pred, zero_division=0, output_dict=True, labels=labels)  # Remove sample_weight here
-
-    print(report_dict)
 
     # Calculate weighted metrics manually for the weighted average
     metrics_dict = {}
@@ -301,16 +291,16 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
         if MODEL_TYPE.lower() == 'multi':
             # Generate predictions for multiclass model
             saved_data = load(model_path)
-            predictions_df = predict_single_model(X, y, metadata, saved_data['model'], saved_data['scaler'])
+            multiclass_predictions = predict_single_model(X, y, metadata, saved_data['model'], saved_data['scaler'], MODEL_TYPE)
             # account for the threshold in some conditions
             if THRESHOLDING is not False:
                 print("accounting for threshold")
-                predictions_df['Predicted_Label'] = predictions_df.apply(
+                multiclass_predictions['Predicted_Label'] = multiclass_predictions.apply(
                     lambda row: row['Predicted_Label'] if row['Best_Probability'] >= 0.5 else "Other", 
                     axis=1
                 )
-            predictions_df.to_csv(predictions_file, index=False)
-            return predictions_df
+            multiclass_predictions.to_csv(predictions_file, index=False)
+            return multiclass_predictions
 
         else:
             # Generate predictions for each behaviour in binary/oneclass models
@@ -318,7 +308,7 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
             for behaviour in TARGET_ACTIVITIES:
                 model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
                 saved_data = load(model_path)
-                predictions = predict_single_model(X, y, metadata, saved_data['model'], saved_data['scaler'])
+                predictions = predict_single_model(X, y, metadata, saved_data['model'], saved_data['scaler'], MODEL_TYPE, behaviour)
                 predictions.to_csv(Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_predictions.csv"), index=False)
                 all_predictions.append(predictions)
 
@@ -331,7 +321,7 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
         return None
     
 
-def predict_single_model(X, y, metadata, model, scaler):
+def predict_single_model(X, y, metadata, model, scaler, MODEL_TYPE, target_class=None):
     """Helper function to generate predictions for a single model"""
     # Scale features
     scaler_features = scaler.feature_names_in_
@@ -343,14 +333,17 @@ def predict_single_model(X, y, metadata, model, scaler):
     
     # Make predictions
     predictions = model.predict(X_scaled)
-
-    print(f"predictions made {predictions}")
+    
+    # rename the values for the one-class scenario
+    if MODEL_TYPE.lower() == 'oneclass':
+        predictions = np.where(predictions == -1, 'Other', target_class)
     
     # Get probabilities
     if hasattr(model, 'predict_proba'):
         probabilities = model.predict_proba(X_scaled)
         prob_columns = {f'Probability_{cls}': prob for cls, prob in zip(model.classes_, probabilities.T)}
     else:
+        # When using decision_function (common for one-class scenarios)
         decision_scores = model.decision_function(X_scaled)
         if decision_scores.ndim == 1:  # Binary/OneClass
             probabilities = 1 / (1 + np.exp(-decision_scores))
@@ -371,13 +364,15 @@ def predict_single_model(X, y, metadata, model, scaler):
     for col, values in prob_columns.items():
         results[col] = values
 
-    # add column for the probability of the predicted label
-    results['Best_Probability'] = results.apply(lambda row: row[f"Probability_{row['Predicted_Label']}"], axis=1)
-    
+    # add column for the probability of the predicted label in multi case
+    if MODEL_TYPE.lower() == 'multi':
+        results['Best_Probability'] = results.apply(lambda row: row[f"Probability_{row['Predicted_Label']}"], axis=1)
+
     return results
 
 def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING):
 
+    print(f"Generating results for {TRAINING_SET} with {MODEL_TYPE} model")
     # generate the predictions
     multiclass_predictions = generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING) 
     # generate the confusion matrices
