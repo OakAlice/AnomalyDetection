@@ -45,15 +45,15 @@ def main():
     # HpoOptimisation.append_files(BASE_PATH)
 
     # and then do the final model run
-    # for DATASET_NAME in ['Vehkaoja_Dog']:
+    # for DATASET_NAME in ['Vehkaoja_Dog', "Ferdinandy_Dog"]:
     #     TARGET_ACTIVITIES = target_activities[DATASET_NAME]
     #     for TRAINING_SET in ['all', 'some', 'target']:
-    #         for MODEL_TYPE in ['multi']:
+    #         for MODEL_TYPE in ['multi', 'binary', 'oneclass']:
                 
     #             if MODEL_TYPE == 'multi':
-    #                 for BEHAVIOUR_SET in ['Activity']:
+    #                 for BEHAVIOUR_SET in ['Activity', 'Other']:
     #                     if BEHAVIOUR_SET == 'Activity':
-    #                         for THRESHOLDING in [True]:
+    #                         for THRESHOLDING in [True, False]:
                                 
     #                             #TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
     #                             #                  TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
@@ -68,52 +68,22 @@ def main():
     #             else:
     #                 #TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
     #                 #                  TARGET_ACTIVITIES, BEHAVIOUR_SET = None, THRESHOLDING = False)
+    #                 THRESHOLDING = False
     #                 TestModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
     #                                 TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
 
 
     # DATASET_NAME = "Vehkaoja_Dog"
     # TARGET_ACTIVITIES = target_activities[DATASET_NAME]
-    # TRAINING_SET = "all"
+    # TRAINING_SET = "some"
     # MODEL_TYPE = "multi"
     # BEHAVIOUR_SET = "Activity"
-    # for THRESHOLDING in [False, True]:
-    #     TestModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
-
-
+    # THRESHOLDING = True
     
-    #             #HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
-
-    #             #HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
-    #             #TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
-                
-    #             # Define test configurations based on MODEL_TYPE
-    #             test_configs = []
-    #             if MODEL_TYPE == 'multi':
-    #                 test_configs = [
-    #                     ('Activity', 0.5),
-    #                     ('Activity', False),
-    #                     ('Other', False)
-    #                 ]
-    #             else:
-    #                 test_configs = [('Activity', False)]
-                
-    #             # Run tests for each configuration
-    #             for BEHAVIOUR_SET, THRESHOLDING in test_configs:
-    #                 TestModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-    #                              TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
-    
-    # for DATASET_NAME in ['Ferdinandy_Dog', "Vehkaoja_Dog"]:
-    #     TARGET_ACTIVITIES = target_activities[DATASET_NAME]
+    # TestModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
     
     # First run the comparisons to generate data
-    for DATASET_NAME in ['Vehkaoja_Dog', 'Ferdinandy_Dog']:
-        TARGET_ACTIVITIES = target_activities[DATASET_NAME]
-        CompareConditions.main(BASE_PATH, DATASET_NAME, TARGET_ACTIVITIES)
-
-    # # Then plot the results after data has been generated
-    CompareConditions.plot_auc_comparison(BASE_PATH)
-    CompareConditions.elapsed_time(BASE_PATH)
+    CompareConditions.main(BASE_PATH, target_activities)
 
 if __name__ == "__main__":
     main()

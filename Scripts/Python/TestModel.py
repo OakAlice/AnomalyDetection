@@ -92,10 +92,6 @@ def merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_
     if true_label_col != 'True_Label':
         merged_predictions.rename(columns={true_label_col: 'True_Label'}, inplace=True)
 
-    # Save the merged predictions
-    merged_path = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_all_predictions_merged.csv")
-    merged_predictions.to_csv(merged_path, index=False)
-
     return merged_predictions
 
 def generate_heatmap_confusion_matrix(cm, labels, TARGET_ACTIVITIES, cm_path):
@@ -198,6 +194,7 @@ def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MO
     y_true = multiclass_predictions['True_Label']
     y_pred = multiclass_predictions['Predicted_Label']
     labels = sorted(list(set(y_true) | set(y_pred)))
+    # labels = sorted(list(set(y_pred))) # to just calculate for the predicted ones
     
     # Get classification report for per-class metrics
     report_dict = classification_report(y_true, y_pred, zero_division=0, output_dict=True, labels=labels)  # Remove sample_weight here
@@ -287,7 +284,7 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
         X = df.drop(columns=['Activity', 'ID', 'Time'])
         y = df['Activity']
         metadata = df[['ID', 'Time']]
-
+    
         if MODEL_TYPE.lower() == 'multi':
             # Generate predictions for multiclass model
             saved_data = load(model_path)
@@ -299,8 +296,6 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
                     lambda row: row['Predicted_Label'] if row['Best_Probability'] >= 0.5 else "Other", 
                     axis=1
                 )
-            multiclass_predictions.to_csv(predictions_file, index=False)
-            return multiclass_predictions
 
         else:
             # Generate predictions for each behaviour in binary/oneclass models
@@ -314,7 +309,23 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
 
             # Merge predictions from all behaviors
             multiclass_predictions = merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES)
-            return multiclass_predictions
+            
+        # recoding y to account for the other class
+        print("renaming the classes") 
+        if MODEL_TYPE.lower() != 'multi':
+            # for one-class and binary class, everything not in target activities is "Other"
+            multiclass_predictions['True_Label'] = multiclass_predictions['True_Label'].apply(lambda x: 'Other' if x not in TARGET_ACTIVITIES else x)
+            multiclass_predictions['Predicted_Label'] = multiclass_predictions['Predicted_Label'].apply(lambda x: 'Other' if x not in TARGET_ACTIVITIES else x)
+        else:
+            # for multi class, everything not in trained behaviours is "Other"
+            possible_behaviours = list(set(multiclass_predictions['Predicted_Label']))
+            print(f"possible behaviours: {possible_behaviours}")
+            multiclass_predictions['True_Label'] = multiclass_predictions['True_Label'].apply(lambda x: 'Other' if x not in possible_behaviours else x)
+            multiclass_predictions['Predicted_Label'] = multiclass_predictions['Predicted_Label'].apply(lambda x: 'Other' if x not in possible_behaviours else x)
+      
+        # otherwise, keep the original y for the baseline control case  
+        multiclass_predictions.to_csv(predictions_file, index=False)
+        return multiclass_predictions
 
     except Exception as e:
         print(f"Error generating predictions: {str(e)}")
@@ -337,7 +348,7 @@ def predict_single_model(X, y, metadata, model, scaler, MODEL_TYPE, target_class
     # rename the values for the one-class scenario
     if MODEL_TYPE.lower() == 'oneclass':
         predictions = np.where(predictions == -1, 'Other', target_class)
-    
+
     # Get probabilities
     if hasattr(model, 'predict_proba'):
         probabilities = model.predict_proba(X_scaled)
@@ -371,10 +382,10 @@ def predict_single_model(X, y, metadata, model, scaler, MODEL_TYPE, target_class
     return results
 
 def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING):
-
     print(f"Generating results for {TRAINING_SET} with {MODEL_TYPE} model")
     # generate the predictions
     multiclass_predictions = generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING) 
+        
     # generate the confusion matrices
     generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
     # calculate the metrics
