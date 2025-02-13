@@ -5,12 +5,12 @@ import os  # Add this import for extra path handling compatibility
 from MainScript import BASE_PATH
 from FeatureSelectionFunctions import clean_training_data
 
-def remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES):
+def remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES, FOLD):
     """
     Highly custom function for removing speciifc behaviours from the datasets.
     To create the Open Set Test conditions.
     """
-    input_path = Path(BASE_PATH) / "Data" / "Split_data" / f"{DATASET_NAME}_train.csv"
+    input_path = Path(BASE_PATH) / "Output" / f"fold_{FOLD}" / "Split_data" / f"{DATASET_NAME}_train.csv"
     # Add low_memory=False to avoid DtypeWarning
     df = pd.read_csv(input_path, low_memory=False)
 
@@ -31,7 +31,7 @@ def remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES):
         print(counts)
         # Select top 50% of activities by frequency
         n_activities = len(counts)
-        common_activities = counts.index[:n_activities//2].tolist()
+        common_activities = counts.index[:n_activities//4].tolist() # select a quarter of the activities
             
         # Combine common activities with target activities and remove duplicates
         common_activities = list(set(common_activities + TARGET_ACTIVITIES))
@@ -48,7 +48,7 @@ def remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES):
 
     return df
 
-def create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES):
+def create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, FOLD):
     """
     Create and save datasets based on specified parameters
     
@@ -85,13 +85,13 @@ def create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MO
             behaviour_df['Activity'] = activity_column
             
             # Save the dataset
-            save_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv")
+            save_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv")
             behaviour_df.to_csv(save_path, index=False)
     else:
         for behaviour in ["Activity", "Other"]:
             if behaviour == "Activity":
                 # Save the original dataframe
-                save_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_Activity.csv")
+                save_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_Activity.csv")
                 df_clean.to_csv(save_path, index=False)
             elif behaviour == "Other":
                 # Use numpy where for vectorized operation
@@ -102,14 +102,14 @@ def create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MO
                 behaviour_df = df_clean.copy(deep=False)
                 behaviour_df['Activity'] = activity_column
                 
-                save_path = Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_Other.csv")
+                save_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_Other.csv")
                 behaviour_df.to_csv(save_path, index=False)
 
     return(clean_columns)
 
-def split_test_data(BASE_PATH, DATASET_NAME):
-    test_path = Path(BASE_PATH) / "Data" / "Split_data" / f"{DATASET_NAME}_test.csv"
-    train_path = Path(BASE_PATH) / "Data" / "Split_data" / f"{DATASET_NAME}_train.csv"
+def split_test_data(BASE_PATH, DATASET_NAME, fold):
+    test_path = Path(BASE_PATH) / "Output" / f"fold_{fold}" / "Split_data" / f"{DATASET_NAME}_test.csv"
+    train_path = Path(BASE_PATH) / "Output" / f"fold_{fold}" / "Split_data" / f"{DATASET_NAME}_train.csv"
     
     if test_path.exists():
         print(f"Test data already split for {DATASET_NAME}. If you change it, you will need to delete the file and also redo everything.")
@@ -130,18 +130,18 @@ def split_test_data(BASE_PATH, DATASET_NAME):
         df_test.to_csv(test_path, index=False)
         df_train.to_csv(train_path, index=False)
 
-def main():
+def main(DATASET_NAME, TARGET_ACTIVITIES, FOLD):
     # split out the test data
-    split_test_data(BASE_PATH, DATASET_NAME)
+    split_test_data(BASE_PATH, DATASET_NAME, FOLD)
     
     # generate the individual datasets used in each subsequent model design
     for TRAINING_SET in ['all', 'some', 'target']:
-        df = remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES)
+        df = remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES, FOLD)
             
         for MODEL_TYPE in ['binary', 'oneclass', 'multi']:
             clean_columns = clean_training_data(training_data=df, corr_threshold = 0.9)
             # next function will create and save the dataframes]
-            create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES)
+            create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, FOLD)
 
 if __name__ == "__main__":
     main()
