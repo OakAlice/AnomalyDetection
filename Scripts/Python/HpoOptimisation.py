@@ -13,7 +13,7 @@ import time
 import matplotlib.pyplot as plt
 import os
 
-def save_results(results, dataset_name, training_set, model_type, base_path, behaviour_set, thresholding):
+def save_results(results, dataset_name, training_set, model_type, base_path, behaviour_set, thresholding, fold):
     """Save optimization results to CSV"""
     try:
         results_df = pd.DataFrame.from_dict(results, orient='index')
@@ -30,11 +30,11 @@ def save_results(results, dataset_name, training_set, model_type, base_path, beh
         
         if model_type.lower() == 'multi':
             if thresholding is not None:
-                output_path = Path(f"{base_path}/Output/Tuning/{dataset_name}_{training_set}_{model_type}_{behaviour_set}_threshold_optimisation_results.csv")
+                output_path = Path(f"{base_path}/Output/fold_{fold}/Tuning/{dataset_name}_{training_set}_{model_type}_{behaviour_set}_threshold_optimisation_results.csv")
             else:
-                output_path = Path(f"{base_path}/Output/Tuning/{dataset_name}_{training_set}_{model_type}_{behaviour_set}_NOthreshold_optimisation_results.csv")
+                output_path = Path(f"{base_path}/Output/fold_{fold}/Tuning/{dataset_name}_{training_set}_{model_type}_{behaviour_set}_NOthreshold_optimisation_results.csv")
         else:
-            output_path = Path(f"{base_path}/Output/Tuning/{dataset_name}_{training_set}_{model_type}_optimisation_results.csv")
+            output_path = Path(f"{base_path}/Output/fold_{fold}/Tuning/{dataset_name}_{training_set}_{model_type}_optimisation_results.csv")
         
 
         print(f"saved to {output_path}")
@@ -127,16 +127,29 @@ def optimize_svm(X, y, groups, thresholding):
     
     return best_params, -best_score
 
-def main(base_path, dataset_name, training_set, model_type, target_activities, behaviour_set, thresholding):
+def main(base_path, dataset_name, training_set, model_type, target_activities, behaviour_set = None, thresholding = False, fold = None):
     """Main optimization function"""
+
+    if model_type.lower() == 'multi':
+        if thresholding is not False:
+            output_path = Path(f"{base_path}/Output/fold_{fold}/Tuning/{dataset_name}_{training_set}_{model_type}_{behaviour_set}_threshold_optimisation_results.csv")
+        else:
+            output_path = Path(f"{base_path}/Output/fold_{fold}/Tuning/{dataset_name}_{training_set}_{model_type}_{behaviour_set}_NOthreshold_optimisation_results.csv")
+    else:
+        output_path = Path(f"{base_path}/Output/fold_{fold}/Tuning/{dataset_name}_{training_set}_{model_type}_optimisation_results.csv")
+    
+    if output_path.exists():
+        print(f"File already exists: {output_path}")
+        return
+
     try:
         optimization_results = {}
         scaler = StandardScaler()
 
         # Handle multiclass case
         if model_type.lower() == 'multi':
-            df = pd.read_csv(Path(f"{base_path}/Data/Split_data/{dataset_name}_{training_set}_{model_type}_{behaviour_set}.csv"))
-            df = df.groupby(['Activity', 'ID']).head(500)
+            df = pd.read_csv(Path(f"{base_path}/Output/fold_{fold}/Split_data/{dataset_name}_{training_set}_{model_type}_{behaviour_set}.csv"))
+            df = df.groupby(['Activity', 'ID']).head(100)
             
             X = scaler.fit_transform(df.drop(['Activity', 'ID'], axis=1))
             y = df['Activity']
@@ -163,7 +176,7 @@ def main(base_path, dataset_name, training_set, model_type, target_activities, b
             for behaviour in target_activities:
                 try:
                     print(f"\nProcessing {behaviour}...")
-                    df = pd.read_csv(Path(f"{base_path}/Data/Split_data/{dataset_name}_{training_set}_{model_type}_{behaviour}.csv"))
+                    df = pd.read_csv(Path(f"{base_path}/Output/fold_{fold}/Split_data/{dataset_name}_{training_set}_{model_type}_{behaviour}.csv"))
                     df = df.groupby(['Activity', 'ID']).head(100)
                     
                     X = scaler.fit_transform(df.drop(['Activity', 'ID'], axis=1))
@@ -190,7 +203,7 @@ def main(base_path, dataset_name, training_set, model_type, target_activities, b
                     print(f"Error processing {behaviour}: {str(e)}")
                     continue
         
-        save_results(optimization_results, dataset_name, training_set, model_type, base_path, behaviour_set, thresholding)
+        save_results(optimization_results, dataset_name, training_set, model_type, base_path, behaviour_set, thresholding, fold)
         print("\nOptimization completed successfully!")
         
     except Exception as e:
@@ -275,7 +288,7 @@ def generate_learning_curves(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIV
         plt.grid(True)
             
         # Create directory if it doesn't exist
-        output_dir = os.path.join(BASE_PATH, 'Output', 'Tuning')
+        output_dir = os.path.join(BASE_PATH, 'Output', 'fold_{fold}', 'Tuning')
         os.makedirs(output_dir, exist_ok=True)
         
         # Save plot
@@ -290,8 +303,8 @@ def generate_learning_curves(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIV
         print(f"Error in optimization: {str(e)}")
         raise
 
-def append_files(BASE_PATH):
-    path = f"{BASE_PATH}/Output/Tuning"
+def append_files(BASE_PATH, FOLD):
+    path = f"{BASE_PATH}/Output/fold_{FOLD}/Tuning"
     
     # Get all CSV files in the directory
     all_files = [f for f in os.listdir(path) if f.endswith('_optimisation_results.csv')]
@@ -336,5 +349,5 @@ def append_files(BASE_PATH):
     print(f"Combined results saved to: {output_path}")
 
 if __name__ == "__main__":
-    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
+    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
 

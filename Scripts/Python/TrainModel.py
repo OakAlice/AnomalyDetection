@@ -131,10 +131,10 @@ def find_matching_file(path_pattern):
 
     return df
 
-def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None, BEHAVIOUR_SET = None, THRESHOLDING = None):
+def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None, BEHAVIOUR_SET = None, THRESHOLDING = False, FOLD = 0):
 
     # load the hyperparameters
-    parameters_path = f"{BASE_PATH}/Output/Tuning/Combined_optimisation_results.csv"
+    parameters_path = f"{BASE_PATH}/Output/fold_{FOLD}/Tuning/Combined_optimisation_results.csv"
     params = pd.read_csv(parameters_path)
     
     # Add debug prints to check the filtering conditions
@@ -164,13 +164,13 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
 
     if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
         for behaviour in TARGET_ACTIVITIES:
-            model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
+            model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
             
             if model_path.exists():
                 print(f"Model {model_path} already exists, skipping")
                 continue
 
-            df = find_matching_file(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv"))
+            df = find_matching_file(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv"))
             print(f"unique activities: {df['Activity'].unique()}")
             print(f"unique ids: {df['ID'].unique()}")
             # Take up to 200 samples per group, or all available if fewer
@@ -201,18 +201,18 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
     else:
         if BEHAVIOUR_SET == 'Activity' and THRESHOLDING is not False:
             threshold = 'threshold'
-            model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_{threshold}_model.joblib")
+            model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_{threshold}_model.joblib")
         elif BEHAVIOUR_SET == 'Activity' and THRESHOLDING is False:
             threshold = 'NOthreshold'
-            model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_{threshold}_model.joblib")
+            model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_{threshold}_model.joblib")
         else:
-            model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_model.joblib")
+            model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_model.joblib")
         
         if model_path.exists():
             print(f"Model {model_path} already exists, skipping")
             return
 
-        df = find_matching_file(Path(f"{BASE_PATH}/Data/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}.csv"))
+        df = find_matching_file(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}.csv"))
         
 
         df = df.groupby(['ID', 'Activity']).apply(
@@ -247,4 +247,4 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
         save_model(model, scaler, model_path)
 
 if __name__ == "__main__":
-    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
+    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
