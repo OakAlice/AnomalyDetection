@@ -9,13 +9,13 @@ import matplotlib.pyplot as plt
 
 
 # merge the predictions from the individual models
-def merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES=None):
+def merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES=None, FOLD=None):
     print("\nMerging individual model prediction results...")
     all_predictions = []
             
     for behaviour in TARGET_ACTIVITIES:
         try:
-            predictions_path = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_predictions.csv")                 
+            predictions_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_predictions.csv")                 
             predictions_df = pd.read_csv(predictions_path)
             
             if MODEL_TYPE.lower() == 'oneclass':
@@ -146,7 +146,7 @@ def generate_heatmap_confusion_matrix(cm, labels, TARGET_ACTIVITIES, cm_path):
     plt.savefig(cm_path, bbox_inches='tight', dpi=300)
     plt.close()
 
-def generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHODLING):
+def generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHODLING, REASSIGN_LABELS, FOLD):
     y_true = multiclass_predictions['True_Label']
     y_pred = multiclass_predictions['Predicted_Label']
     labels = sorted(list(set(y_true) | set(y_pred)))
@@ -167,13 +167,16 @@ def generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_S
     if MODEL_TYPE.lower() == 'multi':
         if BEHAVIOUR_SET.lower() == 'activity':
             if THRESHODLING is not False:
-                cm_path = Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_threshold_confusion_matrix.png")
+                cm_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_threshold_confusion_matrix.png")
             else:
-                cm_path = Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_confusion_matrix.png") 
+                if REASSIGN_LABELS is not False:
+                    cm_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_confusion_matrix.png") 
+                else:
+                    cm_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_fullclasses_confusion_matrix.png") 
         else:
-            cm_path = Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_confusion_matrix.png")
+            cm_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_confusion_matrix.png")
     else:
-        cm_path = Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_confusion_matrix.png")
+        cm_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_confusion_matrix.png")
         
     generate_heatmap_confusion_matrix(cm, labels, TARGET_ACTIVITIES, cm_path)
 
@@ -182,15 +185,18 @@ def generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_S
     if MODEL_TYPE.lower() == 'multi':
         if BEHAVIOUR_SET.lower() == 'activity':
             if THRESHODLING is not False:
-                cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_threshold_confusion_matrix.csv"))
+                cm_df.to_csv(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_threshold_confusion_matrix.csv"))
             else:
-                cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_confusion_matrix.csv")) 
+                if REASSIGN_LABELS is not False:
+                    cm_df.to_csv(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_confusion_matrix.csv")) 
+                else:
+                    cm_df.to_csv(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_fullclasses_confusion_matrix.csv")) 
         else:
-            cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_confusion_matrix.csv"))
+            cm_df.to_csv(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_confusion_matrix.csv"))
     else:
-            cm_df.to_csv(Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_confusion_matrix.csv"))
+            cm_df.to_csv(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_confusion_matrix.csv"))
         
-def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING):
+def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD):
     y_true = multiclass_predictions['True_Label']
     y_pred = multiclass_predictions['Predicted_Label']
     labels = sorted(list(set(y_true) | set(y_pred)))
@@ -205,6 +211,7 @@ def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MO
         # Create binary labels for current class
         y_true_binary = (y_true == label).astype(int)
         y_pred_binary = (y_pred == label).astype(int)
+        count = y_true_binary.sum()
         
         try:
             # Calculate AUC
@@ -219,7 +226,8 @@ def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MO
             'F1': report_dict[label]['f1-score'],
             'Precision': report_dict[label]['precision'],
             'Recall': report_dict[label]['recall'],
-            'Support': report_dict[label]['support']
+            'Support': report_dict[label]['support'],
+            'Count': count
         }
     
     # Calculate true weighted averages based on true class prevalence
@@ -236,7 +244,8 @@ def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MO
                         for label in valid_labels) / total_samples,
         'Recall': sum(metrics_dict[label]['Recall'] * class_frequencies[label] 
                         for label in valid_labels) / total_samples,
-        'Support': total_samples
+        'Support': total_samples,
+        'Count': total_samples
     }
     metrics_df = pd.DataFrame.from_dict(metrics_dict, orient='index')
             
@@ -244,11 +253,14 @@ def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MO
     if MODEL_TYPE.lower() == 'multi':
         if BEHAVIOUR_SET == 'Activity':
             if THRESHOLDING is not False:
-                metrics_path = Path(f"{BASE_PATH}/Output/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_threshold_metrics.csv")
+                metrics_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_threshold_metrics.csv")
             else:
-                metrics_path = Path(f"{BASE_PATH}/Output/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_metrics.csv")
+                if REASSIGN_LABELS is not False:    
+                    metrics_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_metrics.csv")
+                else:
+                    metrics_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_fullclasses_metrics.csv")
         else:
-            metrics_path = Path(f"{BASE_PATH}/Output/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_metrics.csv")
+            metrics_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_metrics.csv")
                
     else:
         metrics_path = Path(f"{BASE_PATH}/Output/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_metrics.csv")
@@ -256,21 +268,21 @@ def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MO
     metrics_df.to_csv(metrics_path)            
     return metrics_dict
 
-def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING):
+def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD):
     try:
 
         # Determine the predictions file path based on model type and settings
         if MODEL_TYPE.lower() == 'multi':
             if BEHAVIOUR_SET.lower() == 'activity':
 
-                predictions_file = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_multi_Activity_{'threshold' if THRESHOLDING else 'NOthreshold'}_predictions.csv")
-                model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_multi_Activity_{'threshold' if THRESHOLDING else 'NOthreshold'}_model.joblib")
+                predictions_file = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_multi_Activity_{'threshold' if THRESHOLDING else 'NOthreshold'}_predictions.csv")
+                model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_multi_Activity_{'threshold' if THRESHOLDING else 'NOthreshold'}_model.joblib")
 
             else:  # BEHAVIOUR_SET == 'other'
-                predictions_file = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_multi_Other_predictions.csv")
-                model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_multi_Other_model.joblib")
+                predictions_file = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_multi_Other_predictions.csv")
+                model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_multi_Other_model.joblib")
         else:  # binary or oneclass
-            predictions_file = Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_all_predictions_merged.csv")
+            predictions_file = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_all_predictions_merged.csv")
 
         # If predictions already exist, load them and exit function
         if predictions_file.exists():
@@ -280,7 +292,7 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
 
         # Load test data
         print(f"Loading test data from {DATASET_NAME}_test.csv")
-        df = pd.read_csv(Path(BASE_PATH) / "Data" / "Split_data" / f"{DATASET_NAME}_test.csv")
+        df = pd.read_csv(Path(BASE_PATH) / "Output" / "fold_{FOLD}" / "Split_data" / f"{DATASET_NAME}_test.csv")
         X = df.drop(columns=['Activity', 'ID', 'Time'])
         y = df['Activity']
         metadata = df[['ID', 'Time']]
@@ -301,28 +313,15 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
             # Generate predictions for each behaviour in binary/oneclass models
             all_predictions = []
             for behaviour in TARGET_ACTIVITIES:
-                model_path = Path(f"{BASE_PATH}/Output/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
+                model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
                 saved_data = load(model_path)
                 predictions = predict_single_model(X, y, metadata, saved_data['model'], saved_data['scaler'], MODEL_TYPE, behaviour)
-                predictions.to_csv(Path(f"{BASE_PATH}/Output/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_predictions.csv"), index=False)
+                predictions.to_csv(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_predictions.csv"), index=False)
                 all_predictions.append(predictions)
 
             # Merge predictions from all behaviors
-            multiclass_predictions = merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES)
-            
-        # recoding y to account for the other class
-        print("renaming the classes") 
-        if MODEL_TYPE.lower() != 'multi':
-            # for one-class and binary class, everything not in target activities is "Other"
-            multiclass_predictions['True_Label'] = multiclass_predictions['True_Label'].apply(lambda x: 'Other' if x not in TARGET_ACTIVITIES else x)
-            multiclass_predictions['Predicted_Label'] = multiclass_predictions['Predicted_Label'].apply(lambda x: 'Other' if x not in TARGET_ACTIVITIES else x)
-        else:
-            # for multi class, everything not in trained behaviours is "Other"
-            possible_behaviours = list(set(multiclass_predictions['Predicted_Label']))
-            print(f"possible behaviours: {possible_behaviours}")
-            multiclass_predictions['True_Label'] = multiclass_predictions['True_Label'].apply(lambda x: 'Other' if x not in possible_behaviours else x)
-            multiclass_predictions['Predicted_Label'] = multiclass_predictions['Predicted_Label'].apply(lambda x: 'Other' if x not in possible_behaviours else x)
-      
+            multiclass_predictions = merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, FOLD)
+        
         # otherwise, keep the original y for the baseline control case  
         multiclass_predictions.to_csv(predictions_file, index=False)
         return multiclass_predictions
@@ -381,15 +380,31 @@ def predict_single_model(X, y, metadata, model, scaler, MODEL_TYPE, target_class
 
     return results
 
-def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING):
+def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD):
     print(f"Generating results for {TRAINING_SET} with {MODEL_TYPE} model")
     # generate the predictions
-    multiclass_predictions = generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING) 
-        
+    multiclass_predictions = generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD) 
+    
+    if REASSIGN_LABELS is not False:
+    # reassign the labels to add in the "Other class"
+        if MODEL_TYPE.lower() != 'multi':
+            # for one-class and binary class, everything not in target activities is "Other"
+            multiclass_predictions['True_Label'] = multiclass_predictions['True_Label'].apply(lambda x: 'Other' if x not in TARGET_ACTIVITIES else x)
+            multiclass_predictions['Predicted_Label'] = multiclass_predictions['Predicted_Label'].apply(lambda x: 'Other' if x not in TARGET_ACTIVITIES else x)
+        else:
+            # for multi class, everything not in trained behaviours is "Other"
+            possible_behaviours = list(set(multiclass_predictions['Predicted_Label']))
+            print(f"possible behaviours: {possible_behaviours}")
+            multiclass_predictions['True_Label'] = multiclass_predictions['True_Label'].apply(lambda x: 'Other' if x not in possible_behaviours else x)
+            multiclass_predictions['Predicted_Label'] = multiclass_predictions['Predicted_Label'].apply(lambda x: 'Other' if x not in possible_behaviours else x)
+    else:
+        # do nothing
+        print("not reassigning labels")
+        print(multiclass_predictions['True_Label'].unique())
     # generate the confusion matrices
-    generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
+    generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD)
     # calculate the metrics
-    calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
+    calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD)
 
 if __name__ == "__main__":
-    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING)
+    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
