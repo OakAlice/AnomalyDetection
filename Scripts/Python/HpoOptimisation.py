@@ -130,6 +130,8 @@ def optimize_svm(X, y, groups, thresholding):
 def main(base_path, dataset_name, training_set, model_type, target_activities, behaviour_set = None, thresholding = False, fold = None):
     """Main optimization function"""
 
+    print(f"optimising {dataset_name} with {training_set} {model_type} {behaviour_set} {thresholding} {fold}")
+
     if model_type.lower() == 'multi':
         if thresholding is not False:
             output_path = Path(f"{base_path}/Output/fold_{fold}/Tuning/{dataset_name}_{training_set}_{model_type}_{behaviour_set}_threshold_optimisation_results.csv")
@@ -141,6 +143,8 @@ def main(base_path, dataset_name, training_set, model_type, target_activities, b
     if output_path.exists():
         print(f"File already exists: {output_path}")
         return
+    else:
+        print(f"File does not exist: {output_path}")
 
     try:
         optimization_results = {}

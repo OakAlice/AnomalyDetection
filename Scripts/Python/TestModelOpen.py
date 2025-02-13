@@ -263,7 +263,7 @@ def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MO
             metrics_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_metrics.csv")
                
     else:
-        metrics_path = Path(f"{BASE_PATH}/Output/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_metrics.csv")
+        metrics_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_metrics.csv")
             
     metrics_df.to_csv(metrics_path)            
     return metrics_dict
@@ -292,7 +292,7 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
 
         # Load test data
         print(f"Loading test data from {DATASET_NAME}_test.csv")
-        df = pd.read_csv(Path(BASE_PATH) / "Output" / "fold_{FOLD}" / "Split_data" / f"{DATASET_NAME}_test.csv")
+        df = pd.read_csv(Path(BASE_PATH) / "Output" / f"fold_{FOLD}" / "Split_data" / f"{DATASET_NAME}_test.csv")
         X = df.drop(columns=['Activity', 'ID', 'Time'])
         y = df['Activity']
         metadata = df[['ID', 'Time']]
