@@ -173,40 +173,6 @@ def plot_auc_comparison(combined_metrics, BASE_PATH):
     plt.savefig(plot_path, bbox_inches='tight', dpi=300)
     plt.close()
 
-def combine_metrics(combined_metrics_path, DATASET_NAME):
-    if combined_metrics_path.exists():
-        combined_metrics = pd.read_csv(combined_metrics_path)
-    else:            
-        metrics_files = Path(f"{BASE_PATH}/Output/Testing/Metrics/").glob(f"{DATASET_NAME}*.csv")
-        
-        all_metrics = []
-        for file in metrics_files:
-            metrics = pd.read_csv(file)
-            # Add filename as a column
-            metrics['file'] = file.name
-            
-            # Parse filename components correctly
-            filename_parts = file.name.split('_')
-            metrics['dataset'] = filename_parts[0] 
-            metrics['training_set'] = filename_parts[2]
-            metrics['model_type'] = filename_parts[3]
-            if filename_parts[3].lower() == "multi":
-                if "Other" in filename_parts[4]:
-                    metrics['model_type'] = f"{filename_parts[3]}_{filename_parts[4]}"
-                else:
-                    metrics['model_type'] = f"{filename_parts[3]}_{filename_parts[4]}_{filename_parts[5].replace('_metrics.csv', '')}"
-        
-            # name the first column
-            metrics = metrics.rename(columns={metrics.columns[0]: 'behaviour'})
-            
-            all_metrics.append(metrics)
-        
-        combined_metrics = pd.concat(all_metrics, ignore_index=True)
-        combined_metrics.to_csv(combined_metrics_path, index=False)
-        print(f"combined_metrics {combined_metrics}")
-
-    return(combined_metrics)
-
 def combine_confusion_matrices(BASE_PATH, DATASET_NAME):
     confusion_matrices_path = Path(f"{BASE_PATH}/Output/Testing/ConfusionMatrices/")
     
@@ -330,43 +296,83 @@ def plot_training_set_comparison(combined_metrics, BASE_PATH):
     plt.savefig(plot_path, bbox_inches='tight')
     plt.close()
 
-def main(BASE_PATH, target_activities):
 
-    # for DATASET_NAME in ['Vehkaoja_Dog', 'Ferdinandy_Dog']:
-    #     TARGET_ACTIVITIES = target_activities[DATASET_NAME]
-    #     # load in the metrics for each condition
-    #     combined_metrics_path = Path(f"{BASE_PATH}/Output/Testing/{DATASET_NAME}_all_metrics.csv")
-    #     print("combining the metrics")
-    #     if combined_metrics_path.exists():
-    #         print("already generated")
-    #         combined_metrics = pd.read_csv(combined_metrics_path)
-    #     else:
-    #         combined_metrics = combine_metrics(combined_metrics_path, DATASET_NAME)
+def combine_metrics_per_fold(BASE_PATH):
+    # for combining all the metrics within each fold
+    all_metrics = []
+    for fold in [1,2,3]:
+        # read all files in the the metrics folder
+        folder_path = Path(f"{BASE_PATH}/Output/fold_{fold}/Testing/Metrics/")
+        metrics_files = list(folder_path.glob('*.csv'))
 
-    # # combine all the metrics
-    save_path = Path(f"{BASE_PATH}/Output/Testing/all_combined_metrics.csv")
-    # if save_path.exists():
-    #     print("already generated")
-    #     combined_metrics = pd.read_csv(save_path)
-    # else:
-    #     combined_metrics_path = Path(f"{BASE_PATH}/Output/Testing/")
-    #     all_metrics = []
-    #     for file in combined_metrics_path.glob("*.csv"):
-    #         metrics = pd.read_csv(file)
-    #         all_metrics.append(metrics)
-    #     combined_metrics = pd.concat(all_metrics, ignore_index=True)
-    #     combined_metrics.to_csv(save_path, index=False)
+        for file in metrics_files:
+            metrics = pd.read_csv(file)
+            # Add filename as a column
+            metrics['file'] = file.name
+
+            # Parse filename components correctly
+            filename_parts = file.name.split('_')
+            metrics['dataset'] = filename_parts[0] 
+            metrics['training_set'] = filename_parts[2]
+            metrics['model_type'] = filename_parts[3]
+            if filename_parts[3].lower() == "multi":
+                if "Activity" in filename_parts[4]:
+                    metrics['model_type'] = f"{filename_parts[3]}_{filename_parts[4]}_{filename_parts[5]}"
+                    if "fullclasses" in filename_parts[6]:
+                        metrics['closed_open'] = f"{filename_parts[6]}_{filename_parts[7].replace('_metrics.csv', '')}"
+                if "Other" in filename_parts[4]:
+                    metrics['model_type'] = f"{filename_parts[3]}_{filename_parts[4]}"
+
+        # name the first column
+        metrics = metrics.rename(columns={metrics.columns[0]: 'behaviour'})
+        
+        all_metrics.append(metrics)
+        combined_metrics = pd.concat(all_metrics, ignore_index=True)
+
+        # save it to file
+        save_path = Path(f"{BASE_PATH}/Output/fold_{fold}/Testing/Metrics/{DATASET_NAME}_all_metrics.csv")
+        combined_metrics.to_csv(save_path, index=False)
+
+def combine_metrics_across_folds(BASE_PATH):
+    # for combining all the metrics across all folds
+    all_metrics = []
+    for fold in [1,2,3]:
+        metrics = pd.read_csv(f"{BASE_PATH}/Output/fold_{fold}/Testing/{DATASET_NAME}_all_metrics.csv")
+        metrics['fold'] = fold
+        all_metrics.append(metrics)
+
+    combined_metrics = pd.concat(all_metrics, ignore_index=True)
+
+    # #combine all the metrics
+    save_path = Path(f"{BASE_PATH}/Output/Combined/all_combined_metrics.csv")
+    combined_metrics.to_csv(save_path, index=False)
+
+def average_metrics_across_folds(BASE_PATH):
+    # for averaging the metrics across all folds
+    combined_metrics = pd.read_csv(Path(f"{BASE_PATH}/Output/Combined/all_combined_metrics.csv"))
     
-    # print("beginning per dataset plots")
+    # average the metrics across all folds, save mean and std
+    averaged_metrics = combined_metrics.groupby(['dataset', 'model_type', 'training_set', 'behaviour']).agg({'AUC': ['mean', 'std']}).reset_index()
+
+    # save the averaged metrics
+    save_path = Path(f"{BASE_PATH}/Output/Combined/all_averaged_metrics.csv")
+    averaged_metrics.to_csv(save_path, index=False)
+
+def main(BASE_PATH, target_activities):
+    combine_metrics_per_fold(BASE_PATH)
+    combine_metrics_across_folds(BASE_PATH)
+    average_metrics_across_folds(BASE_PATH)
+
+    # now generate the plots  
+    print("beginning plots")
     # for DATASET_NAME in ['Vehkaoja_Dog', 'Ferdinandy_Dog']:
     #     TARGET_ACTIVITIES = target_activities[DATASET_NAME]
     #     plot_model_type_comparison(combined_metrics, DATASET_NAME, TARGET_ACTIVITIES, BASE_PATH)
     #     combine_confusion_matrices(BASE_PATH, DATASET_NAME)
 
-    print("beginning all dataset plots")
-    combined_metrics = pd.read_csv(save_path)
-    plot_auc_comparison(combined_metrics, BASE_PATH)
-    plot_training_set_comparison(combined_metrics, BASE_PATH)
+    averaged_metrics = pd.read_csv(Path(f"{BASE_PATH}/Output/Combined/all_averaged_metrics.csv"))
+    # plot_auc_comparison(averaged_metrics, BASE_PATH)
+    plot_training_set_comparison(averaged_metrics, BASE_PATH)
 
     print("done")
 

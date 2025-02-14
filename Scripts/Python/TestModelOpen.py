@@ -281,6 +281,11 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
             else:  # BEHAVIOUR_SET == 'other'
                 predictions_file = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_multi_Other_predictions.csv")
                 model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_multi_Other_model.joblib")
+            
+            if model_path.exists() is False:
+                print(f"Model path {model_path} does not exist. Skipping this test")
+                return
+        
         else:  # binary or oneclass
             predictions_file = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_all_predictions_merged.csv")
 
@@ -314,6 +319,11 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
             all_predictions = []
             for behaviour in TARGET_ACTIVITIES:
                 model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
+                
+                if model_path.exists() is False:
+                    print(f"Model path {model_path} does not exist. Skipping this test")
+                    return
+                
                 saved_data = load(model_path)
                 predictions = predict_single_model(X, y, metadata, saved_data['model'], saved_data['scaler'], MODEL_TYPE, behaviour)
                 predictions.to_csv(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_predictions.csv"), index=False)
@@ -382,29 +392,36 @@ def predict_single_model(X, y, metadata, model, scaler, MODEL_TYPE, target_class
 
 def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD):
     print(f"Generating results for {TRAINING_SET} with {MODEL_TYPE} model")
-    # generate the predictions
-    multiclass_predictions = generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD) 
-    
-    if REASSIGN_LABELS is not False:
-    # reassign the labels to add in the "Other class"
-        if MODEL_TYPE.lower() != 'multi':
-            # for one-class and binary class, everything not in target activities is "Other"
-            multiclass_predictions['True_Label'] = multiclass_predictions['True_Label'].apply(lambda x: 'Other' if x not in TARGET_ACTIVITIES else x)
-            multiclass_predictions['Predicted_Label'] = multiclass_predictions['Predicted_Label'].apply(lambda x: 'Other' if x not in TARGET_ACTIVITIES else x)
+    try:
+        # generate the predictions
+        multiclass_predictions = generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD) 
+        
+        if REASSIGN_LABELS is not False:
+            print("reassigning labels")
+        # reassign the labels to add in the "Other class"
+            if MODEL_TYPE.lower() != 'multi':
+                # for one-class and binary class, everything not in target activities is "Other"
+                multiclass_predictions['True_Label'] = multiclass_predictions['True_Label'].apply(lambda x: 'Other' if x not in TARGET_ACTIVITIES else x)
+                multiclass_predictions['Predicted_Label'] = multiclass_predictions['Predicted_Label'].apply(lambda x: 'Other' if x not in TARGET_ACTIVITIES else x)
+            else:
+                # for multi class, everything not in trained behaviours is "Other"
+                possible_behaviours = list(set(multiclass_predictions['Predicted_Label']))
+                print(f"possible behaviours: {possible_behaviours}")
+                multiclass_predictions['True_Label'] = multiclass_predictions['True_Label'].apply(lambda x: 'Other' if x not in possible_behaviours else x)
+                multiclass_predictions['Predicted_Label'] = multiclass_predictions['Predicted_Label'].apply(lambda x: 'Other' if x not in possible_behaviours else x)
         else:
-            # for multi class, everything not in trained behaviours is "Other"
-            possible_behaviours = list(set(multiclass_predictions['Predicted_Label']))
-            print(f"possible behaviours: {possible_behaviours}")
-            multiclass_predictions['True_Label'] = multiclass_predictions['True_Label'].apply(lambda x: 'Other' if x not in possible_behaviours else x)
-            multiclass_predictions['Predicted_Label'] = multiclass_predictions['Predicted_Label'].apply(lambda x: 'Other' if x not in possible_behaviours else x)
-    else:
-        # do nothing
-        print("not reassigning labels")
-        print(multiclass_predictions['True_Label'].unique())
-    # generate the confusion matrices
-    generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD)
-    # calculate the metrics
-    calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD)
+            # do nothing
+            print("not reassigning labels")
+            print(multiclass_predictions['True_Label'].unique())
+        
+        # generate the confusion matrices
+        generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD)
+        # calculate the metrics
+        calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD)
+
+    except Exception as e:
+        print(f"Error: {e}. Skipping iteration")
+        return
 
 if __name__ == "__main__":
     main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)

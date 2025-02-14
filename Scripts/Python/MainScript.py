@@ -45,50 +45,50 @@ def main():
 
     # HpoOptimisation.append_files(BASE_PATH)
 
-    # for DATASET_NAME in ['Ferdinandy_Dog']:
-    #     TARGET_ACTIVITIES = target_activities[DATASET_NAME]
-    #     for FOLD in [2, 3, 4, 5]:
-    #         CreateDatasets.main(DATASET_NAME, TARGET_ACTIVITIES, FOLD)
+    for DATASET_NAME in ['Ferdinandy_Dog']:
+        TARGET_ACTIVITIES = target_activities[DATASET_NAME]
+        for FOLD in [1]:
+            CreateDatasets.main(DATASET_NAME, TARGET_ACTIVITIES, FOLD)
 
     # and then do the final model run
-    for FOLD in [2, 3]:
+    for FOLD in [1, 2, 3]:
         for DATASET_NAME in ["Ferdinandy_Dog"]:
             TARGET_ACTIVITIES = target_activities[DATASET_NAME]
-            for TRAINING_SET in ['all', 'target']: # add back in some when it has been redone
-                for MODEL_TYPE in ['oneclass', 'binary', 'multi']:
+            for TRAINING_SET in ['some']: # add back in some when it has been redone
+                for MODEL_TYPE in ['binary', 'oneclass', 'multi']: #, 'oneclass', 'binary']:
 
                     print(f"Running {DATASET_NAME} with training set {TRAINING_SET} and {MODEL_TYPE} model for fold {FOLD}")
                     
                     if MODEL_TYPE == 'multi':
                         for BEHAVIOUR_SET in ['Activity', 'Other']:
                             if BEHAVIOUR_SET == 'Activity':
-                                for THRESHOLDING in [True, False]:
-                                    print(f"thresholding: {THRESHOLDING}")
-                                    # HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                    #                 TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
-                                    TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                                    TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
-                                    TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                                        TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS=True, FOLD = FOLD)
-                                    # TestModelClosed.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BEHAVIOUR_SET, THRESHOLDING, FOLD)
+                                THRESHOLDING = True
+                                print(f"thresholding: {THRESHOLDING}")
+                                HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+                                                TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
+                                # TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+                                #                 TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
+                                # TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+                                #                     TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS=True, FOLD = FOLD)
+                                # TestModelClosed.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BEHAVIOUR_SET, THRESHOLDING, FOLD)
                             else:
                                 THRESHOLDING = False
-                                # HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                #                    TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
-                                TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                                TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
-                                TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                                TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS=True, FOLD = FOLD)
+                                HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+                                                    TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
+                                # TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+                                #                  TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
+                                # TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+                                #                  TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS=True, FOLD = FOLD)
                                 # TestModelClosed.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BEHAVIOUR_SET, THRESHOLDING, FOLD)
                     else:
                         THRESHOLDING = False
-                        #HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                        #                            TARGET_ACTIVITIES, behaviour_set = None, thresholding= False, fold= FOLD)
-                        TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                         TARGET_ACTIVITIES, BEHAVIOUR_SET= None, THRESHOLDING = False, FOLD = FOLD)
+                        HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+                                                   TARGET_ACTIVITIES, behaviour_set = None, thresholding= False, fold= FOLD)
+                        # TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+                        #                  TARGET_ACTIVITIES, BEHAVIOUR_SET= None, THRESHOLDING = False, FOLD = FOLD)
                     
-                        TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                        TARGET_ACTIVITIES, BEHAVIOUR_SET = None, THRESHOLDING =False, REASSIGN_LABELS=True, FOLD = FOLD)
+                        # TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+                        #                 TARGET_ACTIVITIES, BEHAVIOUR_SET = None, THRESHOLDING =False, REASSIGN_LABELS=True, FOLD = FOLD)
                         # TestModelClosed.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BEHAVIOUR_SET = None, THRESHOLDING = False, FOLD = FOLD)
                     
         HpoOptimisation.append_files(BASE_PATH, FOLD)

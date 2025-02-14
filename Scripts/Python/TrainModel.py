@@ -132,119 +132,118 @@ def find_matching_file(path_pattern):
     return df
 
 def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = None, BEHAVIOUR_SET = None, THRESHOLDING = False, FOLD = 0):
+    try:
+        # load the hyperparameters
+        parameters_path = f"{BASE_PATH}/Output/fold_{FOLD}/Tuning/Combined_optimisation_results.csv"
+        params = pd.read_csv(parameters_path)
+        
+        # Add debug prints to check the filtering conditions
+        print("\nFiltering conditions:")
+        print(f"Dataset name: {DATASET_NAME}")
+        print(f"Training set: {TRAINING_SET}")
+        print(f"Model type: {MODEL_TYPE}")
+        print(f"Thresholding: {THRESHOLDING}")
+        print(f"Behaviour set: {BEHAVIOUR_SET}")
 
-    # load the hyperparameters
-    parameters_path = f"{BASE_PATH}/Output/fold_{FOLD}/Tuning/Combined_optimisation_results.csv"
-    params = pd.read_csv(parameters_path)
-    
-    # Add debug prints to check the filtering conditions
-    print("\nFiltering conditions:")
-    print(f"Dataset name: {DATASET_NAME}")
-    print(f"Training set: {TRAINING_SET}")
-    print(f"Model type: {MODEL_TYPE}")
-    print(f"Thresholding: {THRESHOLDING}")
-    
-    relevant_params = params[
-        (params['dataset_name'] == DATASET_NAME) & 
-        (params['training_set'] == TRAINING_SET) & 
-        (params['model_type'] == MODEL_TYPE) &
-        (params['thresholding'] == THRESHOLDING)
-    ]
-    
-    # Add debug print to check filtered results
-    print(f"\nNumber of matching parameter rows: {len(relevant_params)}")
-    if len(relevant_params) == 0:
+        relevant_params = params[
+            (params['dataset_name'] == DATASET_NAME) & 
+            (params['training_set'] == TRAINING_SET) & 
+            (params['model_type'] == MODEL_TYPE) &
+            (params['thresholding'] == THRESHOLDING)
+        ]
+        
+        # Add debug print to check filtered results
+        print(f"\nNumber of matching parameter rows: {len(relevant_params)}")
+        if len(relevant_params) == 0:
+            raise ValueError("No matching parameters found in the optimization results file")
 
-        print("\nAvailable values in parameters file:")
-        print(f"Dataset names: {params['dataset_name'].unique()}")
-        print(f"Training sets: {params['training_set'].unique()}")
-        print(f"Model types: {params['model_type'].unique()}")
-        print(f"Thresholding values: {params['thresholding'].unique()}")
-        raise ValueError("No matching parameters found in the optimization results file")
+        if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
+            for behaviour in TARGET_ACTIVITIES:
+                model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
+                
+                if model_path.exists():
+                    print(f"Model {model_path} already exists, skipping")
+                    continue
 
-    if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
-        for behaviour in TARGET_ACTIVITIES:
-            model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}_model.joblib")
+                df = find_matching_file(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv"))
+                print(f"unique activities: {df['Activity'].unique()}")
+                print(f"unique ids: {df['ID'].unique()}")
+                # Take up to 200 samples per group, or all available if fewer
+
+                df = df.groupby(['ID', 'Activity']).apply(
+                    lambda x: x.sample(n=min(len(x), 200), replace=False)
+                ).reset_index(drop=True)
+
+                behaviour_params = relevant_params[relevant_params['behaviour'] == behaviour]
+                kernel = behaviour_params['kernel'].iloc[0]
+                nu = float(behaviour_params['C'].iloc[0])
+                gamma = float(behaviour_params['gamma'].iloc[0])
+
+                print(behaviour_params)
+
+                model_info = train_svm(
+                    df,
+                    MODEL_TYPE,
+                    kernel,
+                    nu,
+                    gamma,
+                    behaviour
+                )
+
+                model = model_info['model']
+                scaler = model_info['scaler']
+                save_model(model, scaler, model_path)
+        else:
+            print(f"Behaviour set: {BEHAVIOUR_SET}")
+            if BEHAVIOUR_SET.lower() == 'activity' and THRESHOLDING is not False:
+                threshold = 'threshold'
+                model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_{threshold}_model.joblib")
+            elif BEHAVIOUR_SET.lower() == 'activity' and THRESHOLDING is False:
+                threshold = 'NOthreshold'
+                model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_{threshold}_model.joblib")
+            else:
+                model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_model.joblib")
             
             if model_path.exists():
                 print(f"Model {model_path} already exists, skipping")
-                continue
+                return
 
-            df = find_matching_file(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{behaviour}.csv"))
-            print(f"unique activities: {df['Activity'].unique()}")
-            print(f"unique ids: {df['ID'].unique()}")
-            # Take up to 200 samples per group, or all available if fewer
+            df = find_matching_file(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}.csv"))
+            print(f"path: {Path(f"{BASE_PATH}/Output/fold_{FOLD}/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}.csv")}")
 
             df = df.groupby(['ID', 'Activity']).apply(
-                lambda x: x.sample(n=min(len(x), 200), replace=False)
-            ).reset_index(drop=True)
+                        lambda x: x.sample(n=min(len(x), 200), replace=False)
+                    ).reset_index(drop=True)
+            
+            model_params = relevant_params[relevant_params['behaviour'] == BEHAVIOUR_SET]
+            print(f"\nParameters for behaviour set {BEHAVIOUR_SET}:")
+            print(model_params)
+            
+            if len(model_params) == 0:
+                print(f"\nAvailable behaviours in filtered params:")
+                print(relevant_params['behaviour'].unique())
+                raise ValueError(f"No parameters found for behaviour set: {BEHAVIOUR_SET}")
 
-            behaviour_params = relevant_params[relevant_params['behaviour'] == behaviour]
-            kernel = behaviour_params['kernel'].iloc[0]
-            nu = float(behaviour_params['C'].iloc[0])
-            gamma = float(behaviour_params['gamma'].iloc[0])
-
-            print(behaviour_params)
-
+            kernel = model_params['kernel'].iloc[0]
+            nu = float(model_params['C'].iloc[0])
+            gamma = float(model_params['gamma'].iloc[0])
+            
             model_info = train_svm(
                 df,
                 MODEL_TYPE,
                 kernel,
                 nu,
                 gamma,
-                behaviour
+                behaviour = BEHAVIOUR_SET
             )
-
+            
             model = model_info['model']
             scaler = model_info['scaler']
             save_model(model, scaler, model_path)
-    else:
-        if BEHAVIOUR_SET == 'Activity' and THRESHOLDING is not False:
-            threshold = 'threshold'
-            model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_{threshold}_model.joblib")
-        elif BEHAVIOUR_SET == 'Activity' and THRESHOLDING is False:
-            threshold = 'NOthreshold'
-            model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_{threshold}_model.joblib")
-        else:
-            model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_model.joblib")
-        
-        if model_path.exists():
-            print(f"Model {model_path} already exists, skipping")
-            return
-
-        df = find_matching_file(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}.csv"))
-        
-
-        df = df.groupby(['ID', 'Activity']).apply(
-                    lambda x: x.sample(n=min(len(x), 200), replace=False)
-                ).reset_index(drop=True)
-        
-
-        model_params = relevant_params[relevant_params['behaviour'] == BEHAVIOUR_SET]
-        print(f"\nParameters for behaviour set {BEHAVIOUR_SET}:")
-        print(model_params)
-        
-        if len(model_params) == 0:
-            print(f"\nAvailable behaviours in filtered params:")
-            print(relevant_params['behaviour'].unique())
-            raise ValueError(f"No parameters found for behaviour set: {BEHAVIOUR_SET}")
-
-        kernel = model_params['kernel'].iloc[0]
-        nu = float(model_params['C'].iloc[0])
-        gamma = float(model_params['gamma'].iloc[0])
-        
-        model_info = train_svm(
-            df,
-            MODEL_TYPE,
-            kernel,
-            nu,
-            gamma,
-            behaviour = BEHAVIOUR_SET
-        )
-        
-        model = model_info['model']
-        scaler = model_info['scaler']
-        save_model(model, scaler, model_path)
+    
+    except Exception as e:
+        print(f"Error: {e}")
+        return
 
 if __name__ == "__main__":
     main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)

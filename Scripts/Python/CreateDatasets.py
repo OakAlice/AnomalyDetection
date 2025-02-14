@@ -132,7 +132,7 @@ def split_test_data(BASE_PATH, DATASET_NAME, fold):
 
 def main(DATASET_NAME, TARGET_ACTIVITIES, FOLD):
     # split out the test data
-    split_test_data(BASE_PATH, DATASET_NAME, FOLD)
+    # split_test_data(BASE_PATH, DATASET_NAME, FOLD) # temporarily commented this out
     
     # generate the individual datasets used in each subsequent model design
     for TRAINING_SET in ['all', 'some', 'target']:

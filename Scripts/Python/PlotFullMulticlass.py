@@ -1,7 +1,7 @@
 import pandas as pd
 from pathlib import Path
 import matplotlib.pyplot as plt
-import TestModel
+import TestModelOpen
 import numpy as np
 import seaborn as sns
 
@@ -13,7 +13,7 @@ def generate_full_class_data(BASE_PATH, target_activities):
             MODEL_TYPE ='multi'
             BEHAVIOUR_SET = 'Activity'
             THRESHOLDING = False
-            TestModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+            TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
                             TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS=False)
 
 def generate_false_positive_plots(BASE_PATH):
