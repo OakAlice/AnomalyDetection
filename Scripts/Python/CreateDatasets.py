@@ -7,7 +7,7 @@ from FeatureSelectionFunctions import clean_training_data
 
 def remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES, FOLD):
     """
-    Highly custom function for removing speciifc behaviours from the datasets.
+    Highly custom function for removing specific behaviours from the datasets.
     To create the Open Set Test conditions.
     """
     input_path = Path(BASE_PATH) / "Output" / f"fold_{FOLD}" / "Split_data" / f"{DATASET_NAME}_train.csv"
@@ -17,21 +17,26 @@ def remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES, FOL
     # Define metadata columns explicitly and ensure rest are numeric
     metadata_columns = ['Activity', 'ID', 'Time']
     numeric_columns = df.columns.difference(metadata_columns)
+    
     # Convert only columns that are actually numeric
     for col in numeric_columns:
         try:
             df[col] = pd.to_numeric(df[col], errors='coerce')
-        except:
-            print(f"Could not convert column {col} to numeric")
+        except Exception as e:
+            print(f"Could not convert column {col} to numeric: {e}")
             numeric_columns = numeric_columns.drop(col)
+    
+    # Combine the numeric and metadata column names into a single list
+    columns_to_keep = list(numeric_columns) + metadata_columns
+    df = df[columns_to_keep]
 
     if TRAINING_SET == 'some':
         # remove the uncommon behaviours
         counts = df['Activity'].value_counts()
         print(counts)
-        # Select top 50% of activities by frequency
+        # Select top 25% of activities (you could adjust this as needed)
         n_activities = len(counts)
-        common_activities = counts.index[:n_activities//4].tolist() # select a quarter of the activities
+        common_activities = counts.index[:n_activities//4].tolist()
             
         # Combine common activities with target activities and remove duplicates
         common_activities = list(set(common_activities + TARGET_ACTIVITIES))
@@ -42,7 +47,6 @@ def remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES, FOL
     elif TRAINING_SET == 'target':
         # only keep the target activities
         df = df[df['Activity'].isin(TARGET_ACTIVITIES)]
-
     else:
         print("keep everything, nothing to change")
 
@@ -62,11 +66,9 @@ def create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MO
     Returns:
         saves both the target training data types as well as the cleaned test data
     """
-    # Define metadata columns to preserve
-    metadata_columns = ['ID', 'Time'] # activity already in there
     
     # Add metadata columns to clean_columns
-    all_columns = list(clean_columns) + metadata_columns
+    all_columns = list(clean_columns)
     
     # clean the dataset but keep metadata
     df_clean = df[all_columns]
@@ -113,6 +115,7 @@ def split_test_data(BASE_PATH, DATASET_NAME, fold):
     
     if test_path.exists():
         print(f"Test data already split for {DATASET_NAME}. If you change it, you will need to delete the file and also redo everything.")
+        return
     else:
         # Load the full dataset
         features_path = Path(BASE_PATH) / "Data" / "Feature_data" / f"{DATASET_NAME}_features.csv"
@@ -132,7 +135,7 @@ def split_test_data(BASE_PATH, DATASET_NAME, fold):
 
 def main(DATASET_NAME, TARGET_ACTIVITIES, FOLD):
     # split out the test data
-    # split_test_data(BASE_PATH, DATASET_NAME, FOLD) # temporarily commented this out
+    # split_test_data(BASE_PATH, DATASET_NAME, FOLD) # only do this once as it will change everything
     
     # generate the individual datasets used in each subsequent model design
     for TRAINING_SET in ['all', 'some', 'target']:

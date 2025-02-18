@@ -298,6 +298,9 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
         # Load test data
         print(f"Loading test data from {DATASET_NAME}_test.csv")
         df = pd.read_csv(Path(BASE_PATH) / "Output" / f"fold_{FOLD}" / "Split_data" / f"{DATASET_NAME}_test.csv")
+        
+        df = df.dropna()
+
         X = df.drop(columns=['Activity', 'ID', 'Time'])
         y = df['Activity']
         metadata = df[['ID', 'Time']]

@@ -1,6 +1,7 @@
 from TestModelOpen import predict_single_model
 from pathlib import Path
 import pandas as pd
+import numpy as np
 from joblib import load
 from sklearn.metrics import classification_report, roc_auc_score
 
@@ -25,6 +26,9 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BEHAVIOUR_SET, THRES
     # only allow those same classes in the test data
     df = pd.read_csv(Path(BASE_PATH) / "Output" / f"fold_{FOLD}" / "Split_data" / f"{DATASET_NAME}_test.csv")
     df = df[df['Activity'].isin(classes)]
+    df = df.replace([np.inf, -np.inf], np.nan)
+    df = df.dropna()
+
     X = df.drop(columns=['Activity', 'ID', 'Time'])
     y = df['Activity']
     metadata = df[['ID', 'Time']]

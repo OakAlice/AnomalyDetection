@@ -13,32 +13,21 @@ import glob
 import os
 
 def train_svm(df, MODEL_TYPE, kernel, nu, gamma, behaviour):
-    """
-    Train a single SVM model based on the specified type and previously identified best parameters
-    
-    Args:
-        df (df): training data to build this model
-        dataset_name (str): Name of the dataset
-        training_set (str): Training set identifier
-        model_type (str): 'oneclass', 'binary', or 'multiclass'
-        base_path (str): Base path for data
-        target_activities (list): List of target activities
-        best_params (dict): Dictionary of best parameters from optimization
-        behaviour (str): The specific behavior to train for
-    
-    Returns:
-        dict: Dictionary containing the model and scaler
-    """
-    print(f"\nTraining {MODEL_TYPE} SVM for {behaviour or set}...")
-    
-    # Prepare features
-    X = df.drop(columns=['Activity', 'ID', 'Time'])
+    print(f"\nTraining {MODEL_TYPE} SVM for {behaviour}...")
+
+    df = df.dropna()
+    # Prepare features after cleaning
+    X = df.drop(columns=['Activity', 'Time', 'ID'])
     y = df['Activity']
     
-    # Scale features
+    # Verify no NaN values in features
+    if X.isna().any().any():
+        raise ValueError("NaN values still present in features after cleaning")
+    
+    # Rest of your existing code remains the same
     scaler = StandardScaler()
     X = scaler.fit_transform(X)
-
+    
     # Add class_weight parameter to handle imbalance
     if MODEL_TYPE.lower() == 'binary':
         n_other = sum(y == 'Other')
@@ -136,6 +125,10 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
         # load the hyperparameters
         parameters_path = f"{BASE_PATH}/Output/fold_{FOLD}/Tuning/Combined_optimisation_results.csv"
         params = pd.read_csv(parameters_path)
+
+        print(f"parameters_path: {parameters_path}")
+
+        print(f"params: {params.tail()}")
         
         # Add debug prints to check the filtering conditions
         print("\nFiltering conditions:")
@@ -214,6 +207,7 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
             df = df.groupby(['ID', 'Activity']).apply(
                         lambda x: x.sample(n=min(len(x), 200), replace=False)
                     ).reset_index(drop=True)
+    
             
             model_params = relevant_params[relevant_params['behaviour'] == BEHAVIOUR_SET]
             print(f"\nParameters for behaviour set {BEHAVIOUR_SET}:")
