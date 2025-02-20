@@ -7,7 +7,6 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-
 # merge the predictions from the individual models
 def merge_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES=None, FOLD=None):
     print("\nMerging individual model prediction results...")
@@ -298,11 +297,15 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
         # Load test data
         print(f"Loading test data from {DATASET_NAME}_test.csv")
         df = pd.read_csv(Path(BASE_PATH) / "Output" / f"fold_{FOLD}" / "Split_data" / f"{DATASET_NAME}_test.csv")
-        
-        df = df.dropna()
+
+        # print the nsmaes of  the columns wheich contain NaN values # remove these columns
+        # print(df.columns[df.isna().any()])
+        df = df.dropna(axis=1)
 
         X = df.drop(columns=['Activity', 'ID', 'Time'])
+        print(X.head())
         y = df['Activity']
+        print(y.head())
         metadata = df[['ID', 'Time']]
     
         if MODEL_TYPE.lower() == 'multi':

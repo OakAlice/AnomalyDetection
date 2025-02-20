@@ -50,6 +50,9 @@ def remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES, FOL
     else:
         print("keep everything, nothing to change")
 
+    # remove the columns with NA values
+    df = df.dropna(axis=1)
+
     return df
 
 def create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, FOLD):
@@ -135,7 +138,7 @@ def split_test_data(BASE_PATH, DATASET_NAME, fold):
 
 def main(DATASET_NAME, TARGET_ACTIVITIES, FOLD):
     # split out the test data
-    # split_test_data(BASE_PATH, DATASET_NAME, FOLD) # only do this once as it will change everything
+    split_test_data(BASE_PATH, DATASET_NAME, FOLD) # only do this once as it will change everything
     
     # generate the individual datasets used in each subsequent model design
     for TRAINING_SET in ['all', 'some', 'target']:
