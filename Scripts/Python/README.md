@@ -7,6 +7,9 @@ Then use that path...
 C:\Users\oaw001\AppData\Local\Programs\Python\Python312\python.exe -m pip install virtualenv
 C:\Users\oaw001\AppData\Local\Programs\Python\Python312\python.exe -m virtualenv .venv 
 
+
+# C:\Users\PC\OneDrive - University of the Sunshine Coast\AnomalyDetection\Scripts\Python
+
 ## When you start a powershell instance (must be in this directory)
 .\.venv\Scripts\activate.bat
 

@@ -175,23 +175,20 @@ def pca_feature_selection(data: pd.DataFrame,
 
 def clean_training_data(training_data: pd.DataFrame,
                        corr_threshold: float) -> List[str]:
-    """
-    Clean and preprocess training data.
-    
-    Args:
-        training_data: Input DataFrame
-        corr_threshold: Correlation threshold for feature removal
-        
-    Returns:
-        List of column names to keep
-    """
-    # Get numeric columns
-    numeric_columns = training_data.select_dtypes(include=[np.number]).columns
+    # Define metadata columns explicitly and ensure rest are numeric
+    metadata_columns = ['Activity', 'ID', 'Time']
+    numeric_columns = training_data.columns.difference(metadata_columns)
     numeric_data = training_data[numeric_columns].copy()
+
+    # make sure all the data is numeric
+    numeric_data = numeric_data.apply(pd.to_numeric, errors='coerce')
     
     # Remove columns with >50% NA
     valid_cols = numeric_data.columns[numeric_data.isna().mean() <= 0.5]
     numeric_data = numeric_data[valid_cols]
+
+    # remove the rows with NA values
+    numeric_data = numeric_data.dropna()
     
     # Remove zero-variance columns
     valid_cols = numeric_data.columns[numeric_data.std() > 0]
@@ -213,6 +210,6 @@ def clean_training_data(training_data: pd.DataFrame,
     if len(numeric_data.columns) == 0:
         raise ValueError("No valid features remaining after preprocessing.")
         
-    clean_columns = list(numeric_data.columns) + ['Activity']
+    clean_columns = list(numeric_data.columns) + metadata_columns
     
     return clean_columns

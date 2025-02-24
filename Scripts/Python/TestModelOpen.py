@@ -154,12 +154,13 @@ def generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_S
 
     full_labels = sorted(list(set(y_true) | set(y_pred)))
 
-    if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
-        # for binary and oneclass, change so everything not in target activities is "Other"
-        y_true = y_true.apply(lambda x: x if x in TARGET_ACTIVITIES else 'Other')
-        y_pred = y_pred.apply(lambda x: x if x in TARGET_ACTIVITIES else 'Other')
-        # Only use target activities and "Other" for labels
-        labels = sorted(TARGET_ACTIVITIES + ['Other'])
+    if REASSIGN_LABELS is not False:
+        if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
+            # for binary and oneclass, change so everything not in target activities is "Other"
+            y_true = y_true.apply(lambda x: x if x in TARGET_ACTIVITIES else 'Other')
+            y_pred = y_pred.apply(lambda x: x if x in TARGET_ACTIVITIES else 'Other')
+            # Only use target activities and "Other" for labels
+            labels = sorted(TARGET_ACTIVITIES + ['Other'])
 
     # make the plots and save to file
     cm = confusion_matrix(y_true, y_pred, labels=labels)
@@ -175,7 +176,10 @@ def generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_S
         else:
             cm_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_confusion_matrix.png")
     else:
-        cm_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_confusion_matrix.png")
+        if REASSIGN_LABELS is not False:
+            cm_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_confusion_matrix.png")
+        else:
+            cm_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_fullclasses_confusion_matrix.png")
         
     generate_heatmap_confusion_matrix(cm, labels, TARGET_ACTIVITIES, cm_path)
 
@@ -192,17 +196,19 @@ def generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_S
                     cm_df.to_csv(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_NOthreshold_fullclasses_confusion_matrix.csv")) 
         else:
             cm_df.to_csv(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_confusion_matrix.csv"))
-    else:
+    else:   
+        if REASSIGN_LABELS is not False:
             cm_df.to_csv(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_confusion_matrix.csv"))
+        else:
+            cm_df.to_csv(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_fullclasses_confusion_matrix.csv"))
         
 def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD):
     y_true = multiclass_predictions['True_Label']
     y_pred = multiclass_predictions['Predicted_Label']
     labels = sorted(list(set(y_true) | set(y_pred)))
-    # labels = sorted(list(set(y_pred))) # to just calculate for the predicted ones
     
     # Get classification report for per-class metrics
-    report_dict = classification_report(y_true, y_pred, zero_division=0, output_dict=True, labels=labels)  # Remove sample_weight here
+    report_dict = classification_report(y_true, y_pred, zero_division=0, output_dict=True, labels=labels)
 
     # Calculate weighted metrics manually for the weighted average
     metrics_dict = {}
@@ -213,11 +219,28 @@ def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MO
         count = y_true_binary.sum()
         
         try:
-            # Calculate AUC
-            auc = roc_auc_score(y_true_binary, y_pred_binary)
+            # Calculate AUC and handle the case where all predictions are the same class
+            if len(np.unique(y_true_binary)) < 2:
+                auc = 0  # or 1 if you prefer, when all predictions are correct
+                print(f"Warning: Only one class present in true labels for {label}, AUC defaulting to 0")
+            else:
+                auc = roc_auc_score(y_true_binary, y_pred_binary)
         except Exception as e:
             print(f"Warning: Could not calculate AUC for {label}: {str(e)}")
             auc = 0
+        
+        # Calculate FPR: FP / (FP + TN)
+        tn = np.sum((y_true_binary == 0) & (y_pred_binary == 0))
+        fp = np.sum((y_true_binary == 0) & (y_pred_binary == 1))
+        tp = np.sum((y_true_binary == 1) & (y_pred_binary == 1))
+        fn = np.sum((y_true_binary == 1) & (y_pred_binary == 0))
+        fpr = fp / (fp + tn) if (fp + tn) > 0 else 0
+        
+        # Calculate Specificity (TNR): TN / (TN + FP)
+        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+        
+        # Calculate accuracy for this class
+        accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0
         
         # Store metrics for this class
         metrics_dict[label] = {
@@ -225,9 +248,15 @@ def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MO
             'F1': report_dict[label]['f1-score'],
             'Precision': report_dict[label]['precision'],
             'Recall': report_dict[label]['recall'],
+            'Accuracy': accuracy,
+            'Specificity': specificity,
+            'FPR': fpr,
             'Support': report_dict[label]['support'],
             'Count': count
         }
+
+    # replace any NA or blank values with 0
+    metrics_dict = {k: {k2: v2 if v2 is not None else 0 for k2, v2 in v.items()} for k, v in metrics_dict.items()}
     
     # Calculate true weighted averages based on true class prevalence
     class_frequencies = y_true.value_counts()
@@ -243,6 +272,12 @@ def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MO
                         for label in valid_labels) / total_samples,
         'Recall': sum(metrics_dict[label]['Recall'] * class_frequencies[label] 
                         for label in valid_labels) / total_samples,
+        'Accuracy': sum(metrics_dict[label]['Accuracy'] * class_frequencies[label]
+                        for label in valid_labels) / total_samples,
+        'Specificity': sum(metrics_dict[label]['Specificity'] * class_frequencies[label]
+                        for label in valid_labels) / total_samples,
+        'FPR': sum(metrics_dict[label]['FPR'] * class_frequencies[label] 
+                    for label in valid_labels) / total_samples,
         'Support': total_samples,
         'Count': total_samples
     }
@@ -262,7 +297,10 @@ def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MO
             metrics_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_metrics.csv")
                
     else:
-        metrics_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_metrics.csv")
+        if REASSIGN_LABELS is not False:
+            metrics_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_metrics.csv")
+        else:
+            metrics_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Metrics/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_fullclasses_metrics.csv")
             
     metrics_df.to_csv(metrics_path)            
     return metrics_dict
@@ -296,12 +334,13 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
 
         # Load test data
         print(f"Loading test data from {DATASET_NAME}_test.csv")
-        df = pd.read_csv(Path(BASE_PATH) / "Output" / f"fold_{FOLD}" / "Split_data" / f"{DATASET_NAME}_test.csv")
+        df = pd.read_csv(Path(BASE_PATH) / "Output" / f"fold_{FOLD}" / "Split_data" / f"{DATASET_NAME}_test.csv", low_memory=False)
 
         # print the nsmaes of  the columns wheich contain NaN values # remove these columns
         # print(df.columns[df.isna().any()])
         df = df.dropna(axis=1)
 
+        print("dealing with the metadata columns")
         X = df.drop(columns=['Activity', 'ID', 'Time'])
         print(X.head())
         y = df['Activity']
@@ -351,13 +390,17 @@ def predict_single_model(X, y, metadata, model, scaler, MODEL_TYPE, target_class
     """Helper function to generate predictions for a single model"""
     # Scale features
     scaler_features = scaler.feature_names_in_
-    scaler_features = [feat for feat in scaler_features if feat != "Time"]  # Remove Time from features
+    print(scaler_features)
+    if "Time" in scaler_features:    
+        print("removing Time that was accidentally included")
+        scaler_features = [feat for feat in scaler_features if feat != "Time"]  # Remove Time from features
 
     X = X[scaler_features]  # Ensure columns match
     
     X_scaled = scaler.transform(X)
     
     # Make predictions
+    print("making predictions")
     predictions = model.predict(X_scaled)
     
     # rename the values for the one-class scenario
@@ -430,4 +473,4 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, B
         return
 
 if __name__ == "__main__":
-    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
+    main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD)

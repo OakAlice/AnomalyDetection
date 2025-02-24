@@ -1,96 +1,121 @@
-#load in the data
+
+# Libraries and set up ----------------------------------------------------
 library(data.table)
 library(tidyverse)
-
-path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection/Output/Testing/all_combined_metrics.csv"
-
-data <- fread(path)
-
-d1 <- data %>% filter(dataset == "Vehkaoja",
-                      training_set == "all")
-
-d2 <- data %>% filter(dataset == "Vehkaoja",
-                      training_set == "all",
-                      behaviour %in% c("Walking", "Shaking", "Lying chest", "Eating", "Other", "weighted_avg"))
-
-p <- ggplot(d2, aes(x = model_type, y = AUC, colour = behaviour)) +
-  geom_point(size = 5, alpha = 0.8)
-p
-
-
-
+library(lme4)
+library(emmeans)
+library(lmerTest)
 
 
 # Load in the data --------------------------------------------------------
 path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection/Output/Combined/all_combined_metrics.csv"
+# path <- "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection/Output/Combined/all_combined_metrics.csv"
 df <- read.csv(path)
 
-# Account for random baseline ---------------------------------------------
+
+# Hypothesis 1 ------------------------------------------------------------
+# Performance (AUC) of control models with increasingly open sets
+# tested conditions of control model with an linear mixed effects model (with fold as a random effect)
+
+## 1: Closed tests #####
+# subset the dataset
+subset_df <- df %>% filter(closed_open == "closed",
+                             dataset == "Ferdinandy_Dog",
+                           behaviour == 'weighted_avg',
+                           model_type == 'multi_Activity_NOthreshold')
+
+# factorise and level variables to define the controls
+subset_df$training_set <- relevel(factor(subset_df$training_set), ref = "all")
+# run the mixed effects model
+mixed_model_AUC <- lmer(AUC ~ training_set + (1|fold), data = subset_df)
+# Display the summary of the model
+summary(mixed_model_AUC)
+
+## 2. Open tests ####
+subset_df <- df %>% filter(closed_open == "open",
+                           dataset == "Ferdinandy_Dog",
+                           behaviour == 'weighted_avg',
+                           model_type == 'multi_Activity_NOthreshold')
+
+subset_df$training_set <- relevel(factor(subset_df$training_set), ref = "all")
+model <- lmer(AUC ~ training_set + (1|fold), data = subset_df)
+summary(model)
 
 
+# Hypothesis 2 ------------------------------------------------------------
+# tested each model type with an linear mixed effects model (with fold as a random effect)
 
+subset_df <- df %>% filter(closed_open == "open",
+                           dataset == "Ferdinandy_Dog",
+                           behaviour == "weighted_avg")
 
+## Part 1: Overall patterns ####
+full_model <- lmer(AUC ~ training_set * model_type + (1 | fold), data = subset_df, REML = FALSE)
+reduced_model <- lmer(AUC ~ training_set + model_type + (1 | fold), data = subset_df, REML = FALSE)
+anova(reduced_model, full_model)
 
+## Part 2: AUC within each model type ####
+subset_df$training_set <- relevel(factor(subset_df$training_set), ref = "all")
+model_types <- unique(subset_df$model_type)
 
-# Run ANOVA for each training set
-training_sets <- unique(df$training_set)
-
-for (train_set in training_sets) {
-  cat("\n=== ANOVA for Training Set:", train_set, "===\n")
+for(model in model_types){
+  cat("/n=== LME model for Model:", model, "===/n")
   
-  subset_df <- df %>% filter(closed_open == "open",
-                             training_set == train_set)
+  subset_df2 <- df %>% filter(model_type == model)
   
-  anova_model <- aov(AUC ~ model_type + dataset + behaviour, data = subset_df)
-  print(summary(anova_model))  # ANOVA results
+  # run the mixed effects model
+  mixed_model_AUC <- lmer(AUC ~ training_set + (1|fold), data = subset_df2)
+  # anova_AUC <- aov(AUC ~ training_set, data = subset_df)
   
-  # If ANOVA is significant, run post-hoc Tukey test
-  if (summary(anova_model)[[1]][["Pr(>F)"]][1] < 0.05) {
-    cat("\nTukey HSD Post-hoc Test:\n")
-    tukey_results <- TukeyHSD(anova_model)
-    significant_results <- tukey_results$model_type[tukey_results$model_type[, "p adj"] < 0.05, ]
-    print(significant_results)
-  } else {
-    cat("No significant differences between models for this training set.\n")
-  }
+  # Display the summary of the model
+  print(summary(mixed_model_AUC))
 }
 
-# Run ANOVA for each model
-models <- unique(df$model_type)
+## Part 3. Specificity of all models with increasingly open sets ####
+subset_df$training_set <- relevel(factor(subset_df$training_set), ref = "all")
+model_types <- unique(subset_df$model_type)
 
-for (model in models) {
-  cat("\n=== ANOVA for Training Set:", model, "===\n")
+for(model in onceclass){
+  print(paste0("=============", model, "=============="))
   
-  subset_df <- df %>% filter(closed_open == "open",
-                             model_type == model
-  )
+  subset_df2 <- df %>% filter(model_type == model)
   
-  anova_model <- aov(AUC ~ training_set + dataset + behaviour, data = subset_df)
-  print(summary(anova_model))  # ANOVA results
+  # run the mixed effects model
+  mixed_model_Spec <- lmer(Specificity ~ training_set + (1|fold), data = subset_df2)
+  # anova_AUC <- aov(AUC ~ training_set, data = subset_df)
   
-  # If ANOVA is significant, run post-hoc Tukey test
-  if (summary(anova_model)[[1]][["Pr(>F)"]][1] < 0.05) {
-    cat("\nTukey HSD Post-hoc Test:\n")
-    tukey_results <- TukeyHSD(anova_model)
-    significant_results <- tukey_results$training_set # [tukey_results$training_set[, "p adj"] < 0.05, ]
-    print(significant_results)
-    
-  } else {
-    cat("No significant differences between training_sets for this model type.\n")
-  }
+  # Display the summary of the model
+  print(summary(mixed_model_Spec))
 }
 
+# Hypothesis 3 ------------------------------------------------------------
+# Binary models perform best on incomplete models
+# which model performs best
+subset_df <- df %>% filter(closed_open == "open",
+                           dataset == "Ferdinandy_Dog",
+                           behaviour == "weighted_avg")
 
+subset_df$training_set <- relevel(factor(subset_df$training_set), ref = "all")
+subset_df$model_type <- relevel(factor(subset_df$model_type), ref = "multi_Activity_NOthreshold")
 
-# everything
-anova_model <- aov(AUC ~ training_set + model_type + dataset + behaviour, data = df)
-print(summary(anova_model))  # ANOVA results
-
-# If ANOVA is significant, run post-hoc Tukey test
-if (summary(anova_model)[[1]][["Pr(>F)"]][1] < 0.05) {
-  cat("\nTukey HSD Post-hoc Test:\n")
-  tukey_results <- TukeyHSD(anova_model)
-  print(tukey_results)
-} else {
-  cat("No significant differences between training_sets for this model type.\n")
+## Approach 1: split trainign sets ####
+for (condition in unique(subset_df$training_set)){
+  cat("/n======= LME set for condtiion:", condition, "=======/n")
+  
+  subset_df2 <- subset_df %>% filter(training_set == condition)
+  
+  linear_fit <- lmer(AUC ~ model_type + (1 | fold), data = subset_df2)
+  print(summary(linear_fit))
 }
+
+## Approach 2: combine training sets ####
+full_model <- lmer(AUC ~ training_set * model_type + (1 | fold), data = subset_df, REML = FALSE)
+
+# Get ANOVA table to test significance of interaction
+anova(full_model)
+
+# Post-hoc pairwise comparisons for model type within each training set
+emmeans(full_model, pairwise ~ model_type | training_set, adjust = "bonferroni")
+
+
+

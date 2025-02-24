@@ -17,6 +17,7 @@ def train_svm(df, MODEL_TYPE, kernel, nu, gamma, behaviour):
 
     df = df.dropna()
     # Prepare features after cleaning
+    print("removing metadata columns now")
     X = df.drop(columns=['Activity', 'Time', 'ID'])
     y = df['Activity']
     
@@ -206,8 +207,7 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
 
             df = df.groupby(['ID', 'Activity']).apply(
                         lambda x: x.sample(n=min(len(x), 200), replace=False)
-                    ).reset_index(drop=True)
-    
+                    ).reset_index(drop=True)    
             
             model_params = relevant_params[relevant_params['behaviour'] == BEHAVIOUR_SET]
             print(f"\nParameters for behaviour set {BEHAVIOUR_SET}:")

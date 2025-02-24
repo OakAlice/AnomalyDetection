@@ -6,35 +6,15 @@ from MainScript import BASE_PATH
 from FeatureSelectionFunctions import clean_training_data
 
 def remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES, FOLD):
-    """
-    Highly custom function for removing specific behaviours from the datasets.
-    To create the Open Set Test conditions.
-    """
     input_path = Path(BASE_PATH) / "Output" / f"fold_{FOLD}" / "Split_data" / f"{DATASET_NAME}_train.csv"
     # Add low_memory=False to avoid DtypeWarning
     df = pd.read_csv(input_path, low_memory=False)
-
-    # Define metadata columns explicitly and ensure rest are numeric
-    metadata_columns = ['Activity', 'ID', 'Time']
-    numeric_columns = df.columns.difference(metadata_columns)
-    
-    # Convert only columns that are actually numeric
-    for col in numeric_columns:
-        try:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-        except Exception as e:
-            print(f"Could not convert column {col} to numeric: {e}")
-            numeric_columns = numeric_columns.drop(col)
-    
-    # Combine the numeric and metadata column names into a single list
-    columns_to_keep = list(numeric_columns) + metadata_columns
-    df = df[columns_to_keep]
 
     if TRAINING_SET == 'some':
         # remove the uncommon behaviours
         counts = df['Activity'].value_counts()
         print(counts)
-        # Select top 25% of activities (you could adjust this as needed)
+        # Select top 25% of activities
         n_activities = len(counts)
         common_activities = counts.index[:n_activities//4].tolist()
             
@@ -50,26 +30,9 @@ def remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES, FOL
     else:
         print("keep everything, nothing to change")
 
-    # remove the columns with NA values
-    df = df.dropna(axis=1)
-
     return df
 
-def create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, FOLD):
-    """
-    Create and save datasets based on specified parameters
-    
-    Args:
-        DATASET_NAME (str): Name of the dataset
-        TRAINING_SET (str): Training set identifier
-        MODEL_TYPE (str): Type of model ('binary', 'oneclass', or 'multi')
-        BASE_PATH (str): Base path for data
-        TARGET_ACTIVITIES (list): List of target activities
-    
-    Returns:
-        saves both the target training data types as well as the cleaned test data
-    """
-    
+def create_datasets(df, clean_columns, BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, FOLD):   
     # Add metadata columns to clean_columns
     all_columns = list(clean_columns)
     
@@ -142,6 +105,7 @@ def main(DATASET_NAME, TARGET_ACTIVITIES, FOLD):
     
     # generate the individual datasets used in each subsequent model design
     for TRAINING_SET in ['all', 'some', 'target']:
+        print(f"removing classes for {TRAINING_SET}")
         df = remove_classes(BASE_PATH, DATASET_NAME, TRAINING_SET, TARGET_ACTIVITIES, FOLD)
             
         for MODEL_TYPE in ['binary', 'oneclass', 'multi']:

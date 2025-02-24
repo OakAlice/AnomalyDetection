@@ -154,6 +154,9 @@ def main(base_path, dataset_name, training_set, model_type, target_activities, b
         if model_type.lower() == 'multi':
             df = pd.read_csv(Path(f"{base_path}/Output/fold_{fold}/Split_data/{dataset_name}_{training_set}_{model_type}_{behaviour_set}.csv"))
             df = df.groupby(['Activity', 'ID']).head(100)
+
+            # Drop the 'Time' column (not necessary for training and optimising model)
+            df = df.drop(columns=['Time'])
             
             X = scaler.fit_transform(df.drop(['Activity', 'ID'], axis=1))
             y = df['Activity']
@@ -182,6 +185,9 @@ def main(base_path, dataset_name, training_set, model_type, target_activities, b
                     print(f"\nProcessing {behaviour}...")
                     df = pd.read_csv(Path(f"{base_path}/Output/fold_{fold}/Split_data/{dataset_name}_{training_set}_{model_type}_{behaviour}.csv"))
                     df = df.groupby(['Activity', 'ID']).head(100)
+
+                    # Drop the 'Time' column (not necessary for training and optimising model)
+                    df = df.drop(columns=['Time'])
                     
                     X = scaler.fit_transform(df.drop(['Activity', 'ID'], axis=1))
                     y = np.where(df['Activity'] == behaviour, 1, 0)

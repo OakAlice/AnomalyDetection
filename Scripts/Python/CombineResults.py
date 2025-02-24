@@ -114,8 +114,8 @@ def average_metrics_across_folds(BASE_PATH):
     averaged_metrics.to_csv(save_path, index=False)
 
 def main(BASE_PATH):
-    # print("combining metrics per fold")
-    # combine_metrics_per_fold(BASE_PATH)
+    print("combining metrics per fold")
+    combine_metrics_per_fold(BASE_PATH)
     print("combining metrics across folds")
     combine_metrics_across_folds(BASE_PATH)
     print("averaging metrics across folds")

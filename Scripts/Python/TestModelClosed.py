@@ -20,6 +20,9 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BEHAVIOUR_SET, THRES
             predictions_file = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/Predictions/{DATASET_NAME}_{TRAINING_SET}_multi_Other_closed_predictions.csv")
             model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_multi_Other_model.joblib")
             # extract the classes present in the model
+    else:
+        print("this method only works for multiclass models")
+    
     saved_data = load(model_path)
     classes = saved_data['model'].classes_
 
@@ -71,6 +74,16 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BEHAVIOUR_SET, THRES
             print(f"Warning: Could not calculate AUC for {label}: {str(e)}")
             auc = 0
         
+        # Calculate additional metrics
+        TP = ((y_true_binary == 1) & (y_pred_binary == 1)).sum()
+        TN = ((y_true_binary == 0) & (y_pred_binary == 0)).sum()
+        FP = ((y_true_binary == 0) & (y_pred_binary == 1)).sum()
+        FN = ((y_true_binary == 1) & (y_pred_binary == 0)).sum()
+        
+        accuracy = (TP + TN) / (TP + TN + FP + FN)
+        specificity = TN / (TN + FP) if (TN + FP) > 0 else 0
+        fpr = FP / (FP + TN) if (FP + TN) > 0 else 0
+        
         # Store metrics for this class
         metrics_dict[label] = {
             'AUC': auc,
@@ -78,7 +91,10 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BEHAVIOUR_SET, THRES
             'Precision': report_dict[label]['precision'],
             'Recall': report_dict[label]['recall'],
             'Support': report_dict[label]['support'],
-            'Count': count
+            'Count': count,
+            'Accuracy': accuracy,
+            'Specificity': specificity,
+            'FPR': fpr
         }
     
     # Calculate true weighted averages based on true class prevalence
@@ -96,7 +112,13 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BEHAVIOUR_SET, THRES
         'Recall': sum(metrics_dict[label]['Recall'] * class_frequencies[label] 
                         for label in valid_labels) / total_samples,
         'Support': total_samples,
-        'Count': total_samples
+        'Count': total_samples,
+        'Accuracy': sum(metrics_dict[label]['Accuracy'] * class_frequencies[label]
+                        for label in valid_labels) / total_samples,
+        'Specificity': sum(metrics_dict[label]['Specificity'] * class_frequencies[label]
+                        for label in valid_labels) / total_samples,
+        'FPR': sum(metrics_dict[label]['FPR'] * class_frequencies[label]
+                        for label in valid_labels) / total_samples
     }
     metrics_df = pd.DataFrame.from_dict(metrics_dict, orient='index')
             

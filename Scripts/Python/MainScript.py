@@ -23,7 +23,7 @@ FOLD = 2 # 0, 1, 2, 3, 4
 
 target_activities = {
     "Vehkaoja_Dog": ["Walking", "Eating", "Shaking", "Lying chest"],
-    "Ladds_Seal": ["swimming", "still", "chewing", "facerub"],
+    "Ladds_Seal": ["swimming", "still", "chewing"],
     "Ferdinandy_Dog": ["walk", "eat", "lay"]  # only 3 target activities
     }
 TARGET_ACTIVITIES = target_activities[DATASET_NAME]
@@ -47,88 +47,89 @@ def main():
     # HpoOptimisation.append_files(BASE_PATH)
 
     # and then do the final model run
-    for FOLD in [2, 3, 4, 5]:
-        for DATASET_NAME in ["Vehkaoja_Dog"]:
-            TARGET_ACTIVITIES = target_activities[DATASET_NAME]
-            
-            CreateDatasets.main(DATASET_NAME, TARGET_ACTIVITIES, FOLD)
+    # for FOLD in [1, 2, 3, 4, 5]:
+    #     for DATASET_NAME in ["Ferdinandy_Dog"]:
+    #         TARGET_ACTIVITIES = target_activities[DATASET_NAME]
 
-            for MODEL_TYPE in ['binary']: # 'binary', 'oneclass'
-                for TRAINING_SET in ['some']: 
+    #         # CreateDatasets.main(DATASET_NAME, TARGET_ACTIVITIES, FOLD)
 
-                    print(f"Running {DATASET_NAME} with training set {TRAINING_SET} and {MODEL_TYPE} model for fold {FOLD}")
+    #         for TRAINING_SET in ['some', 'target', 'all']:
+    #             for MODEL_TYPE in ['multi']:
+                
+    #                 print(f"Running {DATASET_NAME} with training set {TRAINING_SET} and {MODEL_TYPE} model for fold {FOLD}")
                     
-                    if MODEL_TYPE == 'multi':
-                        for BEHAVIOUR_SET in ['Activity', 'Other']:
-                            if BEHAVIOUR_SET == 'Activity':
-                                THRESHOLDING = False
-                                print(f"thresholding: {THRESHOLDING}")
-                                # HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                #                  TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
-                                # HpoOptimisation.append_files(BASE_PATH, FOLD)
-                                # TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                #                 TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
-                                # TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                #                    TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS=True, FOLD = FOLD)
-                                # TestModelClosed.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BEHAVIOUR_SET, THRESHOLDING, FOLD)
-                            else:
-                                THRESHOLDING = False
-                                # HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                #                     TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
-                                # HpoOptimisation.append_files(BASE_PATH, FOLD)
-                                # TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                #                  TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
-                                # TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                #                  TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS=True, FOLD = FOLD)
-                                # TestModelClosed.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BEHAVIOUR_SET, THRESHOLDING, FOLD)
-                    else:
-                        THRESHOLDING = False
-                        HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                                    TARGET_ACTIVITIES, behaviour_set = None, thresholding= False, fold= FOLD)
-                        HpoOptimisation.append_files(BASE_PATH, FOLD)
-                        TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                          TARGET_ACTIVITIES, BEHAVIOUR_SET= None, THRESHOLDING = False, FOLD = FOLD)
+    #                 if MODEL_TYPE == 'multi':
+    #                     for BEHAVIOUR_SET in ['Activity', 'Other']:
+    #                         if BEHAVIOUR_SET == 'Activity':
+    #                             for THRESHOLDING in [False]:
+    #                                 print(f"thresholding: {THRESHOLDING}")
+    #                                 # HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+    #                                 #                 TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
+    #                                 # HpoOptimisation.append_files(BASE_PATH, FOLD)
+    #                                 # TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+    #                                 #                 TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
+    #                                 TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+    #                                                     TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS=True, FOLD = FOLD)
+    #                                 if THRESHOLDING is False:
+    #                                     TestModelClosed.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BEHAVIOUR_SET, THRESHOLDING, FOLD)
+    #                         else:
+    #                             THRESHOLDING = False
+    #                             # HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+    #                             #                     TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
+    #                             # HpoOptimisation.append_files(BASE_PATH, FOLD)
+    #                             # TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+    #                             #                  TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD)
+    #                             # TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+    #                             #                  TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS=True, FOLD = FOLD)
+    #                 else:
+    #                     THRESHOLDING = False
+                        # HpoOptimisation.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+                        #                             TARGET_ACTIVITIES, behaviour_set = None, thresholding= False, fold= FOLD)
+                        # HpoOptimisation.append_files(BASE_PATH, FOLD)
+                        # TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+                        #                   TARGET_ACTIVITIES, BEHAVIOUR_SET= None, THRESHOLDING = False, FOLD = FOLD)
                     
-                        TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-                                        TARGET_ACTIVITIES, BEHAVIOUR_SET = None, THRESHOLDING =False, REASSIGN_LABELS=True, FOLD = FOLD)
-                        # TestModelClosed.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, BEHAVIOUR_SET = None, THRESHOLDING = False, FOLD = FOLD)
-                    
+                        # TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+                        #               TARGET_ACTIVITIES, BEHAVIOUR_SET = None, THRESHOLDING =False, REASSIGN_LABELS=True, FOLD = FOLD)
        #  HpoOptimisation.append_files(BASE_PATH, FOLD)
 
 
-    # DATASET_NAME = "Vehkaoja_Dog"
+    # DATASET_NAME = "Ferdinandy_Dog"
     # TARGET_ACTIVITIES = target_activities[DATASET_NAME] 
-    # FOLD = 4
-    # MODEL_TYPE = "binary"
-    # BEHAVIOUR_SET = "Activity"
+    # MODEL_TYPE = "multi"
+    # BEHAVIOUR_SET = "Other"
     # THRESHOLDING = False
-    # TRAINING_SET = "some"
 
-
-
-
-
-
-    # TrainModel.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-    #     TARGET_ACTIVITIES, BEHAVIOUR_SET = None, THRESHOLDING = False, FOLD = FOLD)
-    # TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
-    #     TARGET_ACTIVITIES, BEHAVIOUR_SET = None, THRESHOLDING = False, REASSIGN_LABELS=True, FOLD = FOLD)
-
-
-
+    # for FOLD in [1, 2, 3, 4, 5]:
+    #     for TRAINING_SET in ['all', 'some', 'target']:
+    #         for MODEL_TYPE in ['oneclass', 'binary', 'multi']:
+    #             if MODEL_TYPE == 'multi':
+    #                 for BEHAVIOUR_SET in ['Activity', 'Other']:
+    #                     if BEHAVIOUR_SET == 'Activity':
+    #                         for THRESHOLDING in [False, True]: 
+    #                             print(FOLD)
+    #                             TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+    #                             TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS=True, FOLD = FOLD)
+    #                     else:
+    #                         TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+    #                         TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING = False, REASSIGN_LABELS=True, FOLD = FOLD)
+    #             else:    
+    #                 TestModelOpen.main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, 
+    #                     TARGET_ACTIVITIES, BEHAVIOUR_SET = None, THRESHOLDING = False, REASSIGN_LABELS=True, FOLD = FOLD)
 
     
-    # First run the comparisons to generate data
-    # CombineResults.main(BASE_PATH)
+    # # # First run the comparisons to generate data
+    #  CombineResults.main(BASE_PATH)
 
-    # PlotResults.main(BASE_PATH)
+    PlotResults.main(BASE_PATH, "Ferdinandy_Dog")
 
     # plot the volume to performance graph
     # import PlotVolumePerformance
     # PlotVolumePerformance.main(BASE_PATH)
 
     # import PlotFullMulticlass
-    # PlotFullMulticlass.main(BASE_PATH, target_activities)
+    # PlotFullMulticlass.generate_full_class_data(BASE_PATH, target_activities, FOLD = 2)
+    # PlotFullMulticlass.main(BASE_PATH, target_activities, FOLD = 2)
 
 if __name__ == "__main__":
     main()
