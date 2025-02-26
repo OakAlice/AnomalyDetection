@@ -1,4 +1,3 @@
-from MainScript import BASE_PATH, THRESHOLDING
 from joblib import load
 from pathlib import Path
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve

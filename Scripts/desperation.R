@@ -75,7 +75,9 @@ for(model in model_types){
 subset_df$training_set <- relevel(factor(subset_df$training_set), ref = "all")
 model_types <- unique(subset_df$model_type)
 
-for(model in onceclass){
+for(model in model_types){
+  
+  model = 'oneclass'
   print(paste0("=============", model, "=============="))
   
   subset_df2 <- df %>% filter(model_type == model)
@@ -119,3 +121,16 @@ emmeans(full_model, pairwise ~ model_type | training_set, adjust = "bonferroni")
 
 
 
+
+
+
+
+path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection/Data/Feature_data/Ferdinandy_Dog_features.csv"
+data <- fread(path)
+
+counts <- data %>% group_by(Activity) %>% count()  
+
+
+  
+  
+  

@@ -1,4 +1,3 @@
-from MainScript import BASE_PATH, DATASET_NAME # BEHAVIOUR_SET, MODEL_TYPE, TRAINING_SET, TARGET_ACTIVITIES, 
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import GroupKFold
