@@ -144,7 +144,7 @@ def generate_heatmap_confusion_matrix(cm, labels, TARGET_ACTIVITIES, cm_path):
     plt.savefig(cm_path, bbox_inches='tight', dpi=300)
     plt.close()
 
-def generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHODLING, REASSIGN_LABELS, FOLD):
+def generate_confusion_matrices(multiclass_predictions, BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHODLING, REASSIGN_LABELS, FOLD):
     y_true = multiclass_predictions['True_Label']
     y_pred = multiclass_predictions['Predicted_Label']
     labels = sorted(list(set(y_true) | set(y_pred)))
@@ -201,7 +201,7 @@ def generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_S
         else:
             cm_df.to_csv(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_fullclasses_confusion_matrix.csv"))
         
-def calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD):
+def calculate_performance(multiclass_predictions, BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD):
     y_true = multiclass_predictions['True_Label']
     y_pred = multiclass_predictions['Predicted_Label']
     labels = sorted(list(set(y_true) | set(y_pred)))
@@ -339,11 +339,8 @@ def generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARG
         # print(df.columns[df.isna().any()])
         df = df.dropna(axis=1)
 
-        print("dealing with the metadata columns")
         X = df.drop(columns=['Activity', 'ID', 'Time'])
-        print(X.head())
         y = df['Activity']
-        print(y.head())
         metadata = df[['ID', 'Time']]
     
         if MODEL_TYPE.lower() == 'multi':
@@ -389,7 +386,6 @@ def predict_single_model(X, y, metadata, model, scaler, MODEL_TYPE, target_class
     """Helper function to generate predictions for a single model"""
     # Scale features
     scaler_features = scaler.feature_names_in_
-    print(scaler_features)
     if "Time" in scaler_features:    
         print("removing Time that was accidentally included")
         scaler_features = [feat for feat in scaler_features if feat != "Time"]  # Remove Time from features
@@ -460,12 +456,11 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, B
         else:
             # do nothing
             print("not reassigning labels")
-            print(multiclass_predictions['True_Label'].unique())
         
         # generate the confusion matrices
-        generate_confusion_matrices(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD)
+        generate_confusion_matrices(multiclass_predictions, BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD)
         # calculate the metrics
-        calculate_performance(multiclass_predictions, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD)
+        calculate_performance(multiclass_predictions, BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD)
 
     except Exception as e:
         print(f"Error: {e}. Skipping iteration")

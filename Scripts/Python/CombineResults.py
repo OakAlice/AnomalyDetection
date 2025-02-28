@@ -51,12 +51,6 @@ def combine_metrics_per_fold(BASE_PATH):
         save_path = Path(f"{BASE_PATH}/Output/fold_{fold}/Testing/all_metrics.csv")
         combined_metrics.to_csv(save_path, index=False)
 
-from pathlib import Path
-import pandas as pd
-
-from pathlib import Path
-import pandas as pd
-
 def combine_metrics_across_folds(BASE_PATH):
     """
     Combines metrics from multiple folds and standardizes the closed_open column values.
@@ -118,8 +112,8 @@ def main(BASE_PATH):
     combine_metrics_per_fold(BASE_PATH)
     print("combining metrics across folds")
     combine_metrics_across_folds(BASE_PATH)
-    print("averaging metrics across folds")
-    average_metrics_across_folds(BASE_PATH)
+    # print("averaging metrics across folds")
+    # average_metrics_across_folds(BASE_PATH)
 
 if __name__ == "__main__":
     main(BASE_PATH)

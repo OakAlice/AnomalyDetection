@@ -70,8 +70,8 @@ def main():
                                     TARGET_ACTIVITIES, BEHAVIOUR_SET = None, THRESHOLDING = False, 
                                     REASSIGN_LABELS=True, FOLD=FOLD)
 
-    # # # First run the comparisons to generate data
-    #  CombineResults.main(BASE_PATH)
+    # First run the comparisons to generate data
+    CombineResults.main(BASE_PATH)
 
     # PlotResults.main(BASE_PATH, "Ferdinandy_Dog")
 
