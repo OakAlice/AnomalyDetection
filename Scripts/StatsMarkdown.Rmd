@@ -4,6 +4,13 @@ output: html_document
 date: "2025-02-27"
 ---
 
+## Introduction
+Behaviour classification from animal accelerometer data is an inherently open set recognition (OSR) task, but this fact is rarely recognised. In this study, I compared the performance of the control (standard multiclass classification) approach to 4 possible OSR models on increasingly open test data with 3 conditions: all, some, and target. I have now trained and tested a model for each of these model type x condition scenarios. I have collated the performance scores from each and am now evaluating my hypotheses.
+
+* 1: Control models would exhibit significantly lower performance when tested on open compared to closed data.
+* 2: All multiclass models (control, other, threshold) would exhibit significantly lower performance when tested on open compared to closed data, while divide-and-conquer strategies (one-class and binary) would not differ.
+* 3: Combined predictions from multiple binary one-vs-all models would achieve the highest performance of all models tested on open data in conditions some and target.
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
@@ -17,12 +24,10 @@ library(nlme)
 
 # load in the data
 path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection/Scripts/all_combined_metrics.csv"
-# path <- "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection/Output/Combined/all_combined_metrics.csv"
 df <- read.csv(path)
 
-
+# define some variables
 target_behaviours <- c("eat", "lay", "walk", "Other")
-target_behaviours2 <- c("eat", "lay", "walk")
 
 # recode some of the variables
 df <- df %>%
@@ -33,9 +38,7 @@ df <- df %>%
                              "multi_Activity_threshold" = "Threshold",
                              "multi_Other" = "Other"))
 
-
-
-# define my own theme for all my plots
+# define my theme for all my plots
 my_theme <- function() {
   theme(
 # both axes
@@ -67,42 +70,44 @@ my_theme <- function() {
   )
 }
   
-
 ```
 
-## Accounting for chance
-The main metric that I'm using, AUC already has a built-in mechanism for accounting for chance (0.5 is chance rate) but it also a little used metric in my field. To make things more accessible, I could use accuracy. Accuracy is heavily affected by class imbalance and I have to account for the rate of chance as determined by class prevalence. Although I think it is somewhat unfair to make it a truly random guesser (all classes in equal prevelance) because only a truly naive model would do that, and we rarely deal with truly naive guessers in reality... for simplicity in this paper, I will use this system. Furthermore, I don't think that the one-class and binary models (which are actually 4 independnt models and a default class) can reasonably be assessed in this manner... However, I can't resolve it, so may just have to take this solution.
+## Evaluation metrics
+I used the metric AUC for model tuning as it does not require the selection of a threshold and has a built-in mechanism for accounting for chance (0.5 is chance rate). For the final evaluations, I will use accuracy, which measures the proportion of correct predictions of total predictions, and specificity which is 1 - false positive rate. With these two metrics I will be able to see both the positive predictions and the ability of the model to avoid over-predicting the known classes. When using these metrics to compare models with differing amounts of classes, however, we have to account for the relative rate of chance (i.e., the probability of a correct prediction is higher in a task with fewer possible classes, so we need to correct for that).
 
-In that case, I created a new column in my dataframe with the chance-adjusted accuracy for each behaviour within each model.
+The simplest way to account for chance is to compare the observed predictions to the chance predictions of a naive random guesser. Naive random guessers guess each class in equal proportion. Accuracy for each class will therefore be 1/n and specificity will be (k-1)/k. 
 
-```{r adjusting for chance}
+Therefore, I calculated these chance rates for each model type and used these to adjust the observed values. I used these adjusted metrics to test each of my hypotheses.
+
+```{r adjusting for chance, warning=FALSE, include=FALSE}
 
 chance <- df %>% 
   group_by(model_type, training_set, closed_open, fold) %>%
   count() %>%
-  mutate(chance_accuracy = 1/n) %>%
+  mutate(chance_accuracy = 1/n,
+         chance_specificity = (n-1)/n) %>%
   ungroup() %>%
   select(-c("fold", "n"))
 
 df <- merge(chance, df, by = c("model_type", "training_set", "closed_open"))
 
 df <- df %>%
-  mutate(Chance_Accuracy = Accuracy - chance_accuracy) %>%
-  select(-chance_accuracy)
+  mutate(Adj_Accuracy = Accuracy - chance_accuracy,
+         Adj_Specificity = Specificity - chance_specificity) %>%
+  select(-chance_accuracy, chance_specificity)
 
-# rearrange it to be long
+# rearrange it to be long for plotting
 long_df <- melt(df, 
                 id.vars = c("model_type", "training_set", "closed_open", "behaviour", "fold"), 
-                measure.vars = c("AUC", "Chance_Accuracy"), 
+                measure.vars = c("Adj_Accuracy", "Adj_Specificity"), 
                 variable.name = "Metric",
                 value.name = "Value") 
 
 ```
 
-
 ## Hypothesis 1
 
-I hypothesised that the control model would decline in performance when tested on open rather than closed sets. To test this, I isolated my results from my control models and ran a nested anova to see whether there was a significant difference between conditions. I used only the weighted average of each fold because each model had a different number of behaviours.
+I hypothesised that the control model would decline in performance when tested on open rather than closed sets. To test this, I isolated my results from my control models. I used the weighted average of each fold
 
 I plotted this relationship.
 
@@ -125,12 +130,15 @@ subset_df <- df %>% filter(closed_open == "closed",
                            behaviour == 'weighted_avg',
                            model_type == 'Control')
 
-aov_model <- aov(AUC ~training_set, data = subset_df)
-summary(aov_model)
-TukeyHSD(aov_model)
+acc_aov_model <- aov(Adj_Accuracy ~training_set, data = subset_df)
+summary(acc_aov_model)
+TukeyHSD(acc_aov_model)
+
+spec_aov_model <- aov(Adj_Specificity ~training_set, data = subset_df)
+summary(spec_aov_model)
+TukeyHSD(spec_aov_model)
 
 ```
-
 I then tested whether this changed when tested on open sets.
 
 ```{r hypo1.part2}
@@ -139,22 +147,20 @@ subset_df <- df %>% filter(closed_open == "open",
                            model_type == 'Control')
 subset_df$training_set <- relevel(factor(subset_df$training_set), ref = "all")
 
-aov_model <- aov(AUC ~training_set, data = subset_df)
-summary(aov_model)
+acc_aov_model <- aov(Adj_Accuracy ~training_set, data = subset_df)
+summary(acc_aov_model)
+TukeyHSD(acc_aov_model)
 
-TukeyHSD(aov_model)
+spec_aov_model <- aov(Adj_Specificity ~training_set, data = subset_df)
+summary(spec_aov_model)
+TukeyHSD(spec_aov_model)
 ```
 
 ## Hypothesis 2
 
-I hypothesised that the three multiclass models (control, threshold, and other) would all significantly degrade in performance between the all and reduced training conditions whereas the divide and conquer methods would not.
-
-I couldn't decide whether to use just the weighted_avg AUC from each test or the AUC from each of the target behaviours
-
-Firstly I plotted it.
+I hypothesised that the three multiclass models (control, threshold, and other) would all significantly degrade in performance between the all and reduced training conditions whereas the divide and conquer methods would not. Firstly I plotted it.
 
 ```{r hypo2.plot1}
-
 subset_df2 <- long_df %>% filter(closed_open == "open",
                            behaviour == "weighted_avg")
 subset_df2$training_set <- relevel(factor(subset_df2$training_set), ref = "all")
@@ -171,27 +177,18 @@ ggplot(data = subset_df2, aes(x = training_set, y = Value)) +
 First, I checked whether there was a significant interaction between the two variables.
 
 ```{r hypo2.part1}
-# aov_model <- aov(AUC ~ training_set * model_type, data = subset_df2)
-# summary(aov_model)
+subset_df3 <- subset_df2[subset_df2$Metric == "Adj_Accuracy", ]
+lme_model3 <- lmer(Value ~ training_set * model_type + (1 | fold), data = subset_df3)
+summary(lme_model3)
 
-subset_df2 <- subset_df2[subset_df2$Metric == "AUC", ]
-
-lme_model <- lmer(Value ~ training_set * model_type + (1 | fold), data = subset_df2)
-summary(lme_model)
-
+subset_df4 <- subset_df2[subset_df2$Metric == "Adj_Specificity", ]
+lme_model4 <- lmer(Value ~ training_set * model_type + (1 | fold), data = subset_df4)
+summary(lme_model4)
 ```
-There were no significant interactions found. Therefore, a reduced model was used instead and the fit between models was compared.
-
-```{r hypo2.part2}
-lme_model_reduced <- lmer(AUC ~ training_set + model_type + (1 | fold), data = subset_df2)
-summary(lme_model_reduced)
-
-anova(lme_model, lme_model_reduced)
-```
-There was no significant difference between the model with and without the interaction. Therefore, for simplicity's sake, the reduced model was used. Using this reduced model, pairwise comparisons were assessed.
+There were significant interactions.
 
 ```{r hypo2.part3}
-pairwise <- emmeans(lme_model_reduced, pairwise ~ model_type | training_set, adjust = "tukey")
+pairwise <- emmeans(lme_model3, pairwise ~ model_type | training_set, adjust = "tukey")
 pairwise$contrasts
 ```
 
