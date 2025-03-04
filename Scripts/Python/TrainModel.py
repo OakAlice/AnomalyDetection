@@ -196,7 +196,7 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
                 threshold = 'NOthreshold'
                 model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_{threshold}_model.joblib")
             else:
-                model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}_model.joblib")
+                model_path = Path(f"{BASE_PATH}/Output/fold_{FOLD}/Models/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_Other_model.joblib")
             
             if model_path.exists():
                 print(f"Model {model_path} already exists, skipping")
@@ -207,9 +207,10 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
 
             df = df.groupby(['ID', 'Activity']).apply(
                         lambda x: x.sample(n=min(len(x), 200), replace=False)
-                    ).reset_index(drop=True)    
+                    ).reset_index(drop=True)
             
             model_params = relevant_params[relevant_params['behaviour'] == BEHAVIOUR_SET]
+
             print(f"\nParameters for behaviour set {BEHAVIOUR_SET}:")
             print(model_params)
             

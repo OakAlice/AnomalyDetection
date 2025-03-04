@@ -36,7 +36,7 @@ def main():
     # Add the project root directory to Python path
     sys.path.append(BASE_PATH)
 
-    DATASET_NAME = "Ferdinandy_Dog"
+    DATASET_NAME = "Ferdinandy_Dog" 
     TARGET_ACTIVITIES = target_activities[DATASET_NAME]
 
     # parameters for the experiments

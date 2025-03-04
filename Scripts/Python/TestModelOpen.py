@@ -241,6 +241,10 @@ def calculate_performance(multiclass_predictions, BASE_PATH, DATASET_NAME, TRAIN
         # Calculate accuracy for this class
         accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0
         
+        # Compute Youden’s J
+        tpr = tp / (tp + fn) if (tp + fn) > 0 else 0   
+        yodenj = tpr - fpr
+
         # Store metrics for this class
         metrics_dict[label] = {
             'AUC': auc,
@@ -250,7 +254,8 @@ def calculate_performance(multiclass_predictions, BASE_PATH, DATASET_NAME, TRAIN
             'Accuracy': accuracy,
             'Specificity': specificity,
             'FPR': fpr,
-            'Support': report_dict[label]['support'],
+            'TPR': tpr,
+            'YodenJ': yodenj,
             'Count': count
         }
 
@@ -277,7 +282,10 @@ def calculate_performance(multiclass_predictions, BASE_PATH, DATASET_NAME, TRAIN
                         for label in valid_labels) / total_samples,
         'FPR': sum(metrics_dict[label]['FPR'] * class_frequencies[label] 
                     for label in valid_labels) / total_samples,
-        'Support': total_samples,
+        'TPR': sum(metrics_dict[label]['TPR'] * class_frequencies[label] 
+                    for label in valid_labels) / total_samples,
+        'YodenJ': sum(metrics_dict[label]['YodenJ'] * class_frequencies[label] 
+                    for label in valid_labels) / total_samples,
         'Count': total_samples
     }
     metrics_df = pd.DataFrame.from_dict(metrics_dict, orient='index')
