@@ -153,7 +153,7 @@ def generate_confusion_matrices(multiclass_predictions, BASE_PATH, DATASET_NAME,
 
     full_labels = sorted(list(set(y_true) | set(y_pred)))
 
-    if REASSIGN_LABELS is not False:
+    if REASSIGN_LABELS:
         if MODEL_TYPE.lower() == 'binary' or MODEL_TYPE.lower() == 'oneclass':
             # for binary and oneclass, change so everything not in target activities is "Other"
             y_true = y_true.apply(lambda x: x if x in TARGET_ACTIVITIES else 'Other')
@@ -202,10 +202,15 @@ def generate_confusion_matrices(multiclass_predictions, BASE_PATH, DATASET_NAME,
             cm_df.to_csv(Path(f"{BASE_PATH}/Output/fold_{FOLD}/Testing/ConfusionMatrices/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_fullclasses_confusion_matrix.csv"))
         
 def calculate_performance(multiclass_predictions, BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, REASSIGN_LABELS, FOLD):
+    # Initialize y_true and y_pred for all cases
     y_true = multiclass_predictions['True_Label']
     y_pred = multiclass_predictions['Predicted_Label']
     labels = sorted(list(set(y_true) | set(y_pred)))
-    
+
+    # Special case handling is no longer needed since variables are already initialized
+    if MODEL_TYPE.lower() == 'multi' and (BEHAVIOUR_SET.lower() == 'other' or BEHAVIOUR_SET == 'threshold'):
+        pass  # Variables are already set correctly
+        
     # Get classification report for per-class metrics
     report_dict = classification_report(y_true, y_pred, zero_division=0, output_dict=True, labels=labels)
 
@@ -238,10 +243,7 @@ def calculate_performance(multiclass_predictions, BASE_PATH, DATASET_NAME, TRAIN
         # Calculate Specificity (TNR): TN / (TN + FP)
         specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
         
-        # Calculate accuracy for this class
-        accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0
-        
-        # Compute Youden’s J
+        # Calculate Youden’s J
         tpr = tp / (tp + fn) if (tp + fn) > 0 else 0   
         yodenj = tpr - fpr
 
@@ -251,7 +253,7 @@ def calculate_performance(multiclass_predictions, BASE_PATH, DATASET_NAME, TRAIN
             'F1': report_dict[label]['f1-score'],
             'Precision': report_dict[label]['precision'],
             'Recall': report_dict[label]['recall'],
-            'Accuracy': accuracy,
+            'Accuracy': 0,
             'Specificity': specificity,
             'FPR': fpr,
             'TPR': tpr,
@@ -267,6 +269,8 @@ def calculate_performance(multiclass_predictions, BASE_PATH, DATASET_NAME, TRAIN
     total_samples = class_frequencies.sum()
     valid_labels = [label for label in labels if label in class_frequencies.index]
 
+    accuracy = np.sum(y_pred == y_true) / len(y_true)
+
     metrics_dict['weighted_avg'] = {
         'AUC': sum(metrics_dict[label]['AUC'] * class_frequencies[label] 
                     for label in valid_labels) / total_samples,
@@ -276,8 +280,7 @@ def calculate_performance(multiclass_predictions, BASE_PATH, DATASET_NAME, TRAIN
                         for label in valid_labels) / total_samples,
         'Recall': sum(metrics_dict[label]['Recall'] * class_frequencies[label] 
                         for label in valid_labels) / total_samples,
-        'Accuracy': sum(metrics_dict[label]['Accuracy'] * class_frequencies[label]
-                        for label in valid_labels) / total_samples,
+        'Accuracy': accuracy,
         'Specificity': sum(metrics_dict[label]['Specificity'] * class_frequencies[label]
                         for label in valid_labels) / total_samples,
         'FPR': sum(metrics_dict[label]['FPR'] * class_frequencies[label] 
@@ -448,8 +451,7 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, B
         # generate the predictions
         multiclass_predictions = generate_predictions(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, BEHAVIOUR_SET, THRESHOLDING, FOLD) 
         
-        if REASSIGN_LABELS is not False:
-            print("reassigning labels")
+        if REASSIGN_LABELS:
         # reassign the labels to add in the "Other class"
             if MODEL_TYPE.lower() != 'multi':
                 # for one-class and binary class, everything not in target activities is "Other"
@@ -458,6 +460,7 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES, B
             else:
                 # for multi class, everything not in trained behaviours is "Other"
                 possible_behaviours = list(set(multiclass_predictions['Predicted_Label']))
+                
                 print(f"possible behaviours: {possible_behaviours}")
                 multiclass_predictions['True_Label'] = multiclass_predictions['True_Label'].apply(lambda x: 'Other' if x not in possible_behaviours else x)
                 multiclass_predictions['Predicted_Label'] = multiclass_predictions['Predicted_Label'].apply(lambda x: 'Other' if x not in possible_behaviours else x)

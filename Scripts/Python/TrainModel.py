@@ -1,6 +1,5 @@
 # Train the optimal model
 
-from MainScript import BASE_PATH, BEHAVIOUR_SET, TARGET_ACTIVITIES, DATASET_NAME # MODEL_TYPE, TRAINING_SET
 from sklearn.svm import SVC, OneClassSVM
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix
@@ -165,7 +164,7 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
                 # Take up to 200 samples per group, or all available if fewer
 
                 df = df.groupby(['ID', 'Activity']).apply(
-                    lambda x: x.sample(n=min(len(x), 200), replace=False)
+                    lambda x: x.sample(n=min(len(x), 1000), replace=False)
                 ).reset_index(drop=True)
 
                 behaviour_params = relevant_params[relevant_params['behaviour'] == behaviour]
@@ -206,7 +205,7 @@ def main(BASE_PATH, DATASET_NAME, TRAINING_SET, MODEL_TYPE, TARGET_ACTIVITIES = 
             print(f"path: {Path(f"{BASE_PATH}/Output/fold_{FOLD}/Split_data/{DATASET_NAME}_{TRAINING_SET}_{MODEL_TYPE}_{BEHAVIOUR_SET}.csv")}")
 
             df = df.groupby(['ID', 'Activity']).apply(
-                        lambda x: x.sample(n=min(len(x), 200), replace=False)
+                        lambda x: x.sample(n=min(len(x), 1000), replace=False)
                     ).reset_index(drop=True)
             
             model_params = relevant_params[relevant_params['behaviour'] == BEHAVIOUR_SET]

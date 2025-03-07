@@ -52,15 +52,6 @@ def combine_metrics_per_fold(BASE_PATH):
         combined_metrics.to_csv(save_path, index=False)
 
 def combine_metrics_across_folds(BASE_PATH):
-    """
-    Combines metrics from multiple folds and standardizes the closed_open column values.
-    
-    Args:
-        BASE_PATH (str): Base path to the metrics files
-        
-    Returns:
-        None: Saves combined metrics to a CSV file
-    """
     # Combine metrics from all folds
     all_metrics = []
     for fold in range(1, 6):
@@ -70,11 +61,6 @@ def combine_metrics_across_folds(BASE_PATH):
 
     combined_metrics = pd.concat(all_metrics, ignore_index=True)
     
-    # Explicitly modify the closed_open column values
-    combined_metrics['closed_open'] = combined_metrics['closed_open'].fillna('open')
-    combined_metrics.loc[combined_metrics['closed_open'] == 'fullclasses_', 'closed_open'] = 'open'
-    combined_metrics.loc[combined_metrics['closed_open'] == 'fullclasses_closed', 'closed_open'] = 'closed'
-    
     # Save the combined metrics
     save_path = Path(f"{BASE_PATH}/Output/Combined/all_combined_metrics.csv")
     save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -82,38 +68,12 @@ def combine_metrics_across_folds(BASE_PATH):
     
     return combined_metrics
 
-def average_metrics_across_folds(BASE_PATH):
-    combined_metrics = pd.read_csv(Path(f"{BASE_PATH}/Output/Combined/all_combined_metrics.csv"))
-
-    # Replace empty AUC values with 0
-    combined_metrics.loc[combined_metrics['AUC'] == "", 'AUC'] = 0
-
-    # Display unique values in each grouping column to inspect potential group values
-    group_columns = ['dataset', 'model_type', 'training_set', 'behaviour', 'closed_open']
-    grouped = combined_metrics.groupby(group_columns)
-
-    # Average the metrics across all folds, saving mean and std as new columns
-    averaged_metrics = grouped.agg(
-        mean_AUC=('AUC', 'mean'),
-        std_AUC=('AUC', 'std')
-    ).reset_index()
-
-    # Flatten the multi-level column headers:
-    averaged_metrics.columns = [
-        '_'.join(filter(None, map(str, col))) for col in averaged_metrics.columns.values
-    ]
-
-    # Save the averaged metrics to a CSV file
-    save_path = Path(f"{BASE_PATH}/Output/Combined/all_averaged_metrics.csv")
-    averaged_metrics.to_csv(save_path, index=False)
 
 def main(BASE_PATH):
     print("combining metrics per fold")
     combine_metrics_per_fold(BASE_PATH)
     print("combining metrics across folds")
     combine_metrics_across_folds(BASE_PATH)
-    # print("averaging metrics across folds")
-    # average_metrics_across_folds(BASE_PATH)
 
 if __name__ == "__main__":
     main(BASE_PATH)

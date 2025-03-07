@@ -4,14 +4,7 @@ output: html_document
 date: "2025-02-27"
 ---
 
-## Introduction
-In this study, I compared the performance of the control (standard multiclass classification) approach to 4 possible OSR models on increasingly open test data with 3 conditions: all, some, and target. I have trained and tested a model for each of these model type x condition scenarios. Here, I evaluate the following hypotheses using the collated performance scores:
-
-1. Control models would exhibit significantly lower performance when tested on open compared to closed data.
-2. All multiclass models (control, other, threshold) would exhibit significantly lower performance when tested on open compared to closed data, while divide-and-conquer strategies (one-class and binary) would not differ.
-3. Combined predictions from multiple binary one-vs-all models would achieve the highest performance of all models tested on open data in conditions some and target.
-
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = FALSE, error = FALSE)
 
 # packages
@@ -25,6 +18,7 @@ library(car)
 library(DHARMa)
 library(glmmTMB)
 library(MuMIn)
+library(GGally)
 
 # load in the data
 path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection/Scripts/all_combined_metrics.csv"
@@ -34,11 +28,11 @@ original_df <- read.csv(path)
 original_df <- original_df %>%
   mutate(model_type = recode_factor(model_type,
                              "multi_Activity_NOthreshold" = "Control",
-                             "binary" = "Binary",
                              "oneclass" = "One-class",
+                             "binary" = "Binary",
                              "multi_Activity_threshold" = "Threshold",
                              "multi_Other" = "Other")) %>%
-  select(-c(Support, Count, file, dataset))
+  select(-c(Count, file, dataset))
 
 
 # define my theme for all my plots
@@ -49,7 +43,7 @@ my_theme <- function() {
   axis.text = element_text(size = 10),
   
   # x axis
-  axis.text.x = element_text(angle = -20, vjust = 1, hjust = 0),
+  axis.text.x = element_text(angle = -30, vjust = 1, hjust = 0),
   
   # legend
   legend.title = element_text(size = 12, face = "bold"), 
@@ -75,6 +69,13 @@ my_theme <- function() {
   
 ```
 
+## Introduction
+In this study, I compared the performance of the control (standard multiclass classification) approach to 4 possible OSR models on increasingly open test data with 3 conditions: all, some, and target. I have trained and tested a model for each of these model_type * training_set scenarios. Here, I evaluate the following hypotheses using the collated performance scores:
+
+1. Control models would exhibit significantly lower performance when tested on open compared to closed data.
+2. All multiclass models (control, other, threshold) would exhibit significantly lower performance when tested on open compared to closed data, while divide-and-conquer strategies (one-class and binary) would not differ.
+3. Combined predictions from multiple binary one-vs-all models would achieve the highest performance of all models tested on open data in conditions some and target.
+
 ## Evaluation Metrics
 For these evaluations, I use three key metrics:
 - Accuracy
@@ -91,38 +92,39 @@ I use weighted averages across all behaviors (target and non-target) to provide 
 ```{r calculating random baselines, include = FALSE}
 # calculate the number of classes
 metrics_df <- original_df %>% 
-  group_by(model_type, training_set, closed_open, fold) %>% 
+  group_by(model_type, training_set, fold) %>% 
   summarize(
-    n = n(),
+    n = length(unique(behaviour))-1, # account for weighted_avg not counting
     random_accuracy = 1/n,
     random_specificity = (n-1)/n,
     random_F1 = 1/n,
     random_Yoden = 2/n -1,
+    random_AUC = 0.5,
     .groups = "drop"
   ) 
 
 most_common_metrics <- metrics_df %>%
-  group_by(model_type, training_set, closed_open) %>%
-  count(n, random_accuracy, random_specificity, random_F1, random_Yoden) %>%
-  arrange(model_type, training_set, closed_open, desc(nn)) %>%
-  group_by(model_type, training_set, closed_open) %>%
+  group_by(model_type, training_set) %>%
+  count(n, random_accuracy, random_specificity, random_F1, random_Yoden, random_AUC) %>%
+  arrange(model_type, training_set, desc(nn)) %>%
+  group_by(model_type, training_set) %>%
   slice(1) %>%
   ungroup() %>%
   select(-nn) # Remove the count column
 
 # Now apply these most common values to all folds within each combination
 standardized_metrics <- metrics_df %>%
-  select(model_type, training_set, closed_open, fold) %>%
+  select(model_type, training_set, fold) %>%
   left_join(
     most_common_metrics,
-    by = c("model_type", "training_set", "closed_open")
+    by = c("model_type", "training_set")
   )
 
 # Join this with the original dataframe
 df_full <- original_df %>%
   left_join(
     standardized_metrics,
-    by = c("model_type", "training_set", "closed_open", "fold")
+    by = c("model_type", "training_set", "fold")
   ) 
 
 df <- df_full%>%
@@ -136,92 +138,66 @@ I hypothesised that the control model would decline in performance when tested o
 
 I plotted this relationship where the coral line is the performance of chance for each metric.
 
-```{r hypo1.plot1, echo = FALSE}
-# rearrange it to be long for plotting
-long_df <- melt(df, 
-                id.vars = c("model_type", "training_set", "closed_open", "behaviour", "fold", "random_accuracy", "random_specificity", "random_F1"), 
-                measure.vars = c("Accuracy", "Specificity", "F1"), 
-                variable.name = "Metric",
-                value.name = "Value") 
+```{r hypo1.plot1, echo = FALSE, warning=FALSE}
+# Create long format data focusing only on Accuracy and F1
+plot_df <- df %>%
+  select(model_type, training_set, behaviour, fold, 
+         Accuracy, F1, random_accuracy, random_F1) %>%
+  pivot_longer(cols = c(Accuracy, F1),
+               names_to = "Metric",
+               values_to = "Value") %>%
+  filter(model_type == 'Control') %>%
+  mutate(training_set = factor(training_set, levels = c("all", levels(factor(training_set))[levels(factor(training_set)) != "all"])),
+         random_value = if_else(Metric == "Accuracy", random_accuracy, random_F1))
 
-subset_df <- long_df %>% filter(model_type == 'Control')
-subset_df$training_set <- relevel(factor(subset_df$training_set), ref = "all")
-
-hypo1 <- ggplot(subset_df, aes(x = training_set, y = Value)) +
-  geom_boxplot() +
-
-  # Accuracy
-  geom_segment(data = subset_df %>% 
-                 filter(Metric == "Accuracy") %>%
-                 distinct(training_set, closed_open, random_accuracy) %>%
-                 mutate(Metric = factor("Accuracy")),  # Ensure Metric is present
-               aes(x = as.numeric(training_set) - 0.3, 
-                   xend = as.numeric(training_set) + 0.3,
-                   y = random_accuracy, 
-                   yend = random_accuracy,
-                   group = Metric),  # Match facet variable
-               color = "coral", 
-               linewidth = 1) +
-  
-  # F1
-  geom_segment(data = subset_df %>% 
-                 filter(Metric == "F1") %>%
-                 distinct(training_set, closed_open, random_F1) %>%
-                 mutate(Metric = factor("F1")),  # Ensure Metric is present
-               aes(x = as.numeric(training_set) - 0.3, 
-                   xend = as.numeric(training_set) + 0.3,
-                   y = random_F1, 
-                   yend = random_F1,
-                   group = Metric),  # Match facet variable
-               color = "coral", 
-               linewidth = 1) +
-
-  # Specificity
-  geom_segment(data = subset_df %>% 
-                 filter(Metric == "Specificity") %>%
-                 distinct(training_set, closed_open, random_specificity) %>%
-                 mutate(Metric = factor("Specificity")),  # Ensure Metric is present
-               aes(x = as.numeric(training_set) - 0.3, 
-                   xend = as.numeric(training_set) + 0.3,
-                   y = random_specificity, 
-                   yend = random_specificity,
-                   group = Metric),  # Match facet variable
-               color = "coral", 
-               linewidth = 1) +
-
-  facet_grid(Metric ~ closed_open) +
+# Create plot with mean and error bars
+hypo1 <- plot_df %>%
+  group_by(training_set, Metric) %>%
+  summarise(
+    mean = mean(Value, na.rm = TRUE),
+    se = sd(Value, na.rm = TRUE)/sqrt(n()),
+    random_value = first(random_value),
+    .groups = "drop"
+  ) %>%
+  ggplot(aes(x = training_set, y = mean)) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +
+  geom_point(size = 3) +
+  geom_segment(aes(
+    x = as.numeric(training_set) - 0.3,
+    xend = as.numeric(training_set) + 0.3,
+    y = random_value,
+    yend = random_value
+  ), color = "coral", linewidth = 1) +
+  facet_grid(~ Metric) +
   my_theme() +
-  labs(x = "Training Set",
-       y = "Value")
+  labs(x = "Training Set", y = "Value")
 
 print(hypo1)
 
 ```
 
-Now I tested the hypothesis using a subset of the data where model is control. First I identified the best explanatory model.
+Now I tested the hypothesis using a subset of the data where model is control. First I looked at the assumptions for a model.
 
 ```{r hypo1}
 control_df <- df %>% filter(model_type == 'Control')
 
-m1 <- glmmTMB(F1 ~ closed_open * training_set + (1 | fold) + (1 | training_set), data = control_df, family = Gamma(link = "log"))
-m2 <- glmmTMB(F1 ~ closed_open * training_set + (1 | fold), data = control_df)
-m3 <- glmmTMB(F1 ~ closed_open * training_set, data = control_df)
-m4 <- glmmTMB(F1 ~ closed_open + training_set, data = control_df)
-
-# AIC
-AIC(m1, m2, m3, m4)
-# BIC
-AIC(m1, m2, m3, m4, k=log(nrow(control_df)))
-# Anova comparison
-anova(m3, m4, test = "Chisq")
+m1 <- glmmTMB(AUC ~ training_set + (1 | fold), data = control_df, family = gaussian)
 
 # check the assumptions
-sim_res<- simulateResiduals(m3)
+sim_res<- simulateResiduals(m1)
 sim_res_hypo1 <- plot(sim_res)
 print(sim_res_hypo1)
+
 ```
 
-m3 was found to be the most explanatory variable but assumptions were not met... Pause here... Not sure what to do.
+And then I tested it.
+
+```{r}
+r.squaredGLMM(m1)
+summary(m1)
+```
+
+Training set some and target both perform significantly worse than on closed data. I therefore considered that my first hypothesis was confirmed.
 
 ## Hypothesis 2: Performance Patterns Across Model Types
 
@@ -230,101 +206,106 @@ I hypothesised that the three multiclass models (control, threshold, and other) 
 Firstly I plotted this data.
 
 ```{r, echo=FALSE}
-open_df <- df %>% filter(closed_open == "open")
-# Reshape data
-long_df <- melt(open_df, 
-                id.vars = c("model_type", "training_set", "fold", "random_accuracy", "random_specificity", "random_F1"), 
-                measure.vars = c("Accuracy", "F1", "YodenJ"), 
-                variable.name = "Metric",
-                value.name = "Value")
+# Reshape data more efficiently, focusing only on Accuracy and F1
+plot_data <- df %>%
+  select(model_type, training_set, fold, 
+         Accuracy, F1, random_accuracy, random_F1) %>%
+  pivot_longer(cols = c(Accuracy, F1),
+               names_to = "Metric",
+               values_to = "Value") %>%
+  mutate(Metric = factor(Metric, levels = c("Accuracy", "F1")),
+         training_set = factor(training_set))
 
-# Ensure Metric is a factor
-long_df$Metric <- factor(long_df$Metric, levels = c("Accuracy", "F1", "YodenJ"))
+# Create summary statistics
+summary_data <- plot_data %>%
+  group_by(model_type, training_set, Metric) %>%
+  summarise(
+    mean = mean(Value, na.rm = TRUE),
+    se = sd(Value, na.rm = TRUE)/sqrt(n()),
+    .groups = "drop"
+  )
 
-# Create reference line data
-random_lines <- open_df %>%
-  select(training_set, model_type, random_accuracy, random_F1, random_Yoden) %>%
-  distinct() %>%  # Ensure one row per training_set, model_type
-  pivot_longer(cols = c(random_accuracy, random_F1, random_Yoden), 
+# Create reference line data more concisely
+random_lines <- df %>%
+  select(model_type, training_set, random_accuracy, random_F1) %>%
+  distinct() %>%
+  pivot_longer(cols = c(random_accuracy, random_F1), 
                names_to = "Random_Metric", 
                values_to = "Random_Value") %>%
-  mutate(Metric = factor(case_when(
-    Random_Metric == "random_accuracy" ~ "Accuracy",
-    Random_Metric == "random_F1" ~ "F1",
-    Random_Metric == "random_Yoden" ~ "YodenJ",
-    TRUE ~ NA_character_
-  ), levels = c("Accuracy", "F1", "YodenJ"))) %>%
-  filter(!is.na(Metric))
+  mutate(
+    Metric = factor(case_when(
+      Random_Metric == "random_accuracy" ~ "Accuracy",
+      Random_Metric == "random_F1" ~ "F1",
+      TRUE ~ NA_character_
+    ), levels = c("Accuracy", "F1")),
+    training_set = factor(training_set),
+    training_set_numeric = as.numeric(training_set)
+  )
 
-# Convert training_set to factor for consistency
-long_df$training_set <- as.factor(long_df$training_set)
-random_lines$training_set <- as.factor(random_lines$training_set)
-
-# Convert training_set to numeric for reference lines
-random_lines <- random_lines %>%
-  mutate(training_set_numeric = as.numeric(training_set)) %>%
-  mutate(model_type_numeric = as.numeric(model_type))
-
-hypo2 <- ggplot(long_df, aes(x = training_set, y = Value)) +
-  geom_boxplot() +
-
-  # Add reference lines for random values
+# Create plot with mean and error bars
+hypo2 <- ggplot(summary_data, aes(x = training_set, y = mean)) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +
+  geom_point(size = 3) +
   geom_segment(data = random_lines,
                aes(x = training_set_numeric - 0.3,
                    xend = training_set_numeric + 0.3,
                    y = Random_Value, 
-                   yend = Random_Value,
-                   group = Metric),
+                   yend = Random_Value),
                color = "coral",
                linewidth = 1) +
-
   facet_grid(Metric ~ model_type) +
   my_theme() +
-  labs(x = "Training Set", 
-       y = "Value")
+  labs(x = "Training Set", y = "Value")
 
 print(hypo2)
 
 ```
 
 An alternative way to look at this same data is:
-```{r, echo = FALSE}
-hypo2_2 <- ggplot(long_df, aes(x = model_type, y = Value)) +
-  geom_boxplot() +
 
-  # Add reference lines for random values
-  geom_segment(data = random_lines,
+```{r, echo = FALSE}
+# Using the same plot_data from previous code
+# Create summary statistics with model_type as x-axis and training_set as color
+summary_data_by_model <- plot_data %>%
+  group_by(model_type, training_set, Metric) %>%
+  summarise(
+    mean = mean(Value, na.rm = TRUE),
+    se = sd(Value, na.rm = TRUE)/sqrt(n()),
+    .groups = "drop"
+  ) %>%
+  mutate(model_type = factor(model_type))
+
+# Update random lines for this plot orientation
+random_lines_by_model <- random_lines %>%
+  mutate(model_type_numeric = as.numeric(factor(model_type)))
+
+# Create plot with model_type on x-axis and training_set as color
+hypo2_2 <- ggplot(summary_data_by_model, 
+                 aes(x = model_type, y = mean)) +
+  geom_point(position = position_dodge(width = 0.7), size = 3) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), 
+                position = position_dodge(width = 0.7), 
+                width = 0.2) +
+  geom_segment(data = random_lines_by_model,
                aes(x = model_type_numeric - 0.3,
                    xend = model_type_numeric + 0.3,
                    y = Random_Value, 
-                   yend = Random_Value,
-                   group = Metric),
+                   yend = Random_Value),
                color = "coral",
                linewidth = 1) +
-
-  facet_grid(Metric ~ training_set) +
+  facet_grid(Metric~ training_set) +
   my_theme() +
-  labs(x = "Model type", 
-       y = "Value")
+  labs(x = "Model Type", y = "Value", color = "Training Set")
 
 print(hypo2_2)
 
 ```
 
-Then I selected a statistical model. I compared the more complex with reduced models to see which of them added necessary information.
+Then I selected a statistical model and tested assumptions.
 
 ```{r, include = FALSE}
-m1 <- glmmTMB(F1 ~ model_type * training_set + (1 | fold), data = open_df)
-m2 <- glmmTMB(F1 ~ model_type * training_set, data = open_df)
-m3 <- glmmTMB(F1 ~ model_type + training_set, data = open_df)
+m1 <- glmmTMB(F1 ~ model_type * training_set + (1 | fold), data = df)
 
-# Anova comparison
-anova(m1, m2, m3,test = "Chisq")
-```
-
-These tests show that the m3 (simplest model) is a better representation but the interaction term in m2 adds significant more information. As the folds are not independent, however, I have to select the model with the mixed effect.
-
-```{r}
 sim_res<- simulateResiduals(m1)
 sim_res_hypo2 <- plot(sim_res)
 print(sim_res_hypo2)
@@ -336,36 +317,39 @@ It met assumptions, so I can analyse it.
 r.squaredGLMM(m1)
 summary(m1)
 ```
+Fold provided very little variance. In terms of fixed effects, 'One-class' performed significantly worse than the control, but no other models did. Target and some performed significantly worse than all. There were several interactions so I looked at these using emmeans.
 
-Fold provided very little variance. F1, 'One-class' performed significantly worse than the control, but no other models did. I found that target and some performed significantly worse than all. For the interactions:
-- Binary and one-class significantly better than control in 'some'
-- Threshold and one-class significantly better than control in 'target'
+```{r}
+emmeans(m1, specs = trt.vs.ctrl ~ model_type | training_set)$contrasts %>%
+  summary(infer = TRUE)
+```
 
-I then selected the same kind of model for Yoden's J and checked assumptions.
+From these comparisons I can see that in condition all, One-class is significantly worse than control. In Some, Binary, Threshold, and Other are all better than control. There was no significant difference between models in training set target.
+
+I then did the same analysis for Yoden's J and checked assumptions.
 ```{r, include = FALSE}
-m1 <- glmmTMB(YodenJ ~ model_type * training_set + (1 | fold), data = open_df)
+m1 <- glmmTMB(Accuracy ~ model_type * training_set + (1 | fold), data = df)
 
 sim_res<- simulateResiduals(m1)
 sim_res_hypo2_2 <- plot(sim_res)
 print(sim_res_hypo2_2)
-```
 
-```{r}
 r.squaredGLMM(m1)
 summary(m1)
+
+emmeans(m1, specs = trt.vs.ctrl ~ model_type | training_set)$contrasts %>%
+  summary(infer = TRUE)
 ```
 
-Again variance from folds were small. One-class performed significantly worse and all other metrics were the same as control. Both open sets performed worse than the closed set. For the interactions:
-- Binary significantly better than control in 'some'
-- Threshold significantly better than control in 'target'
+Again variance from folds were small. There were the same fixed effects as before. For Accuracy, One-class is significantly worse than the control in condition all and there are no other significant differences.
 
-### More detail about the significant models
+## Closer Look At Binary Models
 
-For the models that suggested better weighted average than control performance, I looked at individual behaviours. First I looked at Threshold.
+I looked at Binary in detail.
 
 ```{r, echo = FALSE}
-Other_df <- df_full %>% filter(closed_open == "open",
-                          model_type == "Threshold",
+Other_df <- df_full %>% filter(
+                          model_type == "Binary",
                           behaviour %in% c("eat", "lay", "walk", "Other", "weighted_avg"))
 
 long_Other <- melt(Other_df, 
@@ -405,7 +389,7 @@ long_Other$behaviour <- factor(long_Other$behaviour,
                                levels = c("walk", "eat", "lay", "Other", "weighted_avg"))
   
 colours = c("tomato", "aquamarine3", "orchid3", "slateblue2", "goldenrod2")
-Threshold_hypo2 <- ggplot(long_Other, aes(x = training_set, y = Value, colour = behaviour)) +
+Other_hypo2 <- ggplot(long_Other, aes(x = training_set, y = Value, colour = behaviour)) +
   geom_boxplot(linewidth = 1, fatten = 1, outlier.size = 2) +
   scale_color_manual(values = colours) +
   geom_segment(data = random_lines,
@@ -421,70 +405,6 @@ Threshold_hypo2 <- ggplot(long_Other, aes(x = training_set, y = Value, colour = 
   labs(x = "Training Set", 
        y = "Value")
 
-print(Threshold_hypo2)
+print(Other_hypo2)
 
 ```
-I looked more closely into the 'Binary' model, plotting all of the individual behaviours to see why this result was the case for the F1 score.
-
-```{r, echo = FALSE}
-Binary_df <- df_full %>% filter(closed_open == "open",
-                          model_type == "Binary",
-                          behaviour %in% c("eat", "lay", "walk", "Other", "weighted_avg"))
-
-long_Binary <- melt(Binary_df, 
-                id.vars = c("model_type", "training_set", "behaviour", "fold", "random_accuracy", "random_specificity", "random_F1"), 
-                measure.vars = c("Accuracy", "F1", "YodenJ"), 
-                variable.name = "Metric",
-                value.name = "Value")
-
-# Ensure Metric is a factor
-long_Binary$Metric <- factor(long_Binary$Metric, levels = c("Accuracy", "F1", "YodenJ"))
-
-# Create reference line data
-random_lines <- Binary_df %>%
-  select(training_set, model_type, behaviour, random_accuracy, random_F1, random_Yoden) %>%
-  distinct() %>%  # Ensure one row per training_set, model_type
-  pivot_longer(cols = c(random_accuracy, random_F1, random_Yoden), 
-               names_to = "Random_Metric", 
-               values_to = "Random_Value") %>%
-  mutate(Metric = factor(case_when(
-    Random_Metric == "random_accuracy" ~ "Accuracy",
-    Random_Metric == "random_F1" ~ "F1",
-    Random_Metric == "random_Yoden" ~ "YodenJ",
-    TRUE ~ NA_character_
-  ), levels = c("Accuracy", "F1", "YodenJ"))) %>%
-  filter(!is.na(Metric))
-
-# Convert training_set to factor for consistency
-long_Binary$training_set <- as.factor(long_Binary$training_set)
-random_lines$training_set <- as.factor(random_lines$training_set)
-
-# Convert training_set to numeric for reference lines
-random_lines <- random_lines %>%
-  mutate(training_set_numeric = as.numeric(training_set)) %>%
-  mutate(model_type_numeric = as.numeric(model_type))
-
-long_Binary$behaviour <- factor(long_Binary$behaviour, 
-                               levels = c("walk", "eat", "lay", "Other", "weighted_avg"))
-  
-colours = c("tomato", "aquamarine3", "orchid3", "slateblue2", "goldenrod2")
-Binary_hypo2 <- ggplot(long_Binary, aes(x = training_set, y = Value, colour = behaviour)) +
-  geom_boxplot(linewidth = 1, fatten = 1, outlier.size = 2) +
-  scale_color_manual(values = colours) +
-  geom_segment(data = random_lines,
-               aes(x = training_set_numeric - 0.3,
-                   xend = training_set_numeric + 0.3,
-                   y = Random_Value, 
-                   yend = Random_Value,
-                   group = Metric),
-               color = "coral",
-               linewidth = 1) +
-  facet_wrap(~ Metric, scales = "free_y") +
-  my_theme() +
-  labs(x = "Training Set", 
-       y = "Value")
-
-print(Binary_hypo2)
-
-```
-
