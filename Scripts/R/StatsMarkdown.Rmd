@@ -21,8 +21,9 @@ library(MuMIn)
 library(GGally)
 
 # load in the data
-path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection/Output/Combined/all_combined_metrics.csv"
-  
+# path <- "C:/Users/PC/OneDrive - University of the Sunshine Coast/AnomalyDetection/Output/Combined/all_combined_metrics.csv"
+
+path <- "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection/Output/Combined/all_combined_metrics.csv"
   
 original_df <- read.csv(path)
 
@@ -34,6 +35,10 @@ original_df <- original_df %>%
                              "binary" = "Binary",
                              "multi_Activity_threshold" = "Threshold",
                              "multi_Other" = "Other")) %>%
+  mutate(training_set = recode_factor(training_set,
+                             "all" = "All",
+                             "some" = "Some",
+                             "target" = "Target")) %>%
   select(-c(Count, file, dataset))
 
 
@@ -141,7 +146,7 @@ I hypothesised that the control model would decline in performance when tested o
 
 I plotted this relationship where the coral line is the performance of chance for each metric.
 
-```{r hypo1.plot1, echo = FALSE, warning=FALSE}
+```{r hypo1.plot1, echo = FALSE, warning=FALSE, fig.width=6,fig.height=4}
 # Create long format data focusing only on Accuracy and F1
 plot_df <- df %>%
   select(model_type, training_set, behaviour, fold, 
@@ -150,7 +155,7 @@ plot_df <- df %>%
                names_to = "Metric",
                values_to = "Value") %>%
   filter(model_type == 'Control') %>%
-  mutate(training_set = factor(training_set, levels = c("all", levels(factor(training_set))[levels(factor(training_set)) != "all"])),
+  mutate(training_set = factor(training_set, levels = c("All", levels(factor(training_set))[levels(factor(training_set)) != "All"])),
          random_value = if_else(Metric == "Accuracy", random_accuracy, random_F1))
 
 # Create plot with mean and error bars
@@ -173,11 +178,19 @@ hypo1 <- plot_df %>%
   ), color = "coral", linewidth = 1) +
   facet_grid(~ Metric) +
   my_theme() +
-  labs(x = "Training Set", y = "Value")
+  labs(x = "Training Set", y = "Performance")
 
 print(hypo1)
 
 ```
+
+To see whether the target condition F1 intersected with chance, I found the confidence interval.
+```{r}
+F1_data <- plot_df %>% filter(Metric == "F1", training_set == "Target")
+
+t.test(F1_data$Value)
+```
+
 
 Now I tested the hypothesis using a subset of the data where model is control. First I looked at the assumptions for a model.
 
@@ -193,7 +206,7 @@ print(sim_res_hypo1)
 
 ```
 
-And then I tested it anc compared each condition to the control.
+And then I tested it and compared each condition to the control.
 
 ```{r}
 r.squaredGLMM(m1)
@@ -280,7 +293,7 @@ hypo2 <- ggplot(summary_data, aes(x = training_set, y = mean)) +
                linewidth = 1) +
   facet_grid(Metric ~ model_type) +
   my_theme() +
-  labs(x = "Training Set", y = "Value")
+  labs(x = "Training Set", y = "Performance")
 
 print(hypo2)
 
@@ -320,7 +333,7 @@ hypo2_2 <- ggplot(summary_data_by_model,
                linewidth = 1) +
   facet_grid(Metric~ training_set) +
   my_theme() +
-  labs(x = "Model Type", y = "Value", color = "Training Set")
+  labs(x = "Model Type", y = "Performance", color = "Training Set")
 
 print(hypo2_2)
 
@@ -480,5 +493,34 @@ ggplot(means, aes(x = True_class, y = Count_mean, fill = Predicted_class)) +
 
 ```
 
+## Making a figure showing the volume of the classes
 
+This involves using the raw data to find shape and counts.
+
+```{r shape, fig.width=10,fig.height=5}
+
+raw_path <- "C:/Users/oaw001/OneDrive - University of the Sunshine Coast/AnomalyDetection/Data/Feature_data/Ferdinandy_Dog_features.csv"
+
+raw_data <- read.csv(raw_path)
+
+raw_data$Activity <- factor(raw_data$Activity, levels = c("drink", "eat", "sit", "run", "trot", "lay", "stand", "walk"))
+
+raw_data <- raw_data %>% filter(!ID == "animal_id")
+
+ggplot(raw_data, aes(x = Activity)) +
+  geom_bar(aes(fill = ID, y = after_stat(count) / 60)) +
+  my_theme() +
+  labs(x = "Activity", y = "Minutes") +
+  scale_fill_manual(values = c("tomato", "aquamarine3", "orchid3", "slateblue2", "goldenrod2", 
+                               "deepskyblue3", "firebrick3", "tan1", "lightcoral", "darkcyan", 
+                               "coral", "mediumpurple3", "lightseagreen", "darkgoldenrod2", 
+                               "dodgerblue2", "indianred3", "peachpuff2", "mediumvioletred", 
+                               "cadetblue3", "orange2", "royalblue3"))
+
+
+individuals <- length(unique(raw_data$ID))
+volume <- nrow(raw_data)/60
+
+
+```
 
